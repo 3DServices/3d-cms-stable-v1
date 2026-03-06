@@ -61,13 +61,27 @@ export type {
   SaveDraftResponse,
   RequestApprovalResponse,
   SubmitDraftResponse,
+  Client,
+  ClientDevice,
+  CreateClientRequest,
+  OnlineUnitsResponse,
+  OfflineUnitsResponse,
+  ExpiredTokensResponse,
+  HighSubClient,
+  HighSubClientsResponse,
+  ActiveSubscriptionsResponse,
+  PausedSubscriptionsResponse,
+  ChurnRateResponse,
+  ExpiringAccount,
+  ExpiringSubscriptionsResponse,
+  ClientTransaction,
 } from "./types";
 
 // ── Domain services ──────────────────────────────────────────────────────────
 
 export { isUserLoggedIn, getAccountUid, startSessionMonitor, stopSessionMonitor } from "./services/auth.service";
 export { createSimCard, getAllSimCards } from "./services/simcards.service";
-export { getSimStatistics } from "./services/statistics.service";
+export { getSimStatistics, getOnlineUnits, getOfflineUnits, getExpiredTokens } from "./services/statistics.service";
 export { getServerMetrics, getApiPerformance } from "./services/metrics.service";
 export { getMobileMoneyGateways, getGatewayHistory, updateGatewayStatus } from "./services/gateways.service";
 export { getVebaStatistics } from "./services/veba.service";
@@ -93,3 +107,5 @@ export {
   requestDraftApproval,
   submitApprovedDraft,
 } from "./services/tenants.service";
+export { createClient, getAllClients, getClientsByProvider, getClientDevices } from "./services/clients.service";
+export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";

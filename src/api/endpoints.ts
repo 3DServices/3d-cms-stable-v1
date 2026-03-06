@@ -14,7 +14,20 @@ export const ENDPOINTS = {
     GET_ALL: "/devices/simcards/all",
   },
   STATISTICS: {
-    SIMS_SUMMARY: "/statistics/sims/summary",
+    SIMS_SUMMARY:     "/statistics/sims/summary",
+    UNITS_ONLINE:     "/statistics/units/online",
+    UNITS_OFFLINE:    "/statistics/units/offline",
+    TOKENS_EXPIRED:   "/statistics/tokens/expired",
+    TOKENS_ACTIVE:    "/statistics/tokens/active",
+    TOKENS_PAUSED:    "/statistics/tokens/paused",
+    HIGH_SUB_CLIENTS: "/statistics/clients/high-subscriptions",
+  },
+  BILLING: {
+    CHURN_RATE:       "/billing/subscriptions/churn-rate",
+    EXPIRING:         "/billing/subscriptions/expiring",   // ?days=30
+  },
+  PAYMENTS: {
+    TRANSACTIONS:     "/payments/transactions",            // append /{client_uid}/list
   },
   METRICS: {
     SERVER:          "/metrics/server",
@@ -50,5 +63,11 @@ export const ENDPOINTS = {
     DRAFTS:          "/tenants/drafts",           // POST save draft
     DRAFT_APPROVAL:  "/tenants/drafts",           // append /{id}/request-approval
     DRAFT_SUBMIT:    "/tenants/drafts",           // append /{id}/submit
+  },
+  CLIENTS: {
+    CREATE:  "/clients/create",
+    GET_ALL: "/clients/all",
+    BY_PROVIDER: "/clients",           // append /{service_provider}/all
+    DEVICES: "/devices/configured",    // append /{client_uid}/client
   },
 } as const;

@@ -30,6 +30,17 @@ export type {
 export type { VebaStatistics } from "./veba.types";
 
 export type {
+  Client,
+  ClientDevice,
+  CreateClientRequest,
+  OnlineUnit,
+  OnlineUnitsResponse,
+  OfflineUnitsResponse,
+  ExpiredSubscription,
+  ExpiredTokensResponse,
+} from "./clients.types";
+
+export type {
   TenantTier,
   TenantStatus,
   Tenant,
@@ -58,3 +69,16 @@ export type {
   RequestApprovalResponse,
   SubmitDraftResponse,
 } from "./tenants.types";
+
+export type {
+  HighSubClient,
+  HighSubClientsResponse,
+  PausedSubscription,
+  PausedSubscriptionsResponse,
+  ChurnRateResponse,
+  ExpiringAccount,
+  ExpiringSubscriptionsResponse,
+  ActiveSubscription,
+  ActiveSubscriptionsResponse,
+  ClientTransaction,
+} from "./billing.types";

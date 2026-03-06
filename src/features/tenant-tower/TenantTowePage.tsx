@@ -8,8 +8,8 @@
  *   MODAL:  Right blade — Create Tenant / Sub-Org (tabs: Basics, Billing, Modules, RBAC, Review)
  */
 import React, { useEffect, useState } from "react";
-import { getTenantKpis, getAllTenants, getTenantWallet, getUsageEvents, getApprovals, approveRequest, rejectRequest, getAuditTrail, saveDraft, requestDraftApproval, submitApprovedDraft } from "../../api";
-import type { TenantKpis, Tenant, TenantWallet, UsageEvent, Approval, AuditTrailEntry, TenantTier } from "../../api";
+import { getAllTenants, getAllClients, getClientDevices, getOnlineUnits, getOfflineUnits, getExpiredTokens, getTenantWallet, /* getApprovals, approveRequest, rejectRequest, */ saveDraft, requestDraftApproval, submitApprovedDraft } from "../../api";
+import type { Tenant, Client, ClientDevice, OnlineUnitsResponse, OfflineUnitsResponse, ExpiredTokensResponse, TenantWallet, /* Approval, */ TenantTier } from "../../api";
 import { TrashRestoreModal } from "./components/TrashRestoreModal";
 import { ImportTenantsModal } from "./components/ImportTenantsModal";
 import { CreateSubOrgModal } from "./components/CreateSubOrgModal";
@@ -22,11 +22,6 @@ const okBg   = "bg-[#25D366] text-[#053B33]";
 const alarmBg= "bg-[#F97316] text-white";
 const critBg = "bg-[#EF4444] text-white";
 // const darkBg = "bg-[#075E54] text-white";
-
-function healthBar(pct: number) {
-  const c = pct >= 95 ? "bg-[#25D366]" : pct >= 90 ? "bg-[#FBBF24]" : pct >= 85 ? "bg-[#F97316]" : "bg-[#EF4444]";
-  return { c, w: `${pct}%` };
-}
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
@@ -49,28 +44,36 @@ export function TenantTowerPage() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [mintOpen, setMintOpen] = useState(false);
-  const [kpis, setKpis] = useState<TenantKpis | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [onlineStats, setOnlineStats] = useState<OnlineUnitsResponse | null>(null);
+  const [offlineStats, setOfflineStats] = useState<OfflineUnitsResponse | null>(null);
+  const [expiredStats, setExpiredStats] = useState<ExpiredTokensResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [usageEvents, setUsageEvents] = useState<UsageEvent[]>([]);
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [auditTrail, setAuditTrail] = useState<AuditTrailEntry[]>([]);
-  const [approvalsLoading, setApprovalsLoading] = useState(true);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  // const [approvals, setApprovals] = useState<Approval[]>([]);
+  // const [approvalsLoading, setApprovalsLoading] = useState(true);
 
   useEffect(() => {
-    getTenantKpis()
-      .then((res) => setKpis(res.data))
+    getAllClients()
+      .then((res) => {
+        setClients(res.data);
+        if (res.data.length > 0) setSelectedClientId(res.data[0].client_uid);
+      })
       .catch(() => {});
-    getUsageEvents()
-      .then((res) => setUsageEvents(res.data))
+    getOnlineUnits()
+      .then((res) => setOnlineStats(res.data))
       .catch(() => {});
-    getApprovals()
-      .then((res) => setApprovals(res.data))
-      .catch(() => {})
-      .finally(() => setApprovalsLoading(false));
-    getAuditTrail()
-      .then((res) => setAuditTrail(res.data))
+    getOfflineUnits()
+      .then((res) => setOfflineStats(res.data))
       .catch(() => {});
+    getExpiredTokens()
+      .then((res) => setExpiredStats(res.data))
+      .catch(() => {});
+    // getApprovals()
+    //   .then((res) => setApprovals(res.data))
+    //   .catch(() => {})
+    //   .finally(() => setApprovalsLoading(false));
     getAllTenants()
       .then((res) => {
         setTenants(res.data);
@@ -78,6 +81,27 @@ export function TenantTowerPage() {
       })
       .catch(() => {});
   }, []);
+
+  const [clientDevices, setClientDevices] = useState<ClientDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedClientId) return;
+    let cancelled = false;
+    const fetchDevices = async () => {
+      setDevicesLoading(true);
+      try {
+        const res = await getClientDevices(selectedClientId);
+        if (!cancelled) setClientDevices(res.data);
+      } catch {
+        if (!cancelled) setClientDevices([]);
+      } finally {
+        if (!cancelled) setDevicesLoading(false);
+      }
+    };
+    fetchDevices();
+    return () => { cancelled = true; };
+  }, [selectedClientId]);
 
   const [wallet, setWallet] = useState<TenantWallet | null>(null);
 
@@ -87,53 +111,52 @@ export function TenantTowerPage() {
     getTenantWallet(selectedId)
       .then((res) => { if (!cancelled) setWallet(res.data); })
       .catch(() => { if (!cancelled) setWallet(null); });
-    return () => { cancelled = true; setWallet(null); };
+    return () => { cancelled = true; };
   }, [selectedId]);
 
-  const [actioningId, setActioningId] = useState<string | null>(null);
+  // const [actioningId, setActioningId] = useState<string | null>(null);
   const [bladeDraftId, setBladeDraftId] = useState<string | null>(null);
   const [bladeApprovalStatus, setBladeApprovalStatus] = useState<string | null>(null);
 
-  function refreshApprovals() {
-    setApprovalsLoading(true);
-    getApprovals()
-      .then((res) => setApprovals(res.data))
-      .catch(() => {})
-      .finally(() => setApprovalsLoading(false));
-  }
+  function refreshApprovals() {}
 
-  /** After approve/reject, check if the actioned item was a tenant_onboarding linked to the open blade draft */
-  function syncBladeAfterAction(actionedId: string, newStatus: "approved" | "rejected") {
-    const match = approvals.find((a) => a.id === actionedId);
-    if (match?.type === "tenant_onboarding" && match.draft_id && match.draft_id === bladeDraftId) {
-      setBladeApprovalStatus(newStatus);
-    }
-  }
+  // /** After approve/reject, check if the actioned item was a tenant_onboarding linked to the open blade draft */
+  // function syncBladeAfterAction(actionedId: string, newStatus: "approved" | "rejected") {
+  //   const match = approvals.find((a) => a.id === actionedId);
+  //   if (match?.type === "tenant_onboarding" && match.draft_id && match.draft_id === bladeDraftId) {
+  //     setBladeApprovalStatus(newStatus);
+  //   }
+  // }
 
-  function handleApprove(id: string) {
-    if (!confirm("Approve this request? For mint requests, tokens will be credited immediately.")) return;
-    setActioningId(id);
-    approveRequest(id)
-      .then(() => {
-        syncBladeAfterAction(id, "approved");
-        refreshApprovals();
-        refreshWallet();
-      })
-      .catch(() => alert("Failed to approve"))
-      .finally(() => setActioningId(null));
-  }
+  // function handleApprove(id: string) {
+  //   if (!window.confirm("Approve this request? For mint requests, tokens will be credited immediately.")) return;
+  //   setActioningId(id);
+  //   approveRequest(id)
+  //     .then(() => {
+  //       syncBladeAfterAction(id, "approved");
+  //       setApprovals((prev) => prev.filter((a) => a.id !== id));
+  //       refreshWallet();
+  //     })
+  //     .catch(() => window.alert("Failed to approve"))
+  //     .finally(() => setActioningId(null));
+  // }
 
-  function handleReject(id: string) {
-    if (!confirm("Reject this request? This action cannot be undone.")) return;
-    setActioningId(id);
-    rejectRequest(id)
-      .then(() => {
-        syncBladeAfterAction(id, "rejected");
-        refreshApprovals();
-      })
-      .catch(() => alert("Failed to reject"))
-      .finally(() => setActioningId(null));
-  }
+  // function handleReject(id: string) {
+  //   if (!window.confirm("Reject this request? This action cannot be undone.")) return;
+  //   setActioningId(id);
+  //   rejectRequest(id)
+  //     .then(() => {
+  //       syncBladeAfterAction(id, "rejected");
+  //       setApprovals((prev) => prev.filter((a) => a.id !== id));
+  //     })
+  //     .catch(() => window.alert("Failed to reject"))
+  //     .finally(() => setActioningId(null));
+  // }
+
+  // function handleDeleteApproval(id: string) {
+  //   if (!window.confirm("Remove this approval from the queue?")) return;
+  //   setApprovals((prev) => prev.filter((a) => a.id !== id));
+  // }
 
   // ── Blade form state ─────────────────────────────────────────────────────
   // Basics
@@ -197,7 +220,7 @@ export function TenantTowerPage() {
 
   /** Save Draft — persists form to dll_tenant_drafts */
   function handleSaveDraft() {
-    if (!bladeName.trim()) { alert("Tenant name is required"); return; }
+    if (!bladeName.trim()) { window.alert("Tenant name is required"); return; }
     setBladeSubmitting(true);
     setBladeResult(null);
     saveDraft(bladePayload())
@@ -216,7 +239,7 @@ export function TenantTowerPage() {
   function handleRequestApproval() {
     if (!bladeDraftId) {
       // Auto-save draft first, then request approval
-      if (!bladeName.trim()) { alert("Tenant name is required"); return; }
+      if (!bladeName.trim()) { window.alert("Tenant name is required"); return; }
       setBladeSubmitting(true);
       setBladeResult(null);
       saveDraft(bladePayload())
@@ -252,11 +275,11 @@ export function TenantTowerPage() {
   /** Submit (after approval) — creates actual tenant from approved draft */
   function handleBladeSubmit() {
     if (!bladeDraftId) {
-      alert("Please save a draft and request approval first.");
+      window.alert("Please save a draft and request approval first.");
       return;
     }
     if (bladeApprovalStatus !== "approved") {
-      alert("This draft must be approved by admin before submitting. Use 'Request HITL Approval' first.");
+      window.alert("This draft must be approved by admin before submitting. Use 'Request HITL Approval' first.");
       return;
     }
     setBladeSubmitting(true);
@@ -264,6 +287,9 @@ export function TenantTowerPage() {
     submitApprovedDraft(bladeDraftId)
       .then((res) => {
         setBladeResult({ ok: true, msg: `Tenant created (ID: ${res.data.tenant_id})` });
+        getAllClients()
+          .then((r) => { setClients(r.data); if (r.data.length > 0 && !selectedClientId) setSelectedClientId(r.data[0].client_uid); })
+          .catch(() => {});
         getAllTenants()
           .then((r) => { setTenants(r.data); if (r.data.length > 0 && !selectedId) setSelectedId(r.data[0].id); })
           .catch(() => {});
@@ -275,29 +301,38 @@ export function TenantTowerPage() {
       .finally(() => setBladeSubmitting(false));
   }
 
-  const [filterTier, setFilterTier] = useState<string>("ALL");
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientFilter, setClientFilter] = useState<"ALL" | "billing" | "subscription">("ALL");
+  const [clientFilterOpen, setClientFilterOpen] = useState(false);
 
-  const filteredTenants = filterTier === "ALL"
-    ? tenants
-    : tenants.filter((t) => t.tier === filterTier);
+  const filteredClients = clients.filter((c) => {
+    const q = clientSearch.toLowerCase();
+    if (q && !c.client_name.toLowerCase().includes(q) && !c.client_email.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
 
   const selectedTenant = tenants.find((t) => t.id === selectedId) ?? null;
+  const selectedClient = clients.find((c) => c.client_uid === selectedClientId) ?? null;
 
-  function exportUsageCsv() {
-    const rows = [["Topic","Type","Tenant","Action","Tokens","Cost","Guardrail","Timestamp"]];
-    usageEvents.forEach((e) => {
-      rows.push([e.topic, e.type, e.tenant, e.action, String(e.tokens), e.cost, e.guardrail, e.timestamp]);
-    });
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "usage_events.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  // function exportUsageCsv() {
+  //   const rows = [["Topic","Type","Tenant","Action","Tokens","Cost","Guardrail","Timestamp"]];
+  //   usageEvents.forEach((e) => {
+  //     rows.push([e.topic, e.type, e.tenant, e.action, String(e.tokens), e.cost, e.guardrail, e.timestamp]);
+  //   });
+  //   const csv = rows.map((r) => r.join(",")).join("\n");
+  //   const blob = new Blob([csv], { type: "text/csv" });
+  //   const url = URL.createObjectURL(blob);
+  //   const a = document.createElement("a");
+  //   a.href = url;
+  //   a.download = "usage_events.csv";
+  //   a.click();
+  //   URL.revokeObjectURL(url);
+  // }
 
   function refreshWallet() {
     if (!selectedId) return;
@@ -307,16 +342,16 @@ export function TenantTowerPage() {
   }
 
   function exportCsv() {
-    const rows = [["Tier","Tenant","Country","Currency","Health","Burn/s","VEBA"]];
-    filteredTenants.forEach((t) => {
-      rows.push([t.tier, t.name, t.country, t.currency, String(t.health), t.burn_rate, t.veba ? "ON" : "OFF"]);
+    const rows = [["#","Client Name","Email","UID"]];
+    clients.forEach((c, i) => {
+      rows.push([String(i + 1), c.client_name, c.client_email, c.client_uid]);
     });
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tenant_hierarchy.csv";
+    a.download = "clients.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -355,17 +390,28 @@ export function TenantTowerPage() {
 
           {/* ── 4 KPI Cards ──────────────────────────────────────────────────── */}
           <div className="grid grid-cols-4 gap-3">
-            {(kpis ? [
-              { label:"Total Accounts", value:kpis.total_accounts.toLocaleString(),       sub:`Δ +${kpis.accounts_delta_week} this week`            },
-              { label:"Active Units",   value:kpis.active_units.toLocaleString(),          sub:`Online ${kpis.online_pct}% • Offline ${100 - kpis.online_pct}%`    },
-              { label:"Token Exposure (24h)", value:`${kpis.token_exposure_currency} ${(kpis.token_exposure_24h / 1_000_000).toFixed(1)}M`, sub:`Run-out < 72h: ${kpis.runout_72h_count} tenants` },
-              { label:"Payment Success (24h)",value:`${kpis.payment_success_24h}%`,     sub:`p95 latency ${kpis.payment_p95_latency}s`         },
-            ] : [
-              { label:"Total Accounts", value:"—", sub:"Loading..." },
-              { label:"Active Units",   value:"—", sub:"Loading..." },
-              { label:"Token Exposure (24h)", value:"—", sub:"Loading..." },
-              { label:"Payment Success (24h)",value:"—", sub:"Loading..." },
-            ]).map(k => (
+            {[
+              {
+                label: "Total Clients",
+                value: clients.length > 0 ? clients.length.toLocaleString() : "—",
+                sub: clients.length > 0 ? `${clients.length} registered accounts` : "Loading...",
+              },
+              {
+                label: "Online Units",
+                value: onlineStats ? onlineStats.count.toLocaleString() : "—",
+                sub: onlineStats ? `of ${onlineStats.total_configured_units} configured units` : "Loading...",
+              },
+              {
+                label: "Offline Units",
+                value: offlineStats ? offlineStats.count.toLocaleString() : "—",
+                sub: offlineStats ? `of ${offlineStats.total_configured_units} configured units` : "Loading...",
+              },
+              {
+                label: "Expired Subscriptions",
+                value: expiredStats ? expiredStats.count.toLocaleString() : "—",
+                sub: expiredStats ? `${expiredStats.count} expired token subscriptions` : "Loading...",
+              },
+            ].map(k => (
               <div key={k.label} className="bg-white border border-[#E9EDEF] rounded-xl p-4">
                 <div className="text-[12px] text-[#667781] font-extrabold">{k.label}</div>
                 <div className="text-[26px] font-black text-[#111B21] mt-1 leading-tight">{k.value}</div>
@@ -377,62 +423,73 @@ export function TenantTowerPage() {
           {/* ── 2-col: Hierarchy Table | Selected Tenant ─────────────────────── */}
           <div className="grid grid-cols-[1.2fr_0.8fr] gap-3 items-start">
 
-            {/* LEFT: Service Hierarchy */}
+            {/* LEFT: Service Hierarchy — Clients */}
             <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
-                <div>
-                  <div className="font-black text-[13px] text-[#111B21]">Service Hierarchy — Accounts</div>
-                  <div className="text-[11px] text-[#667781] mt-0.5">Hard isolation: ON • Cross-tenant blocked (24h): 12</div>
+              <div className="flex flex-col gap-2 px-4 py-3 border-b border-[#E9EDEF]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-black text-[13px] text-[#111B21]">Service Hierarchy — Accounts</div>
+                    <div className="text-[11px] text-[#667781] mt-0.5">{filteredClients.length} of {clients.length} clients</div>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <Pill onClick={() => { getAllClients().then((r) => setClients(r.data)).catch(() => {}); }}>Refresh</Pill>
+                    <Pill onClick={exportCsv}>Export</Pill>
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center relative">
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    placeholder="Search by name or email…"
+                    className="flex-1 h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] placeholder:text-[#9CA3AF] outline-none focus:border-[#128C7E] transition-colors bg-[#F8FAFC]"
+                  />
                   <div className="relative">
-                    <Pill onClick={() => setFilterOpen((v) => !v)}>Filter: {filterTier} ▾</Pill>
-                    {filterOpen && (
-                      <div className="absolute right-0 top-9 z-20 bg-white border border-[#E9EDEF] rounded-xl shadow-lg py-1 min-w-[120px]">
-                        {["ALL", "TOP", "DEAL", "CLIENT", "ORG"].map((tier) => (
+                    <Pill onClick={() => setClientFilterOpen((v) => !v)}>Filter: {clientFilter} ▾</Pill>
+                    {clientFilterOpen && (
+                      <div className="absolute right-0 top-9 z-20 bg-white border border-[#E9EDEF] rounded-xl shadow-lg py-1 min-w-[130px]">
+                        {(["ALL", "billing", "subscription"] as const).map((f) => (
                           <button
-                            key={tier}
-                            onClick={() => { setFilterTier(tier); setFilterOpen(false); }}
+                            key={f}
+                            onClick={() => { setClientFilter(f); setClientFilterOpen(false); }}
                             className={`w-full text-left px-4 py-2 text-[11px] font-black border-none cursor-pointer transition-colors ${
-                              filterTier === tier ? "bg-[#EAF7F3] text-[#128C7E]" : "bg-white text-[#111B21] hover:bg-[#F8FAFC]"
+                              clientFilter === f ? "bg-[#EAF7F3] text-[#128C7E]" : "bg-white text-[#111B21] hover:bg-[#F8FAFC]"
                             }`}
-                          >{tier}</button>
+                          >{f === "ALL" ? "All Clients" : f === "billing" ? "Billing Active" : "Subscribed"}</button>
                         ))}
                       </div>
                     )}
                   </div>
-                  <Pill onClick={exportCsv}>Export</Pill>
                 </div>
               </div>
               <table className="w-full text-[12px] table-fixed">
                 <thead><tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
-                  {["Tier","Tenant","Ctry","CCY","Health","Burn/s","VEBA"].map(h => (
-                    <th key={h} className={`text-left px-3 py-2 font-black text-[#667781] ${h==="Tenant"?"":"w-[60px]"} ${h==="Health"?"w-[100px]":""}`}>{h}</th>
+                  {["#","Client Name","Email","UID","Actions"].map(h => (
+                    <th key={h} className={`text-left px-3 py-2 font-black text-[#667781] ${h==="#"?"w-[40px]":""} ${h==="UID"?"w-[180px]":""} ${h==="Actions"?"w-[100px] text-center":""}`}>{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
-                  {filteredTenants.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-6 text-center text-[12px] text-[#667781]">{tenants.length === 0 ? "Loading..." : "No tenants match filter"}</td></tr>
-                  ) : filteredTenants.map(t => {
-                    const hb = healthBar(t.health);
-                    const isSelected = t.id === selectedId;
+                  {filteredClients.length === 0 ? (
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-[12px] text-[#667781]">{clients.length === 0 ? "Loading clients…" : "No clients match search"}</td></tr>
+                  ) : filteredClients.map((c, i) => {
+                    const isSelected = c.client_uid === selectedClientId;
                     return (
-                      <tr key={t.id} onClick={() => setSelectedId(t.id)} className={`border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer ${isSelected ? "bg-[#EAF7F3]" : ""}`}>
-                        <td className="px-3 py-2.5 font-black text-[#667781]">{t.tier}</td>
-                        <td className={`px-3 py-2.5 font-extrabold ${isSelected ? "text-[#128C7E]" : "text-[#111B21]"}`}>{t.name}</td>
-                        <td className="px-3 py-2.5 text-[#667781]">{t.country}</td>
-                        <td className="px-3 py-2.5 text-[#667781]">{t.currency}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex-1 h-2.5 rounded-full bg-[#E9EDEF] overflow-hidden">
-                              <div className={`h-full rounded-full ${hb.c}`} style={{width:hb.w}} />
-                            </div>
-                            <span className="text-[10px] text-[#667781] w-[26px] text-right">{t.health}</span>
+                      <tr key={c.client_uid} onClick={() => setSelectedClientId(c.client_uid)} className={`border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer ${isSelected ? "bg-[#EAF7F3]" : ""}`}>
+                        <td className="px-3 py-2.5 text-[#667781]">{i + 1}</td>
+                        <td className={`px-3 py-2.5 font-extrabold ${isSelected ? "text-[#128C7E]" : "text-[#111B21]"}`}>{c.client_name}</td>
+                        <td className="px-3 py-2.5 text-[#667781]">{c.client_email}</td>
+                        <td className="px-3 py-2.5 text-[#667781] font-mono text-[10px] truncate">{c.client_uid}</td>
+                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => { setEditingClient(c); setEditName(c.client_name); setEditEmail(c.client_email); }}
+                              className="h-6 px-2 rounded-md text-[10px] font-black border border-[#E9EDEF] bg-white text-[#128C7E] cursor-pointer hover:bg-[#EAF7F3] transition-colors"
+                            >Edit</button>
+                            <button
+                              onClick={() => setDeletingClient(c)}
+                              className="h-6 px-2 rounded-md text-[10px] font-black border border-[#E9EDEF] bg-white text-[#EF4444] cursor-pointer hover:bg-[#FEF2F2] transition-colors"
+                            >Delete</button>
                           </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-[#111B21]">{t.burn_rate}</td>
-                        <td className="px-3 py-2.5">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${t.veba?okBg:"bg-[#E9EDEF] text-[#667781]"}`}>{t.veba?"ON":"OFF"}</span>
                         </td>
                       </tr>
                     );
@@ -441,24 +498,21 @@ export function TenantTowerPage() {
               </table>
             </div>
 
-            {/* RIGHT: Selected Tenant Panel */}
+            {/* RIGHT: Selected Client Panel */}
             <div className="flex flex-col gap-3">
-              {/* Tenant header */}
+              {/* Client header */}
               <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
-                <div className="text-[11px] text-[#667781] font-black">Selected Tenant</div>
-                {selectedTenant ? (
+                <div className="text-[11px] text-[#667781] font-black">Selected Client</div>
+                {selectedClient ? (
                   <>
-                    <div className="font-black text-[16px] text-[#111B21] mt-1">{selectedTenant.name} ({selectedTenant.tier})</div>
+                    <div className="font-black text-[16px] text-[#111B21] mt-1">{selectedClient.client_name}</div>
                     <div className="flex gap-1.5 flex-wrap mt-1.5 text-[10px]">
-                      <span className="bg-[#F0F2F5] px-2 py-0.5 rounded-full text-[#667781]">{selectedTenant.country} • {selectedTenant.currency} • {selectedTenant.timezone}</span>
-                      {selectedTenant.parent_name && <span className="bg-[#F0F2F5] px-2 py-0.5 rounded-full text-[#667781]">Parent: {selectedTenant.parent_name}</span>}
+                      <span className="bg-[#F0F2F5] px-2 py-0.5 rounded-full text-[#667781]">{selectedClient.client_email}</span>
                     </div>
-                    <div className="text-[11px] text-[#667781] mt-2">
-                      Policy: no cross-tenant share • Units: {selectedTenant.unit_count.toLocaleString()} • <span className={`font-black px-2 py-0.5 rounded-full ${selectedTenant.health < 90 ? alarmBg : okBg} text-[10px]`}>Health {selectedTenant.health}%</span>
-                    </div>
+                    <div className="text-[11px] text-[#667781] mt-2 font-mono">{selectedClient.client_uid}</div>
                   </>
                 ) : (
-                  <div className="text-[12px] text-[#667781] mt-2">Click a tenant row to view details</div>
+                  <div className="text-[12px] text-[#667781] mt-2">Click a client row to view details</div>
                 )}
               </div>
 
@@ -509,11 +563,37 @@ export function TenantTowerPage() {
                 </div>
               </div> */}
 
-              {/* VEBA + Waswa AI */}
-              <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-[13px] text-[#111B21]">VEBA + Waswa AI Governance</span>
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${okBg}`}>AI: ON</span>
+              {/* Client Devices */}
+              <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
+                  <div>
+                    <div className="font-black text-[13px] text-[#111B21]">Client Devices</div>
+                    <div className="text-[11px] text-[#667781] mt-0.5">{selectedClient ? `${clientDevices.length} device(s) for ${selectedClient.client_name}` : "Select a client"}</div>
+                  </div>
+                </div>
+                <div className="max-h-[260px] overflow-auto">
+                  {!selectedClient ? (
+                    <div className="px-4 py-6 text-center text-[12px] text-[#667781]">Click a client row to view devices</div>
+                  ) : devicesLoading ? (
+                    <div className="px-4 py-6 text-center text-[12px] text-[#667781]">Loading devices…</div>
+                  ) : clientDevices.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-[12px] text-[#667781]">No devices found</div>
+                  ) : clientDevices.map((d) => (
+                    <div key={d.device_imei} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC]">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-extrabold text-[12px] text-[#111B21] truncate">{d.device_name}</div>
+                        <div className="text-[10px] text-[#667781]">{d.car_make} {d.car_model} • {d.car_type} • {d.hardware} {d.hardware_model}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[10px] font-mono text-[#667781]">IMEI: {d.device_imei}</div>
+                        <div className="text-[10px] text-[#667781]">SIM: {d.simcard}</div>
+                      </div>
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${d.billing_status === "running" ? okBg : alarmBg}`}>{d.billing_status}</span>
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${d.subscription_status === "running" ? okBg : alarmBg}`}>{d.subscription_status}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -521,7 +601,7 @@ export function TenantTowerPage() {
 
           {/* ════════════════════ MID SCROLL ════════════════════════════════════ */}
 
-          {/* ── Usage Events Ledger ───────────────────────────────────────────── */}
+          {/* ── Usage Events Ledger (moved to Billing module as Device Status Overview) ──
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
               <div>
@@ -552,9 +632,9 @@ export function TenantTowerPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </div> */}
 
-          {/* ── Approvals Queue ───────────────────────────────────────────────── */}
+          {/* ── Approvals Queue ───────────────────────────────────────────────
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
               <div className="flex items-center gap-2">
@@ -577,8 +657,6 @@ export function TenantTowerPage() {
                 <div className="px-4 py-6 text-center text-[12px] text-[#667781]">No approval requests</div>
               ) : approvals.map((a) => (
                 <div key={a.id} className="flex items-center gap-3 px-4 py-3.5 border-b border-[#E9EDEF] last:border-0">
-                  <span className="text-[16px]">{a.status === "pending" ? "☐" : a.status === "approved" ? "✅" : "❌"}</span>
-                  {/* Type badge */}
                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 uppercase ${
                     a.type === "mint" ? "bg-[#DBEAFE] text-[#1E40AF]"
                       : a.type === "tenant_onboarding" ? "bg-[#F3E8FF] text-[#7C3AED]"
@@ -597,32 +675,30 @@ export function TenantTowerPage() {
                   <span className={`text-[11px] font-black px-3 py-1 rounded-full whitespace-nowrap ${
                     a.requirement.includes("HIC") ? critBg : alarmBg
                   }`}>{a.requirement}</span>
-                  {a.status === "pending" ? (
-                    <div className="flex gap-1.5 shrink-0">
-                      <button
-                        disabled={actioningId === a.id}
-                        onClick={() => handleApprove(a.id)}
-                        className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer transition-all ${okBg} hover:brightness-105 disabled:opacity-50`}
-                      >{actioningId === a.id ? "…" : "Approve"}</button>
-                      <button
-                        disabled={actioningId === a.id}
-                        onClick={() => handleReject(a.id)}
-                        className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer transition-all ${critBg} hover:brightness-105 disabled:opacity-50`}
-                      >{actioningId === a.id ? "…" : "Reject"}</button>
-                    </div>
-                  ) : (
-                    <span className={`text-[11px] font-black px-3 py-1 rounded-full whitespace-nowrap ${
-                      a.status === "approved" ? okBg : "bg-[#E9EDEF] text-[#667781]"
-                    }`}>{a.status}</span>
-                  )}
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      disabled={actioningId === a.id}
+                      onClick={() => handleApprove(a.id)}
+                      className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer transition-all ${okBg} hover:brightness-105 disabled:opacity-50`}
+                    >{actioningId === a.id ? "…" : "Approve"}</button>
+                    <button
+                      disabled={actioningId === a.id}
+                      onClick={() => handleReject(a.id)}
+                      className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer transition-all ${critBg} hover:brightness-105 disabled:opacity-50`}
+                    >{actioningId === a.id ? "…" : "Reject"}</button>
+                    <button
+                      onClick={() => handleDeleteApproval(a.id)}
+                      className="h-7 px-3 rounded-full text-[11px] font-black border border-[#E9EDEF] bg-white text-[#667781] cursor-pointer hover:bg-[#F8FAFC] transition-all"
+                    >Remove</button>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
 
           {/* ════════════════════ BOTTOM SCROLL ═════════════════════════════════ */}
 
-          {/* ── Audit Trail ───────────────────────────────────────────────────── */}
+          {/* ── Audit Trail (Irrefutable) ─────────────────────────────────────
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E9EDEF]">
               <div className="font-black text-[13px] text-[#111B21]">Audit Trail (Irrefutable)</div>
@@ -642,7 +718,7 @@ export function TenantTowerPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
 
           {/* ── Policy Violations & Opportunities ──────────────────────────────
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
@@ -695,6 +771,63 @@ export function TenantTowerPage() {
         tenantId={selectedId}
         tenantName={selectedTenant?.name ?? ""}
       />
+
+      {/* ── Edit Client Modal ───────────────────────────────────────────── */}
+      {editingClient && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center z-[600]" onClick={() => setEditingClient(null)}>
+          <div className="bg-white rounded-xl border border-[#E9EDEF] shadow-xl w-[400px] p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="font-black text-[14px] text-[#111B21] mb-4">Edit Client</div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-[11px] font-black text-[#667781] mb-1 block">Client Name</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E] bg-[#F8FAFC]" />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-[#667781] mb-1 block">Client Email</label>
+                <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E] bg-[#F8FAFC]" />
+              </div>
+              <div className="text-[10px] text-[#667781] font-mono">UID: {editingClient.client_uid}</div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setEditingClient(null)} className="h-8 px-4 rounded-lg text-[12px] font-black border border-[#E9EDEF] bg-white text-[#667781] cursor-pointer hover:bg-[#F8FAFC]">Cancel</button>
+              <button
+                onClick={() => {
+                  // TODO: wire to PUT/PATCH client endpoint when available
+                  setClients((prev) => prev.map((c) => c.client_uid === editingClient.client_uid ? { ...c, client_name: editName, client_email: editEmail } : c));
+                  setEditingClient(null);
+                }}
+                className="h-8 px-4 rounded-lg text-[12px] font-black border-none bg-[#128C7E] text-white cursor-pointer hover:brightness-105"
+              >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Client Confirmation ────────────────────────────────────── */}
+      {deletingClient && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center z-[600]" onClick={() => setDeletingClient(null)}>
+          <div className="bg-white rounded-xl border border-[#E9EDEF] shadow-xl w-[380px] p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="font-black text-[14px] text-[#EF4444] mb-2">Delete Client</div>
+            <div className="text-[12px] text-[#111B21] mb-1">
+              Are you sure you want to delete <span className="font-black">{deletingClient.client_name}</span>?
+            </div>
+            <div className="text-[11px] text-[#667781] mb-4">This action cannot be undone. All associated devices and data may be affected.</div>
+            <div className="text-[10px] text-[#667781] font-mono mb-4">UID: {deletingClient.client_uid}</div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeletingClient(null)} className="h-8 px-4 rounded-lg text-[12px] font-black border border-[#E9EDEF] bg-white text-[#667781] cursor-pointer hover:bg-[#F8FAFC]">Cancel</button>
+              <button
+                onClick={() => {
+                  // TODO: wire to DELETE client endpoint when available
+                  setClients((prev) => prev.filter((c) => c.client_uid !== deletingClient.client_uid));
+                  if (selectedClientId === deletingClient.client_uid) setSelectedClientId(null);
+                  setDeletingClient(null);
+                }}
+                className="h-8 px-4 rounded-lg text-[12px] font-black border-none bg-[#EF4444] text-white cursor-pointer hover:brightness-105"
+              >Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Right Blade: Create Tenant / Sub-Org ──────────────────────────── */}
       {bladeOpen && (
