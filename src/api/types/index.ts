@@ -41,6 +41,7 @@ export type {
   OfflineUnitsResponse,
   ExpiredSubscription,
   ExpiredTokensResponse,
+  TokenPackage,
   ClientTokenBalance,
   BuyTokensRequest,
   BuyTokensResponse,

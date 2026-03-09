@@ -77,6 +77,7 @@ export type {
   ExpiringAccount,
   ExpiringSubscriptionsResponse,
   ClientTransaction,
+  TokenPackage,
   ClientTokenBalance,
   BuyTokensRequest,
   BuyTokensResponse,
@@ -114,5 +115,5 @@ export {
   requestDraftApproval,
   submitApprovedDraft,
 } from "./services/tenants.service";
-export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
+export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getAllTokens, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";

@@ -75,6 +75,7 @@ export const ENDPOINTS = {
     GET_TRASHED: "/clients/trashed",
   },
   TOKENS: {
+    GET_ALL:  "/tokens",
     BUY:      "/payments/tokens/buy",
     TRANSFER: "/tokens/transfer",
     BALANCE:  "/tokens",               // append /{client_uid}/balance

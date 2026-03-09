@@ -93,6 +93,19 @@ export interface ExpiredTokensResponse {
   subscriptions:  ExpiredSubscription[];
 }
 
+// ── Token registry (packages available for purchase) ────────────────────────
+
+export interface TokenPackage {
+  token_id:         string;
+  token_name:       string;
+  token_type:       string;   // "parameter" | "dynamic"
+  token_validity:   number;   // hours
+  token_currency:   string;   // KES, UGX, USD
+  token_parameters: unknown[];
+  date_created:     string;
+  token_amount:     number;   // price per unit
+}
+
 // ── Token wallet ────────────────────────────────────────────────────────────
 
 export interface ClientTokenBalance {
@@ -119,9 +132,9 @@ export interface BuyTokensResponse {
 }
 
 export interface TransferTokensRequest {
-  from_client_uid: string;
-  to_client_uid:   string;
-  amount:          number;
+  source_client_uid:      string;
+  destination_client_uid: string;
+  token_billing_uid:      string;
 }
 
 export interface TransferTokensResponse {

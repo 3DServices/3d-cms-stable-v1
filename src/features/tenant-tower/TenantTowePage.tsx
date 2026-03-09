@@ -777,6 +777,7 @@ export function TenantTowerPage() {
         onClose={() => setAllocateOpen(false)}
         fromClientUid={selectedClientId}
         fromClientName={selectedClient?.client_name ?? ""}
+        tokenBillingUid={tokenBalance?.token_billing_uid ?? null}
         onSuccess={refreshBalance}
       />
 

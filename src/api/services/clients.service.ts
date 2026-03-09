@@ -21,6 +21,7 @@ import type { ApiResponse, RequestOptions } from "../types";
 import type {
   Client, ClientDevice, CreateClientRequest, UpdateClientRequest,
   TrashClientRequest, TrashedClient,
+  TokenPackage,
   ClientTokenBalance, BuyTokensRequest, BuyTokensResponse,
   TransferTokensRequest, TransferTokensResponse,
 } from "../types";
@@ -87,6 +88,13 @@ export function getClientDevices(
   opts?: RequestOptions,
 ): Promise<ApiResponse<ClientDevice[]>> {
   return get<ClientDevice[]>(`${ENDPOINTS.CLIENTS.DEVICES}/${clientUid}/client`, opts);
+}
+
+/** Fetch all available token packages from the registry. */
+export function getAllTokens(
+  opts?: RequestOptions,
+): Promise<ApiResponse<TokenPackage[]>> {
+  return get<TokenPackage[]>(ENDPOINTS.TOKENS.GET_ALL, opts);
 }
 
 /** Fetch token balance for a client. */

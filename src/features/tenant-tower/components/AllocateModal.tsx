@@ -1,23 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { transferTokens, getAllClients } from "../../../api";
 import type { Client } from "../../../api";
-import { useEffect } from "react";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   fromClientUid: string | null;
   fromClientName: string;
+  tokenBillingUid: string | null;
   onSuccess: () => void;
 }
 
-export function AllocateModal({ open, onClose, fromClientUid, fromClientName, onSuccess }: Props) {
+export function AllocateModal({ open, onClose, fromClientUid, fromClientName, tokenBillingUid, onSuccess }: Props) {
   const [clients, setClients] = useState<Client[]>([]);
   const [toClientUid, setToClientUid] = useState("");
-  const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ from_new_balance: number; to_new_balance: number } | null>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -30,9 +29,8 @@ export function AllocateModal({ open, onClose, fromClientUid, fromClientName, on
 
   function reset() {
     setToClientUid("");
-    setAmount("");
     setError(null);
-    setResult(null);
+    setSuccess(false);
   }
 
   function handleClose() {
@@ -42,22 +40,22 @@ export function AllocateModal({ open, onClose, fromClientUid, fromClientName, on
 
   async function handleSubmit() {
     if (!fromClientUid) return;
+    if (!tokenBillingUid) { setError("Source client has no token to transfer"); return; }
     if (!toClientUid) { setError("Select a recipient client"); return; }
-    const num = Number(amount);
-    if (!num || num <= 0) { setError("Enter a positive token amount"); return; }
 
     setLoading(true);
     setError(null);
     try {
-      const res = await transferTokens({
-        from_client_uid: fromClientUid,
-        to_client_uid: toClientUid,
-        amount: num,
+      await transferTokens({
+        source_client_uid: fromClientUid,
+        destination_client_uid: toClientUid,
+        token_billing_uid: tokenBillingUid,
       });
-      setResult({ from_new_balance: res.data.from_new_balance, to_new_balance: res.data.to_new_balance });
+      setSuccess(true);
       onSuccess();
-    } catch (e: any) {
-      setError(e?.message ?? "Transfer failed");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Transfer failed";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -78,14 +76,11 @@ export function AllocateModal({ open, onClose, fromClientUid, fromClientName, on
             Transfer tokens from <span className="font-black text-[#111B21]">{fromClientName}</span> to another client
           </div>
 
-          {result ? (
+          {success ? (
             <div className="bg-[#EAF7F3] border border-[#25D366] rounded-xl p-4 text-center">
               <div className="text-[14px] font-black text-[#128C7E]">Transfer Successful</div>
               <div className="text-[12px] text-[#667781] mt-1">
-                {fromClientName} balance: <span className="font-black text-[#111B21]">{result.from_new_balance.toLocaleString()}</span>
-              </div>
-              <div className="text-[12px] text-[#667781] mt-0.5">
-                Recipient balance: <span className="font-black text-[#111B21]">{result.to_new_balance.toLocaleString()}</span>
+                Token transferred to {clients.find((c) => c.client_uid === toClientUid)?.client_name ?? "recipient"}
               </div>
               <button onClick={handleClose} className="mt-3 h-8 px-4 rounded-full text-[11px] font-black bg-[#128C7E] text-white border-none cursor-pointer">Done</button>
             </div>
@@ -108,23 +103,15 @@ export function AllocateModal({ open, onClose, fromClientUid, fromClientName, on
                 )}
               </div>
 
-              <div className="mb-3">
-                <label className="text-[10px] font-black text-[#667781] block mb-1">Amount (tokens)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 5000"
-                  className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-[#F8FAFC] px-3 text-[12px] font-black text-[#111B21] outline-none focus:border-[#128C7E]"
-                />
-              </div>
+              {!tokenBillingUid && (
+                <div className="text-[11px] text-[#F97316] font-black mb-2">Source client has no active token to transfer</div>
+              )}
 
               {error && <div className="text-[11px] text-[#EF4444] font-black mb-2">{error}</div>}
 
               <button
                 onClick={handleSubmit}
-                disabled={loading}
+                disabled={loading || !tokenBillingUid}
                 className="h-8 px-4 rounded-full text-[11px] font-black bg-[#128C7E] text-white border-none cursor-pointer disabled:opacity-50"
               >
                 {loading ? "Transferring…" : "Confirm Transfer"}
