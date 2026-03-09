@@ -14,6 +14,23 @@ export interface CreateClientRequest {
   client_owner: string;
 }
 
+export interface UpdateClientRequest {
+  client_name?:  string;
+  client_email?: string;
+}
+
+export interface TrashClientRequest {
+  deleted_by: string;
+}
+
+export interface TrashedClient {
+  client_uid:   string;
+  client_name:  string;
+  client_email: string;
+  deleted_by:   string;
+  deleted_at:   string;
+}
+
 export interface ClientDevice {
   device_imei:          string;
   device_name:          string;
@@ -74,4 +91,42 @@ export interface ExpiredSubscription {
 export interface ExpiredTokensResponse {
   count:          number;
   subscriptions:  ExpiredSubscription[];
+}
+
+// ── Token wallet ────────────────────────────────────────────────────────────
+
+export interface ClientTokenBalance {
+  client_uid:        string;
+  client_name:       string;
+  token_billing_uid: string | null;
+  token_uid:         string | null;
+  token_name:        string;
+  token_hours_left:  number;
+  token_hours_used:  number;
+}
+
+export interface BuyTokensRequest {
+  token_buyer:          string;   // client_uid
+  token_uid:            string;   // token type/plan UID
+  mobile_money_number:  string;
+  token_quantity:       number;
+}
+
+export interface BuyTokensResponse {
+  client_uid:   string;
+  new_balance:  number;
+  transaction_id: string;
+}
+
+export interface TransferTokensRequest {
+  from_client_uid: string;
+  to_client_uid:   string;
+  amount:          number;
+}
+
+export interface TransferTokensResponse {
+  from_client_uid:  string;
+  to_client_uid:    string;
+  from_new_balance: number;
+  to_new_balance:   number;
 }

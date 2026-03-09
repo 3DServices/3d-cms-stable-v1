@@ -1,28 +1,30 @@
 import React, { useState } from "react";
-import { topUpWallet } from "../../../api";
+import { buyTokens } from "../../../api";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  tenantId: string | null;
-  tenantName: string;
+  clientUid: string | null;
+  clientName: string;
+  tokenUid: string | null;
+  tokenName: string;
   onSuccess: () => void;
 }
 
-export function TopUpModal({ open, onClose, tenantId, tenantName, onSuccess }: Props) {
-  const [amount, setAmount] = useState("");
-  const [reference, setReference] = useState("");
+export function TopUpModal({ open, onClose, clientUid, clientName, tokenUid, tokenName, onSuccess }: Props) {
+  const [quantity, setQuantity] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ new_balance: number } | null>(null);
+  const [success, setSuccess] = useState(false);
 
   if (!open) return null;
 
   function reset() {
-    setAmount("");
-    setReference("");
+    setQuantity("");
+    setPhoneNumber("");
     setError(null);
-    setResult(null);
+    setSuccess(false);
   }
 
   function handleClose() {
@@ -31,19 +33,26 @@ export function TopUpModal({ open, onClose, tenantId, tenantName, onSuccess }: P
   }
 
   async function handleSubmit() {
-    if (!tenantId) return;
-    const num = Number(amount);
-    if (!num || num <= 0) { setError("Enter a positive token amount"); return; }
-    if (!reference.trim()) { setError("Enter a payment reference"); return; }
+    if (!clientUid) return;
+    if (!tokenUid) { setError("Client has no token plan assigned"); return; }
+    const num = Number(quantity);
+    if (!num || num <= 0) { setError("Enter a positive token quantity"); return; }
+    if (!phoneNumber.trim()) { setError("Enter a Mobile Money number"); return; }
 
     setLoading(true);
     setError(null);
     try {
-      const res = await topUpWallet({ tenant_id: tenantId, amount: num, reference: reference.trim() });
-      setResult({ new_balance: res.data.new_balance });
+      await buyTokens({
+        token_buyer: clientUid,
+        token_uid: tokenUid,
+        mobile_money_number: phoneNumber.trim(),
+        token_quantity: num,
+      });
+      setSuccess(true);
       onSuccess();
     } catch (e: any) {
-      setError(e?.message ?? "Top-up failed");
+      console.error("[BuyTokens] error:", e);
+      setError(e?.message ?? "Token purchase failed");
     } finally {
       setLoading(false);
     }
@@ -54,43 +63,44 @@ export function TopUpModal({ open, onClose, tenantId, tenantName, onSuccess }: P
       <div className="bg-white rounded-xl shadow-xl w-[420px] max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#E9EDEF]">
-          <span className="font-black text-[14px] text-[#111B21]">Top-Up Tokens</span>
+          <span className="font-black text-[14px] text-[#111B21]">Buy Tokens</span>
           <button onClick={handleClose} className="text-[11px] text-[#667781] bg-[#F0F2F5] border border-[#E9EDEF] rounded-lg px-3 py-1.5 cursor-pointer font-black hover:bg-[#E9EDEF]">Close</button>
         </div>
 
         {/* Body */}
         <div className="px-5 py-4">
           <div className="text-[12px] text-[#667781] mb-3">
-            Add tokens to <span className="font-black text-[#111B21]">{tenantName}</span>
+            Buy tokens for <span className="font-black text-[#111B21]">{clientName}</span>
+            {tokenName && <> — <span className="font-black text-[#128C7E]">{tokenName}</span></>}
           </div>
 
-          {result ? (
+          {success ? (
             <div className="bg-[#EAF7F3] border border-[#25D366] rounded-xl p-4 text-center">
-              <div className="text-[14px] font-black text-[#128C7E]">Top-Up Successful</div>
-              <div className="text-[12px] text-[#667781] mt-1">New balance: <span className="font-black text-[#111B21]">{result.new_balance.toLocaleString()}</span> tokens</div>
+              <div className="text-[14px] font-black text-[#128C7E]">Purchase Successful</div>
+              <div className="text-[12px] text-[#667781] mt-1">Token purchase submitted via Mobile Money</div>
               <button onClick={handleClose} className="mt-3 h-8 px-4 rounded-full text-[11px] font-black bg-[#128C7E] text-white border-none cursor-pointer">Done</button>
             </div>
           ) : (
             <>
               <div className="mb-3">
-                <label className="text-[10px] font-black text-[#667781] block mb-1">Amount (tokens)</label>
+                <label className="text-[10px] font-black text-[#667781] block mb-1">Quantity (hours)</label>
                 <input
                   type="number"
                   min="1"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 10000"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="e.g. 100"
                   className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-[#F8FAFC] px-3 text-[12px] font-black text-[#111B21] outline-none focus:border-[#128C7E]"
                 />
               </div>
 
               <div className="mb-3">
-                <label className="text-[10px] font-black text-[#667781] block mb-1">Payment Reference</label>
+                <label className="text-[10px] font-black text-[#667781] block mb-1">Mobile Money Number</label>
                 <input
-                  type="text"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder="e.g. INV-2026-0042 or MoMo TXN ID"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="e.g. 256770123456"
                   className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-[#F8FAFC] px-3 text-[12px] font-black text-[#111B21] outline-none focus:border-[#128C7E]"
                 />
               </div>
@@ -102,7 +112,7 @@ export function TopUpModal({ open, onClose, tenantId, tenantName, onSuccess }: P
                 disabled={loading}
                 className="h-8 px-4 rounded-full text-[11px] font-black bg-[#128C7E] text-white border-none cursor-pointer disabled:opacity-50"
               >
-                {loading ? "Processing…" : "Confirm Top-Up"}
+                {loading ? "Processing…" : "Confirm Purchase"}
               </button>
             </>
           )}

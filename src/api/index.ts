@@ -64,6 +64,8 @@ export type {
   Client,
   ClientDevice,
   CreateClientRequest,
+  UpdateClientRequest,
+  TrashedClient,
   OnlineUnitsResponse,
   OfflineUnitsResponse,
   ExpiredTokensResponse,
@@ -75,6 +77,11 @@ export type {
   ExpiringAccount,
   ExpiringSubscriptionsResponse,
   ClientTransaction,
+  ClientTokenBalance,
+  BuyTokensRequest,
+  BuyTokensResponse,
+  TransferTokensRequest,
+  TransferTokensResponse,
 } from "./types";
 
 // ── Domain services ──────────────────────────────────────────────────────────
@@ -107,5 +114,5 @@ export {
   requestDraftApproval,
   submitApprovedDraft,
 } from "./services/tenants.service";
-export { createClient, getAllClients, getClientsByProvider, getClientDevices } from "./services/clients.service";
+export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";

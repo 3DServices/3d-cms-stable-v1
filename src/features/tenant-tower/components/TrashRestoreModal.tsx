@@ -1,27 +1,21 @@
 /**
- * TrashRestoreModal — Tenant Trash & Restore overlay.
+ * TrashRestoreModal — Client Trash & Restore overlay.
  *
- * Shows soft-deleted tenants with age + restore action.
- * Restore of high-impact tenants is HITL-gated.
+ * Shows soft-deleted clients with restore action.
  * 30-day retention, then permanent purge.
  */
 import React, { useEffect, useState } from "react";
-import { getTrashedTenants, restoreTenant, ApiError } from "../../../api";
-import type { TrashedTenant } from "../../../api";
+import { getTrashedClients, restoreClient, ApiError } from "../../../api";
+import type { TrashedClient } from "../../../api";
 
 interface TrashRestoreModalProps {
   open:    boolean;
   onClose: () => void;
+  onRestored?: () => void;
 }
 
-const FALLBACK: TrashedTenant[] = [
-  { id: "t1", name: "Mombasa_Reefer_Coldchain",    tier: "ORG",    trashed_at: "2026-02-28T08:00:00Z", age: "5d",  hitl_required: false },
-  { id: "t2", name: "Old_Demo_Tenant",              tier: "CLIENT", trashed_at: "2026-02-20T12:00:00Z", age: "13d", hitl_required: false },
-  { id: "t3", name: "Gulu_Schools_Patrol",          tier: "ORG",    trashed_at: "2026-02-10T09:00:00Z", age: "23d", hitl_required: true  },
-];
-
-export function TrashRestoreModal({ open, onClose }: TrashRestoreModalProps) {
-  const [items, setItems]       = useState<TrashedTenant[]>(FALLBACK);
+export function TrashRestoreModal({ open, onClose, onRestored }: TrashRestoreModalProps) {
+  const [items, setItems]       = useState<TrashedClient[]>([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -30,7 +24,7 @@ export function TrashRestoreModal({ open, onClose }: TrashRestoreModalProps) {
     if (!open) return;
     setLoading(true);
     setError(null);
-    getTrashedTenants()
+    getTrashedClients()
       .then((res) => setItems(res.data))
       .catch((err) => {
         if (err instanceof ApiError) setError(err.apiMessage ?? err.message);
@@ -38,16 +32,24 @@ export function TrashRestoreModal({ open, onClose }: TrashRestoreModalProps) {
       .finally(() => setLoading(false));
   }, [open]);
 
-  async function handleRestore(id: string) {
-    setRestoring(id);
+  async function handleRestore(clientUid: string) {
+    setRestoring(clientUid);
     try {
-      await restoreTenant(id);
-      setItems((prev) => prev.filter((t) => t.id !== id));
+      await restoreClient(clientUid);
+      setItems((prev) => prev.filter((c) => c.client_uid !== clientUid));
+      onRestored?.();
     } catch (err) {
       if (err instanceof ApiError) setError(err.apiMessage ?? err.message);
     } finally {
       setRestoring(null);
     }
+  }
+
+  function ageLabel(deletedAt: string): string {
+    const diff = Date.now() - new Date(deletedAt).getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days < 1) return "<1d";
+    return `${days}d`;
   }
 
   if (!open) return null;
@@ -59,7 +61,7 @@ export function TrashRestoreModal({ open, onClose }: TrashRestoreModalProps) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9EDEF] shrink-0">
           <div>
             <div className="font-black text-[14px] text-[#111B21]">Trash &amp; Restore</div>
-            <div className="text-[11px] text-[#667781] mt-0.5">Soft-deleted tenants retained 30 days. Restore requires HITL if high-impact.</div>
+            <div className="text-[11px] text-[#667781] mt-0.5">Soft-deleted clients retained 30 days before permanent purge.</div>
           </div>
           <button onClick={onClose} className="text-[11px] text-[#667781] bg-[#F0F2F5] border border-[#E9EDEF] rounded-lg px-3 py-1.5 cursor-pointer font-black hover:bg-[#E9EDEF]">Close</button>
         </div>
@@ -71,35 +73,32 @@ export function TrashRestoreModal({ open, onClose }: TrashRestoreModalProps) {
           )}
 
           {loading ? (
-            <div className="flex items-center justify-center py-12 text-[12px] text-[#667781]">Loading trashed tenants...</div>
+            <div className="flex items-center justify-center py-12 text-[12px] text-[#667781]">Loading trashed clients...</div>
           ) : items.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-[12px] text-[#667781]">No trashed tenants.</div>
+            <div className="flex items-center justify-center py-12 text-[12px] text-[#667781]">No trashed clients.</div>
           ) : (
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-[#E9EDEF] bg-[#F8FAFC]">
-                  {["Tenant", "Tier", "Age", "Action"].map((h) => (
+                  {["Client", "Email", "Deleted By", "Age", "Action"].map((h) => (
                     <th key={h} className="text-left px-5 py-2.5 text-[11px] font-extrabold text-[#667781]">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {items.map((t) => (
-                  <tr key={t.id} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC]">
-                    <td className="px-5 py-3 font-extrabold text-[#111B21]">{t.name}</td>
-                    <td className="px-5 py-3 text-[#667781]">{t.tier}</td>
-                    <td className="px-5 py-3 text-[#667781]">{t.age}</td>
+                {items.map((c) => (
+                  <tr key={c.client_uid} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC]">
+                    <td className="px-5 py-3 font-extrabold text-[#111B21]">{c.client_name}</td>
+                    <td className="px-5 py-3 text-[#667781]">{c.client_email}</td>
+                    <td className="px-5 py-3 text-[#667781]">{c.deleted_by}</td>
+                    <td className="px-5 py-3 text-[#667781]">{ageLabel(c.deleted_at)}</td>
                     <td className="px-5 py-3">
                       <button
-                        disabled={restoring === t.id}
-                        onClick={() => handleRestore(t.id)}
-                        className={`h-7 px-3 rounded-full text-[10px] font-black border-none cursor-pointer transition-all whitespace-nowrap ${
-                          t.hitl_required
-                            ? "bg-[#F97316] text-white hover:brightness-105"
-                            : "bg-[#F0F2F5] text-[#111B21] hover:bg-[#E9EDEF]"
-                        } disabled:opacity-50`}
+                        disabled={restoring === c.client_uid}
+                        onClick={() => handleRestore(c.client_uid)}
+                        className="h-7 px-3 rounded-full text-[10px] font-black border-none cursor-pointer transition-all bg-[#F0F2F5] text-[#111B21] hover:bg-[#E9EDEF] disabled:opacity-50"
                       >
-                        {restoring === t.id ? "Restoring..." : t.hitl_required ? "Restore (HITL)" : "Restore"}
+                        {restoring === c.client_uid ? "Restoring..." : "Restore"}
                       </button>
                     </td>
                   </tr>
