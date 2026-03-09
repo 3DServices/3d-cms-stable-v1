@@ -56,7 +56,7 @@ const stColor: Record<string, string> = {
 //   { name:"gps_ping",           rps:"RPS 5.1",  dot:"bg-[#25D366]" },
 // ];
 
-const BLADE_TABS = ["Overview","Payload","Audit Trail","Links"];
+const BLADE_TABS = ["Overview"/* ,"Payload","Audit Trail","Links" */];
 
 const MISMATCHES = [
   { ev:"EV-9821", type:"PAY",  reason:"Webhook timeout; callback retry pending",  impact:"UGX 420k" },
@@ -70,6 +70,7 @@ const MISMATCHES = [
 export function BillingPage() {
   const [bladeOpen, setBladeOpen] = useState(false);
   const [bladeTab, setBladeTab] = useState("Overview");
+  const [selectedTxn, setSelectedTxn] = useState<ClientTransaction | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   const [activeStats, setActiveStats] = useState<ActiveSubscriptionsResponse | null>(null);
@@ -265,7 +266,7 @@ export function BillingPage() {
                   </tr></thead>
                   <tbody>
                     {transactions.map((t, i) => (
-                      <tr key={t.transaction_uid} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer" onClick={() => { setBladeOpen(true); setBladeTab("Overview"); }}>
+                      <tr key={t.transaction_uid} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer" onClick={() => { setSelectedTxn(t); setBladeOpen(true); setBladeTab("Overview"); }}>
                         <td className="px-3 py-2.5 text-[#667781]">{i + 1}</td>
                         <td className="px-3 py-2.5 font-mono text-[#111B21]">{t.transaction_uid.slice(0, 20)}…</td>
                         <td className="px-3 py-2.5 text-[#111B21]">{t.token_count}</td>
@@ -316,10 +317,10 @@ export function BillingPage() {
       </main>
 
       {/* ── Blade: Event Detail ───────────────────────────────────── */}
-      {bladeOpen && (
+      {bladeOpen && selectedTxn && (
         <div className="w-[420px] shrink-0 bg-white border-l border-[#E9EDEF] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-[#E9EDEF] shrink-0">
-            <div className="font-black text-[14px] text-[#111B21]">Blade • Event EV-9821</div>
+            <div className="font-black text-[14px] text-[#111B21]">Transaction Overview</div>
             <button onClick={() => setBladeOpen(false)} className="w-7 h-7 rounded-lg bg-[#F0F2F5] border border-[#E9EDEF] text-[#667781] font-black text-[13px] cursor-pointer grid place-items-center hover:bg-[#E9EDEF]">✕</button>
           </div>
           <div className="flex gap-1.5 px-5 py-2.5 border-b border-[#E9EDEF] shrink-0">
@@ -330,85 +331,32 @@ export function BillingPage() {
           <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-5 py-4">
 
             {bladeTab === "Overview" && (<>
-              <BSection title="Event Summary">
+              <BSection title="Transaction Details">
                 <div className="p-4"><KV rows={[
-                  {k:"Domain:",  v:"VEBA"}, {k:"Product:", v:"VEBA"}, {k:"Tenant:",  v:"3D • TEPU"},
-                  {k:"Tokens:",  v:"34.0"}, {k:"Status:",  v:"PENDING (webhook retry)"}, {k:"Hash:", v:"9f0d…c2aa"},
+                  {k:"Txn UID:",   v: selectedTxn.transaction_uid},
+                  {k:"Tokens:",    v: selectedTxn.token_count},
+                  {k:"Validity:",  v: selectedTxn.token_validity},
+                  {k:"Cost:",      v: `${Number(selectedTxn.total_cost).toLocaleString()} ${selectedTxn.payment_currency}`},
+                  {k:"Date:",      v: selectedTxn.date},
+                  {k:"Status:",    v: selectedTxn.payment_status.toUpperCase()},
                 ]} /></div>
               </BSection>
-              <BSection title="HITL Actions">
+              <BSection title="Client">
+                <div className="p-4"><KV rows={[
+                  {k:"Client:",    v: clients.find(c => c.client_uid === selectedClientId)?.client_name ?? "—"},
+                  {k:"Email:",     v: clients.find(c => c.client_uid === selectedClientId)?.client_email ?? "—"},
+                  {k:"UID:",       v: selectedClientId ?? "—"},
+                ]} /></div>
+              </BSection>
+              {/* <BSection title="HITL Actions">
                 <div className="p-4 flex gap-2 flex-wrap">
                   <button className="h-8 px-3 rounded-lg bg-[#128C7E] text-white text-[11px] font-black border-none cursor-pointer">Replay to Kafka</button>
                   <button className="h-8 px-3 rounded-lg bg-[#EF4444] text-white text-[11px] font-black border-none cursor-pointer">Mark disputed</button>
                   <button className="h-8 px-3 rounded-lg bg-[#34B7F1] text-white text-[11px] font-black border-none cursor-pointer">Open booking</button>
                 </div>
-              </BSection>
-              <BSection title="Payload (masked PII)">
-                <pre className="p-4 text-[11px] font-mono text-[#667781] leading-relaxed whitespace-pre-wrap">{"{\n  \"event_id\": \"EV-9821\",\n  \"tenant_id\": \"TEPU\",\n  \"domain\": \"VEBA\",\n  \"booking_id\": \"BK-77102\",\n  \"payment_ref\": \"MPESA-…-1142\",\n  \"tokens\": 34.0,\n  \"rps\": 9.7,\n  \"ts\": \"2026-02-24T11:42:10Z\"\n}"}</pre>
-              </BSection>
-              <BSection title="Audit Trail (Irrefutable)">
-                <div className="p-4 flex flex-col gap-2">
-                  {[
-                    {ts:"11:42:10", dot:"bg-[#25D366]", ev:"Usage event emitted"},
-                    {ts:"11:42:11", dot:"bg-[#25D366]", ev:"Kafka write OK"},
-                    {ts:"11:42:12", dot:"bg-[#25D366]", ev:"Billing ledger insert"},
-                    {ts:"11:43:01", dot:"bg-[#FBBF24]", ev:"Payment callback timeout"},
-                    {ts:"11:43:31", dot:"bg-[#FBBF24]", ev:"Retry #1 scheduled"},
-                  ].map(a => (
-                    <div key={a.ts} className="flex items-center gap-2.5 text-[11px]">
-                      <span className={`w-2 h-2 rounded-full ${a.dot} shrink-0`} />
-                      <span className="font-black text-[#111B21] w-[56px] font-mono">{a.ts}</span>
-                      <span className="text-[#667781]">{a.ev}</span>
-                    </div>
-                  ))}
-                </div>
-              </BSection>
-              <BSection title="Linked Objects">
-                <div className="p-4"><KV rows={[
-                  {k:"Booking:", v:"BK-77102"}, {k:"Invoice:", v:"INV-TEPU-22014"},
-                  {k:"Txn:",     v:"MPESA-…-1142"}, {k:"Asset:", v:"KLA-BODA-044"},
-                ]} /></div>
-              </BSection>
+              </BSection> */}
             </>)}
 
-            {bladeTab === "Payload" && (
-              <BSection title="Raw Payload (masked PII)">
-                <pre className="p-4 text-[11px] font-mono text-[#667781] leading-relaxed whitespace-pre-wrap">{"{\n  \"event_id\": \"EV-9821\",\n  \"tenant_id\": \"TEPU\",\n  \"domain\": \"VEBA\",\n  \"booking_id\": \"BK-77102\",\n  \"payment_ref\": \"MPESA-…-1142\",\n  \"tokens\": 34.0,\n  \"rps\": 9.7,\n  \"ts\": \"2026-02-24T11:42:10Z\"\n}"}</pre>
-              </BSection>
-            )}
-            {bladeTab === "Audit Trail" && (<>
-              <BSection title="Audit Trail (Irrefutable)">
-                <div className="p-4 flex flex-col gap-2">
-                  {[
-                    {ts:"11:42:10", dot:"bg-[#25D366]", ev:"Usage event emitted"},
-                    {ts:"11:42:11", dot:"bg-[#25D366]", ev:"Kafka write OK"},
-                    {ts:"11:42:12", dot:"bg-[#25D366]", ev:"Billing ledger insert"},
-                    {ts:"11:43:01", dot:"bg-[#FBBF24]", ev:"Payment callback timeout"},
-                    {ts:"11:43:31", dot:"bg-[#FBBF24]", ev:"Retry #1 scheduled"},
-                  ].map(a => (
-                    <div key={a.ts} className="flex items-center gap-2.5 text-[11px]">
-                      <span className={`w-2 h-2 rounded-full ${a.dot} shrink-0`} />
-                      <span className="font-black text-[#111B21] w-[56px] font-mono">{a.ts}</span>
-                      <span className="text-[#667781]">{a.ev}</span>
-                    </div>
-                  ))}
-                </div>
-              </BSection>
-              <BSection title="Linked Objects">
-                <div className="p-4"><KV rows={[
-                  {k:"Booking:", v:"BK-77102"}, {k:"Invoice:", v:"INV-TEPU-22014"},
-                  {k:"Txn:",     v:"MPESA-…-1142"}, {k:"Asset:", v:"KLA-BODA-044"},
-                ]} /></div>
-              </BSection>
-            </>)}
-            {bladeTab === "Links" && (
-              <BSection title="Linked Objects">
-                <div className="p-4"><KV rows={[
-                  {k:"Booking:", v:"BK-77102"}, {k:"Invoice:", v:"INV-TEPU-22014"},
-                  {k:"Txn:",     v:"MPESA-…-1142"}, {k:"Asset:", v:"KLA-BODA-044"},
-                ]} /></div>
-              </BSection>
-            )}
           </div>
         </div>
       )}
