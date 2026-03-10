@@ -80,6 +80,17 @@ export type {
 } from "./tenants.types";
 
 export type {
+  RbacPermission,
+  RbacRole,
+  RbacRoleDetail,
+  RbacUserPermissions,
+  CreateRoleRequest,
+  CreateRoleResponse,
+  UpdateRoleRequest,
+  DeleteRoleRequest,
+} from "./rbac.types";
+
+export type {
   HighSubClient,
   HighSubClientsResponse,
   PausedSubscription,

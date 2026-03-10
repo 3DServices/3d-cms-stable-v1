@@ -80,4 +80,13 @@ export const ENDPOINTS = {
     TRANSFER: "/tokens/transfer",
     BALANCE:  "/tokens",               // append /{client_uid}/balance
   },
+  RBAC: {
+    ROLES:            "/rbac/roles",
+    ROLES_CREATE:     "/rbac/roles/create",
+    ROLES_BY_UID:     "/rbac/roles",           // append /{role_uid}
+    ROLES_UPDATE:     "/rbac/roles",           // append /{role_uid}/update
+    ROLES_DELETE:     "/rbac/roles",           // append /{role_uid}/delete
+    PERMISSIONS:      "/rbac/permissions",
+    USER_PERMISSIONS: "/rbac/users",           // append /{account_uid}/permissions
+  },
 } as const;
