@@ -8,19 +8,19 @@
  *   MODAL:  Right blade — Create Tenant / Sub-Org (tabs: Basics, Billing, Modules, RBAC, Review)
  */
 import React, { useEffect, useState } from "react";
-import { getAllTenants, getAllClients, getClientDevices, getOnlineUnits, getOfflineUnits, getExpiredTokens, getTenantWallet, /* getApprovals, approveRequest, rejectRequest, */ saveDraft, requestDraftApproval, submitApprovedDraft } from "../../api";
-import type { Tenant, Client, ClientDevice, OnlineUnitsResponse, OfflineUnitsResponse, ExpiredTokensResponse, TenantWallet, /* Approval, */ TenantTier } from "../../api";
+import { getAllTenants, getAllClients, createClient, getClientDevices, getClientBalance, getExpiredTokens, getActiveSubscriptions, /* getApprovals, approveRequest, rejectRequest, */ saveDraft, requestDraftApproval, submitApprovedDraft, getAccountUid, trashClient, updateClient, ApiError } from "../../api";
+import type { Tenant, Client, ClientDevice, ClientTokenBalance, ExpiredTokensResponse, ActiveSubscriptionsResponse, /* Approval, */ TenantTier } from "../../api";
+
 import { TrashRestoreModal } from "./components/TrashRestoreModal";
 import { ImportTenantsModal } from "./components/ImportTenantsModal";
-import { CreateSubOrgModal } from "./components/CreateSubOrgModal";
+// import { CreateSubOrgModal } from "./components/CreateSubOrgModal";
 import { TopUpModal } from "./components/TopUpModal";
 import { AllocateModal } from "./components/AllocateModal";
-import { MintModal } from "./components/MintModal";
 
 // ─── Colour helpers ──────────────────────────────────────────────────────────
 const okBg   = "bg-[#25D366] text-[#053B33]";
 const alarmBg= "bg-[#F97316] text-white";
-const critBg = "bg-[#EF4444] text-white";
+//const critBg = "bg-[#EF4444] text-white";
 // const darkBg = "bg-[#075E54] text-white";
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
@@ -40,14 +40,13 @@ export function TenantTowerPage() {
   const [bladeTab, setBladeTab] = useState("Basics");
   const [trashOpen, setTrashOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [subOrgOpen, setSubOrgOpen] = useState(false);
+  // const [subOrgOpen, setSubOrgOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [allocateOpen, setAllocateOpen] = useState(false);
-  const [mintOpen, setMintOpen] = useState(false);
+  // const [mintOpen, setMintOpen] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [onlineStats, setOnlineStats] = useState<OnlineUnitsResponse | null>(null);
-  const [offlineStats, setOfflineStats] = useState<OfflineUnitsResponse | null>(null);
+  const [activeSubStats, setActiveSubStats] = useState<ActiveSubscriptionsResponse | null>(null);
   const [expiredStats, setExpiredStats] = useState<ExpiredTokensResponse | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -61,11 +60,8 @@ export function TenantTowerPage() {
         if (res.data.length > 0) setSelectedClientId(res.data[0].client_uid);
       })
       .catch(() => {});
-    getOnlineUnits()
-      .then((res) => setOnlineStats(res.data))
-      .catch(() => {});
-    getOfflineUnits()
-      .then((res) => setOfflineStats(res.data))
+    getActiveSubscriptions()
+      .then((res) => setActiveSubStats(res.data))
       .catch(() => {});
     getExpiredTokens()
       .then((res) => setExpiredStats(res.data))
@@ -74,12 +70,12 @@ export function TenantTowerPage() {
     //   .then((res) => setApprovals(res.data))
     //   .catch(() => {})
     //   .finally(() => setApprovalsLoading(false));
-    getAllTenants()
-      .then((res) => {
-        setTenants(res.data);
-        if (res.data.length > 0) setSelectedId(res.data[0].id);
-      })
-      .catch(() => {});
+    // getAllTenants()
+    //   .then((res) => {
+    //     setTenants(res.data);
+    //     if (res.data.length > 0) setSelectedId(res.data[0].id);
+    //   })
+    //   .catch(() => {});
   }, []);
 
   const [clientDevices, setClientDevices] = useState<ClientDevice[]>([]);
@@ -103,16 +99,16 @@ export function TenantTowerPage() {
     return () => { cancelled = true; };
   }, [selectedClientId]);
 
-  const [wallet, setWallet] = useState<TenantWallet | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<ClientTokenBalance | null>(null);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedClientId) { setTokenBalance(null); return; }
     let cancelled = false;
-    getTenantWallet(selectedId)
-      .then((res) => { if (!cancelled) setWallet(res.data); })
-      .catch(() => { if (!cancelled) setWallet(null); });
+    getClientBalance(selectedClientId)
+      .then((res) => { if (!cancelled) setTokenBalance(res.data); })
+      .catch(() => { if (!cancelled) setTokenBalance(null); });
     return () => { cancelled = true; };
-  }, [selectedId]);
+  }, [selectedClientId]);
 
   // const [actioningId, setActioningId] = useState<string | null>(null);
   const [bladeDraftId, setBladeDraftId] = useState<string | null>(null);
@@ -161,6 +157,7 @@ export function TenantTowerPage() {
   // ── Blade form state ─────────────────────────────────────────────────────
   // Basics
   const [bladeName, setBladeName] = useState("");
+  const [bladeEmail, setBladeEmail] = useState("");
   const [bladeTier, setBladeTier] = useState<TenantTier>("ORG");
   const [bladeParent, setBladeParent] = useState<string | null>(null);
   const [bladeCountry, setBladeCountry] = useState("UG");
@@ -189,7 +186,7 @@ export function TenantTowerPage() {
   const [bladeResult, setBladeResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   function resetBladeForm() {
-    setBladeName(""); setBladeTier("ORG"); setBladeParent(null);
+    setBladeName(""); setBladeEmail(""); setBladeTier("ORG"); setBladeParent(null);
     setBladeCountry("UG"); setBladeCurrency("UGX"); setBladeTimezone("Africa/Kampala");
     setBladePlan("OLIWA-PLUS"); setBladeRetention("90"); setBladeDailyCap("300000");
     setBladeChannels({ "M-Pesa": true, "MTN MoMo": true, "Airtel Money": true, "Pesapal Cards": true, "Flutterwave": false });
@@ -236,6 +233,7 @@ export function TenantTowerPage() {
   }
 
   /** Request HITL Approval — sends draft to admin queue */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleRequestApproval() {
     if (!bladeDraftId) {
       // Auto-save draft first, then request approval
@@ -273,6 +271,7 @@ export function TenantTowerPage() {
   }
 
   /** Submit (after approval) — creates actual tenant from approved draft */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleBladeSubmit() {
     if (!bladeDraftId) {
       window.alert("Please save a draft and request approval first.");
@@ -301,6 +300,30 @@ export function TenantTowerPage() {
       .finally(() => setBladeSubmitting(false));
   }
 
+  /** Create Client — calls POST /clients/create */
+  function handleCreateClient() {
+    if (!bladeName.trim()) { window.alert("Client name is required"); return; }
+    if (!bladeEmail.trim()) { window.alert("Client email is required"); return; }
+    const owner = getAccountUid();
+    if (!owner) { window.alert("You must be logged in to create a client"); return; }
+    const payload = { client_name: bladeName.trim(), client_email: bladeEmail.trim(), client_owner: owner };
+    setBladeSubmitting(true);
+    setBladeResult(null);
+    createClient(payload)
+      .then(() => {
+        setBladeResult({ ok: true, msg: `Client "${bladeName.trim()}" created successfully` });
+        getAllClients()
+          .then((r) => { setClients(r.data); if (r.data.length > 0 && !selectedClientId) setSelectedClientId(r.data[0].client_uid); })
+          .catch(() => {});
+        setTimeout(() => { setBladeOpen(false); resetBladeForm(); }, 1500);
+      })
+      .catch((err) => {
+        console.error("[CreateClient] error:", err);
+        setBladeResult({ ok: false, msg: err?.message || "Failed to create client" });
+      })
+      .finally(() => setBladeSubmitting(false));
+  }
+
   const [clientSearch, setClientSearch] = useState("");
   const [clientFilter, setClientFilter] = useState<"ALL" | "billing" | "subscription">("ALL");
   const [clientFilterOpen, setClientFilterOpen] = useState(false);
@@ -316,7 +339,6 @@ export function TenantTowerPage() {
   const [editEmail, setEditEmail] = useState("");
   const [deletingClient, setDeletingClient] = useState<Client | null>(null);
 
-  const selectedTenant = tenants.find((t) => t.id === selectedId) ?? null;
   const selectedClient = clients.find((c) => c.client_uid === selectedClientId) ?? null;
 
   // function exportUsageCsv() {
@@ -334,10 +356,10 @@ export function TenantTowerPage() {
   //   URL.revokeObjectURL(url);
   // }
 
-  function refreshWallet() {
-    if (!selectedId) return;
-    getTenantWallet(selectedId)
-      .then((res) => setWallet(res.data))
+  function refreshBalance() {
+    if (!selectedClientId) return;
+    getClientBalance(selectedClientId)
+      .then((res) => setTokenBalance(res.data))
       .catch(() => {});
   }
 
@@ -381,7 +403,7 @@ export function TenantTowerPage() {
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-2.5 flex items-center gap-3">
             <span className="font-black text-[13px] text-[#111B21] mr-2">Quick Actions</span>
             <Pill color="green" onClick={() => { resetBladeForm(); setBladeTab("Basics"); setBladeOpen(true); }}>+ New Tenant</Pill>
-            <Pill onClick={() => setSubOrgOpen(true)}>Create Sub-Org</Pill>
+            {/* <Pill onClick={() => setSubOrgOpen(true)}>Create Sub-Org</Pill> */}
             <Pill onClick={() => setImportOpen(true)}>Import</Pill>
             <Pill color="alarm" onClick={() => setTrashOpen(true)}>Trash/Restore</Pill>
           </div>
@@ -389,7 +411,7 @@ export function TenantTowerPage() {
           {/* ════════════════════ TOP SCROLL ════════════════════════════════════ */}
 
           {/* ── 4 KPI Cards ──────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {[
               {
                 label: "Total Clients",
@@ -397,19 +419,14 @@ export function TenantTowerPage() {
                 sub: clients.length > 0 ? `${clients.length} registered accounts` : "Loading...",
               },
               {
-                label: "Online Units",
-                value: onlineStats ? onlineStats.count.toLocaleString() : "—",
-                sub: onlineStats ? `of ${onlineStats.total_configured_units} configured units` : "Loading...",
-              },
-              {
-                label: "Offline Units",
-                value: offlineStats ? offlineStats.count.toLocaleString() : "—",
-                sub: offlineStats ? `of ${offlineStats.total_configured_units} configured units` : "Loading...",
+                label: "Total Subscriptions",
+                value: activeSubStats ? activeSubStats.count.toLocaleString() : "—",
+                sub: activeSubStats ? `${activeSubStats.count} active subscriptions` : "Loading...",
               },
               {
                 label: "Expired Subscriptions",
-                value: expiredStats ? expiredStats.count.toLocaleString() : "—",
-                sub: expiredStats ? `${expiredStats.count} expired token subscriptions` : "Loading...",
+                value: expiredStats ? new Set(expiredStats.subscriptions.map(s => s.client_uid)).size.toLocaleString() : "—",
+                sub: expiredStats ? `${new Set(expiredStats.subscriptions.map(s => s.client_uid)).size} clients with expired subscriptions` : "Loading...",
               },
             ].map(k => (
               <div key={k.label} className="bg-white border border-[#E9EDEF] rounded-xl p-4">
@@ -516,25 +533,20 @@ export function TenantTowerPage() {
                 )}
               </div>
 
-              {/* Token Wallet (FIFO) */}
+              {/* Token Wallet */}
               <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
-                <div className="font-black text-[13px] text-[#111B21]">Token Wallet (FIFO)</div>
-                {wallet ? (
+                <div className="font-black text-[13px] text-[#111B21]">Token Wallet</div>
+                {tokenBalance ? (
                   <>
-                    <div className="font-black text-[20px] text-[#111B21] mt-1">Balance: {wallet.balance.toLocaleString()}</div>
-                    <div className="text-[11px] text-[#667781] mt-0.5">Burn: {wallet.burn_rate} tokens/s • Run-out: ~{wallet.runout_hours}h</div>
-                    <div className="h-3 rounded-full bg-[#E9EDEF] mt-2 overflow-hidden">
-                      <div className="h-full rounded-full bg-[#128C7E]" style={{width:`${wallet.capacity_pct}%`}} />
-                    </div>
-                    <div className="text-[10px] text-[#667781] mt-1.5">Top drains: {wallet.top_drains.map(d => `${d.name}(${d.pct}%)`).join(" • ")}</div>
+                    <div className="font-black text-[20px] text-[#111B21] mt-1">{tokenBalance.token_hours_left.toLocaleString()} <span className="text-[12px] font-black text-[#667781]">hrs left</span></div>
+                    <div className="text-[11px] text-[#667781] mt-0.5">{tokenBalance.token_name} • Used: {tokenBalance.token_hours_used}h</div>
                   </>
                 ) : (
-                  <div className="text-[12px] text-[#667781] mt-2">{selectedTenant ? "Loading wallet..." : "Select a tenant"}</div>
+                  <div className="text-[12px] text-[#667781] mt-2">{selectedClient ? "Loading balance..." : "Select a client"}</div>
                 )}
                 <div className="flex gap-2 mt-2">
-                  <Pill onClick={() => setTopUpOpen(true)}>Top-Up</Pill>
-                  <Pill onClick={() => setAllocateOpen(true)}>Allocate</Pill>
-                  <span onClick={() => setMintOpen(true)} className={`h-7 px-3 rounded-full text-[11px] font-black inline-flex items-center ${alarmBg} cursor-pointer`}>Mint (HIC)</span>
+                  <Pill onClick={() => setTopUpOpen(true)}>Buy Tokens</Pill>
+                  <Pill onClick={() => setAllocateOpen(true)}>Transfer</Pill>
                 </div>
               </div>
 
@@ -748,28 +760,25 @@ export function TenantTowerPage() {
       </main>
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}
-      <TrashRestoreModal open={trashOpen} onClose={() => setTrashOpen(false)} />
+      <TrashRestoreModal open={trashOpen} onClose={() => setTrashOpen(false)} onRestored={() => { getAllClients().then((r) => setClients(r.data)).catch(() => {}); }} />
       <ImportTenantsModal open={importOpen} onClose={() => setImportOpen(false)} />
-      <CreateSubOrgModal open={subOrgOpen} onClose={() => setSubOrgOpen(false)} />
+      {/* <CreateSubOrgModal open={subOrgOpen} onClose={() => setSubOrgOpen(false)} /> */}
       <TopUpModal
         open={topUpOpen}
         onClose={() => setTopUpOpen(false)}
-        tenantId={selectedId}
-        tenantName={selectedTenant?.name ?? ""}
-        onSuccess={refreshWallet}
+        clientUid={selectedClientId}
+        clientName={selectedClient?.client_name ?? ""}
+        tokenUid={tokenBalance?.token_uid ?? null}
+        tokenName={tokenBalance?.token_name ?? ""}
+        onSuccess={refreshBalance}
       />
       <AllocateModal
         open={allocateOpen}
         onClose={() => setAllocateOpen(false)}
-        fromTenantId={selectedId}
-        fromTenantName={selectedTenant?.name ?? ""}
-        onSuccess={refreshWallet}
-      />
-      <MintModal
-        open={mintOpen}
-        onClose={() => setMintOpen(false)}
-        tenantId={selectedId}
-        tenantName={selectedTenant?.name ?? ""}
+        fromClientUid={selectedClientId}
+        fromClientName={selectedClient?.client_name ?? ""}
+        tokenBillingUid={tokenBalance?.token_billing_uid ?? null}
+        onSuccess={refreshBalance}
       />
 
       {/* ── Edit Client Modal ───────────────────────────────────────────── */}
@@ -791,10 +800,16 @@ export function TenantTowerPage() {
             <div className="flex justify-end gap-2 mt-5">
               <button onClick={() => setEditingClient(null)} className="h-8 px-4 rounded-lg text-[12px] font-black border border-[#E9EDEF] bg-white text-[#667781] cursor-pointer hover:bg-[#F8FAFC]">Cancel</button>
               <button
-                onClick={() => {
-                  // TODO: wire to PUT/PATCH client endpoint when available
-                  setClients((prev) => prev.map((c) => c.client_uid === editingClient.client_uid ? { ...c, client_name: editName, client_email: editEmail } : c));
-                  setEditingClient(null);
+                onClick={async () => {
+                  const uid = editingClient.client_uid;
+                  try {
+                    await updateClient(uid, { client_name: editName, client_email: editEmail });
+                    setClients((prev) => prev.map((c) => c.client_uid === uid ? { ...c, client_name: editName, client_email: editEmail } : c));
+                    setEditingClient(null);
+                  } catch (err) {
+                    const msg = err instanceof ApiError ? (err.apiMessage ?? err.message) : "Failed to update client";
+                    alert(msg);
+                  }
                 }}
                 className="h-8 px-4 rounded-lg text-[12px] font-black border-none bg-[#128C7E] text-white cursor-pointer hover:brightness-105"
               >Save</button>
@@ -811,16 +826,23 @@ export function TenantTowerPage() {
             <div className="text-[12px] text-[#111B21] mb-1">
               Are you sure you want to delete <span className="font-black">{deletingClient.client_name}</span>?
             </div>
-            <div className="text-[11px] text-[#667781] mb-4">This action cannot be undone. All associated devices and data may be affected.</div>
+            <div className="text-[11px] text-[#667781] mb-4">The client will be moved to trash and can be restored within 30 days.</div>
             <div className="text-[10px] text-[#667781] font-mono mb-4">UID: {deletingClient.client_uid}</div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeletingClient(null)} className="h-8 px-4 rounded-lg text-[12px] font-black border border-[#E9EDEF] bg-white text-[#667781] cursor-pointer hover:bg-[#F8FAFC]">Cancel</button>
               <button
-                onClick={() => {
-                  // TODO: wire to DELETE client endpoint when available
-                  setClients((prev) => prev.filter((c) => c.client_uid !== deletingClient.client_uid));
-                  if (selectedClientId === deletingClient.client_uid) setSelectedClientId(null);
-                  setDeletingClient(null);
+                onClick={async () => {
+                  const uid = deletingClient.client_uid;
+                  const owner = getAccountUid() || "";
+                  try {
+                    await trashClient(uid, { deleted_by: owner });
+                    setClients((prev) => prev.filter((c) => c.client_uid !== uid));
+                    if (selectedClientId === uid) setSelectedClientId(null);
+                    setDeletingClient(null);
+                  } catch (err) {
+                    const msg = err instanceof ApiError ? (err.apiMessage ?? err.message) : "Failed to delete client";
+                    alert(msg);
+                  }
                 }}
                 className="h-8 px-4 rounded-lg text-[12px] font-black border-none bg-[#EF4444] text-white cursor-pointer hover:brightness-105"
               >Delete</button>
@@ -862,7 +884,8 @@ export function TenantTowerPage() {
               <>
                 <BladeSection title="Basics" sub="Hierarchy rules: Top cannot create units • dealer accounts should not host units">
                   <div className="grid grid-cols-2 gap-3 p-4">
-                    <FormField label="Tenant name" value={bladeName} onChange={setBladeName} placeholder="e.g. Kampala_Boda_Fleet" />
+                    <FormField label="Client / Tenant name" value={bladeName} onChange={setBladeName} placeholder="e.g. Kampala_Boda_Fleet" />
+                    <FormField label="Email" value={bladeEmail} onChange={setBladeEmail} placeholder="e.g. admin@fleet.co" />
                     <SelectField label="Type" value={bladeTier} onChange={(v) => setBladeTier(v as TenantTier)} options={[
                       { value: "TOP", label: "TOP — Top-level" },
                       { value: "DEAL", label: "DEAL — Dealer" },
@@ -1017,6 +1040,7 @@ export function TenantTowerPage() {
                   <div className="p-4 text-[12px] text-[#111B21] space-y-1.5">
                     <div className="font-black text-[11px] text-[#128C7E] mb-1">Basics</div>
                     <div><span className="text-[#667781] w-24 inline-block">Name:</span> <span className="font-black">{bladeName || "—"}</span></div>
+                    <div><span className="text-[#667781] w-24 inline-block">Email:</span> <span className="font-black">{bladeEmail || "—"}</span></div>
                     <div><span className="text-[#667781] w-24 inline-block">Tier:</span> <span className="font-black">{bladeTier}</span></div>
                     <div><span className="text-[#667781] w-24 inline-block">Parent:</span> <span className="font-black">{bladeParent ? tenants.find(t => t.id === bladeParent)?.name ?? bladeParent : "None (root)"}</span></div>
                     <div><span className="text-[#667781] w-24 inline-block">Country:</span> <span className="font-black">{bladeCountry}</span></div>
@@ -1063,24 +1087,15 @@ export function TenantTowerPage() {
                     {bladeSubmitting && !bladeApprovalStatus ? "Saving…" : bladeDraftId ? "Update Draft" : "Save Draft"}
                   </button>
                   <button
-                    onClick={handleRequestApproval}
-                    disabled={bladeSubmitting || !bladeName.trim() || bladeApprovalStatus === "pending_approval" || bladeApprovalStatus === "approved"}
+                    onClick={handleCreateClient}
+                    disabled={bladeSubmitting || !bladeName.trim() || !bladeEmail.trim()}
                     className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer transition-all whitespace-nowrap ${
-                      bladeSubmitting || !bladeName.trim() || bladeApprovalStatus === "pending_approval" || bladeApprovalStatus === "approved"
+                      bladeSubmitting || !bladeName.trim() || !bladeEmail.trim()
                         ? "bg-[#D1D5DB] text-[#9CA3AF] cursor-not-allowed"
                         : `${okBg} hover:brightness-110`
                     }`}
                   >
-                    {bladeApprovalStatus === "pending_approval" ? "Awaiting Admin…" : bladeApprovalStatus === "approved" ? "Approved ✓" : "Request HITL Approval"}
-                  </button>
-                  <button
-                    onClick={handleBladeSubmit}
-                    disabled={bladeSubmitting || bladeApprovalStatus !== "approved"}
-                    className={`h-7 px-3 rounded-full text-[11px] font-black inline-flex items-center border-none cursor-pointer transition-all ${
-                      bladeSubmitting || bladeApprovalStatus !== "approved" ? "bg-[#D1D5DB] text-[#9CA3AF] cursor-not-allowed" : `${critBg} hover:brightness-110`
-                    }`}
-                  >
-                    {bladeSubmitting && bladeApprovalStatus === "approved" ? "Creating…" : "Submit (after approval)"}
+                    {bladeSubmitting ? "Creating…" : "Create Client"}
                   </button>
                 </div>
 

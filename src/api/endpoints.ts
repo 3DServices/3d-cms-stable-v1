@@ -65,9 +65,19 @@ export const ENDPOINTS = {
     DRAFT_SUBMIT:    "/tenants/drafts",           // append /{id}/submit
   },
   CLIENTS: {
-    CREATE:  "/clients/create",
-    GET_ALL: "/clients/all",
+    CREATE:      "/clients/create",
+    GET_ALL:     "/clients/all",
     BY_PROVIDER: "/clients",           // append /{service_provider}/all
-    DEVICES: "/devices/configured",    // append /{client_uid}/client
+    DEVICES:     "/devices/configured",// append /{client_uid}/client
+    UPDATE:      "/clients",           // append /{client_uid}/update
+    TRASH:       "/clients",           // append /{client_uid}/trash
+    RESTORE:     "/clients",           // append /{client_uid}/restore
+    GET_TRASHED: "/clients/trashed",
+  },
+  TOKENS: {
+    GET_ALL:  "/tokens",
+    BUY:      "/payments/tokens/buy",
+    TRANSFER: "/tokens/transfer",
+    BALANCE:  "/tokens",               // append /{client_uid}/balance
   },
 } as const;

@@ -33,11 +33,20 @@ export type {
   Client,
   ClientDevice,
   CreateClientRequest,
+  UpdateClientRequest,
+  TrashClientRequest,
+  TrashedClient,
   OnlineUnit,
   OnlineUnitsResponse,
   OfflineUnitsResponse,
   ExpiredSubscription,
   ExpiredTokensResponse,
+  TokenPackage,
+  ClientTokenBalance,
+  BuyTokensRequest,
+  BuyTokensResponse,
+  TransferTokensRequest,
+  TransferTokensResponse,
 } from "./clients.types";
 
 export type {
