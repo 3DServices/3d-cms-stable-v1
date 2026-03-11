@@ -8,31 +8,93 @@
  *   BLADE:   Tx Detail PMT-10492 (Summary, Pipeline Trace, Actions, Audit, Recent Events)
  *   MODAL:   HITL Approval Request (Action Type, Amounts, Approvers, Guardrails, Checklist, Risk)
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface Payment {
+  client_name: string;
+  date: string;
+  payment_account: string;
+  payment_currency: string;
+  payment_status: string;
+  token_number: string;
+  token_validity: string | null;
+  total_cost: string;
+  transaction_uid: string;
+}
 
 // ─── Status badge colors ─────────────────────────────────────────────────────
 const txStateColor: Record<string, string> = {
-  PENDING:   "bg-[#F97316] text-white",
-  FAILED:    "bg-[#EF4444] text-white",
-  SUCCESS:   "bg-[#25D366] text-white",
-  REVERSED:  "bg-[#F97316] text-white",
-  CHARGEBACK:"bg-[#FBBF24] text-[#92400E]",
-  PAYOUT:    "bg-[#FBBF24] text-[#92400E]",
+  pending:    "bg-[#F97316] text-white",
+  failed:     "bg-[#EF4444] text-white",
+  successful: "bg-[#25D366] text-white",
+  reversed:   "bg-[#F97316] text-white",
+  chargeback: "bg-[#FBBF24] text-[#92400E]",
+  payout:     "bg-[#FBBF24] text-[#92400E]",
 };
 const whColor: Record<string, string> = { OK: "bg-[#25D366] text-white", FAIL: "bg-[#EF4444] text-white" };
 const riskColor = (r: number) => r >= 0.5 ? "bg-[#EF4444] text-white" : r >= 0.2 ? "bg-[#FBBF24] text-[#92400E]" : "bg-[#25D366] text-white";
 const gwDot: Record<string, string> = { ok: "bg-[#25D366]", warn: "bg-[#FBBF24]", crit: "bg-[#EF4444]" };
+const statusDot: Record<string, string> = { 
+  pending: "warn", 
+  successful: "ok", 
+  failed: "crit"
+};
+
+// ─── Utility Functions ───────────────────────────────────────────────────────
+interface StatsData {
+  successful: { total: number; count: number; byCurrency: Record<string, { sum: number; count: number }> };
+  pending: { total: number; count: number; byCurrency: Record<string, { sum: number; count: number }> };
+  failed: { total: number; count: number; byCurrency: Record<string, { sum: number; count: number }> };
+}
+
+function calculateStats(payments: Payment[]): StatsData {
+  const stats: StatsData = {
+    successful: { total: 0, count: 0, byCurrency: {} },
+    pending: { total: 0, count: 0, byCurrency: {} },
+    failed: { total: 0, count: 0, byCurrency: {} },
+  };
+
+  payments.forEach(p => {
+    const amount = parseInt(p.total_cost) || 0;
+    const status = p.payment_status.toLowerCase();
+    const currency = p.payment_currency;
+
+    if (status === "successful") {
+      stats.successful.total += amount;
+      stats.successful.count += 1;
+      if (!stats.successful.byCurrency[currency]) {
+        stats.successful.byCurrency[currency] = { sum: 0, count: 0 };
+      }
+      stats.successful.byCurrency[currency].sum += amount;
+      stats.successful.byCurrency[currency].count += 1;
+    } else if (status === "pending") {
+      stats.pending.total += amount;
+      stats.pending.count += 1;
+      if (!stats.pending.byCurrency[currency]) {
+        stats.pending.byCurrency[currency] = { sum: 0, count: 0 };
+      }
+      stats.pending.byCurrency[currency].sum += amount;
+      stats.pending.byCurrency[currency].count += 1;
+    } else {
+      stats.failed.total += amount;
+      stats.failed.count += 1;
+      if (!stats.failed.byCurrency[currency]) {
+        stats.failed.byCurrency[currency] = { sum: 0, count: 0 };
+      }
+      stats.failed.byCurrency[currency].sum += amount;
+      stats.failed.byCurrency[currency].count += 1;
+    }
+  });
+
+  return stats;
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-US").format(amount);
+}
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
-const GATEWAYS = [
-  { provider:"M-Pesa",              region:"KE",    sr:91.2, p95:"1.8s", wh:"7%",   dot:"warn" },
-  { provider:"MTN MoMo",            region:"UG",    sr:97.9, p95:"1.1s", wh:"1%",   dot:"ok"   },
-  { provider:"Airtel Money",        region:"UG",    sr:94.1, p95:"2.6s", wh:"5%",   dot:"warn" },
-  { provider:"Airtel Money",        region:"KE",    sr:72.4, p95:"6.3s", wh:"18%",  dot:"crit" },
-  { provider:"Cards (DPO/Pesapal)", region:"KE/UG", sr:98.5, p95:"1.5s", wh:"0.4%", dot:"ok"   },
-  { provider:"Flutterwave",         region:"Multi", sr:96.9, p95:"1.9s", wh:"2%",   dot:"ok"   },
-];
-
 const PIPELINE = [
   { step:"1. Pay-In Initiated",   val:"31 pending", dot:"bg-[#FBBF24]" },
   { step:"2. Webhook Confirm",    val:"19 failed",  dot:"bg-[#F97316]" },
@@ -40,31 +102,6 @@ const PIPELINE = [
   { step:"4. FIFO Allocate",      val:"OK",         dot:"bg-[#25D366]" },
   { step:"5. VEBA Escrow Lock",   val:"OK",         dot:"bg-[#25D366]" },
   { step:"6. Payout/Settlement",  val:"—",          dot:"bg-[#F97316]" },
-];
-
-const TXS = [
-  { id:"PMT-10492", tenant:"3D-TOP",       ch:"M-Pesa", amt:"2,500,000", cur:"UGX", state:"PENDING",   tokens:",000",  wh:"OK",   risk:0.22, dot:"warn" },
-  { id:"PMT-10491", tenant:"KE-Dealer-07", ch:"Airtel", amt:"75,000",    cur:"KES", state:"FAILED",    tokens:"—",     wh:"FAIL", risk:0.71, dot:"crit" },
-  { id:"PMT-10490", tenant:"UG-Client-12", ch:"MTN",    amt:"180,000",   cur:"UGX", state:"SUCCESS",   tokens:",000",  wh:"OK",   risk:0.13, dot:"ok"   },
-  { id:"PMT-10489", tenant:"KE-Client-02", ch:"Card",   amt:"199.00",    cur:"USD", state:"SUCCESS",   tokens:",500",  wh:"OK",   risk:0.08, dot:"ok"   },
-  { id:"PMT-10488", tenant:"VEBA-OPS",     ch:"M-Pesa", amt:"45,000",    cur:"KES", state:"REVERSED",  tokens:"—",     wh:"OK",   risk:0.35, dot:"warn" },
-  { id:"PMT-10487", tenant:"UG-Client-19", ch:"Airtel", amt:"320,000",   cur:"UGX", state:"SUCCESS",   tokens:",000",  wh:"OK",   risk:0.19, dot:"ok"   },
-  { id:"PMT-10486", tenant:"KE-Dealer-03", ch:"Card",   amt:"1,250.00",  cur:"USD", state:"CHARGEBACK",tokens:"—",     wh:"OK",   risk:0.88, dot:"crit" },
-  { id:"PMT-10485", tenant:"UG-Client-05", ch:"MTN",    amt:"50,000",    cur:"UGX", state:"SUCCESS",   tokens:",00",   wh:"OK",   risk:0.09, dot:"ok"   },
-  { id:"PMT-10484", tenant:"VEBA-OPS",     ch:"M-Pesa", amt:"320,000",   cur:"KES", state:"PAYOUT",    tokens:"–",     wh:"OK",   risk:0.15, dot:"ok"   },
-  { id:"PMT-10483", tenant:"UG-Dealer-01", ch:"MTN",    amt:"1,100,000", cur:"UGX", state:"SUCCESS",   tokens:",000",  wh:"OK",   risk:0.11, dot:"ok"   },
-  { id:"PMT-10482", tenant:"KE-Client-11", ch:"Airtel", amt:"12,000",    cur:"KES", state:"FAILED",    tokens:"—",     wh:"FAIL", risk:0.62, dot:"crit" },
-];
-
-const ESCROW_BOOKINGS = [
-  { bkg:"BKG-7781", asset:"D6 Dozer", stage:"Awaiting payout", stageTone:"bg-[#25D366] text-white", escrow:"KES 320,000", action:"Approve payout (HITL)", actionColor:"text-[#128C7E]" },
-  { bkg:"BKG-7774", asset:"Boda",     stage:"Dispute opened",  stageTone:"bg-[#EF4444] text-white", escrow:"UGX 180,000", action:"Open case",             actionColor:"text-[#128C7E]" },
-];
-
-const APPROVALS = [
-  { dot:"bg-[#FBBF24]", title:"Refund > KES 75,000",  sub:"PMT-10491 • Reason: callback failed after debit", badge:"HITL", badgeTone:"bg-[#128C7E] text-white" },
-  { dot:"bg-[#EF4444]", title:"Manual Token Mint",     sub:"PMT-10492 • Mint 125,000 TOK to keep service live", badge:"HIC",  badgeTone:"bg-[#EF4444] text-white" },
-  { dot:"bg-[#FBBF24]", title:"Escrow Release",        sub:"BKG-7781 • Approve payout to owner (instant settlement, chained).", badge:"HITL", badgeTone:"bg-[#128C7E] text-white" },
 ];
 
 const BLADE_TRACE = [
@@ -75,18 +112,100 @@ const BLADE_TRACE = [
   { step:"Post to Odoo",      badge:"WAIT",    badgeTone:"bg-[#FBBF24] text-[#92400E]", dot:"bg-[#F97316]" },
 ];
 
-const BLADE_EVENTS = [
-  "10:21:08 webhook_confirmed (momo_callback_ok)",
-  "10:21:10 mint_enqueue (usage_event_id ue_9a21)",
-  "10:21:14 fifo_blocked (balance low? none)",
-  "10:21:15 ai_hint (suggest top-up bundle)",
-  "10:21:22 approval_required (manual mint)",
-];
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function MoneyPage() {
   const [bladeOpen, setBladeOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<StatsData>({
+    successful: { total: 0, count: 0, byCurrency: {} },
+    pending: { total: 0, count: 0, byCurrency: {} },
+    failed: { total: 0, count: 0, byCurrency: {} },
+  });
+
+  // Filters
+  const [filterCurrency, setFilterCurrency] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterDate, setFilterDate] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("");
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("https://narvas.3dservices.co.ug/finance/payments");
+        const result = await response.json();
+        
+        if (result.status === "success" && Array.isArray(result.data)) {
+          setPayments(result.data);
+          setStats(calculateStats(result.data));
+        } else {
+          setError("Failed to load payments");
+        }
+      } catch (err) {
+        setError("Error fetching payments: " + (err instanceof Error ? err.message : "Unknown error"));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPayments();
+  }, []);
+
+  const openBlade = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setBladeOpen(true);
+  };
+
+  // Filter payments
+  const filteredPayments = payments.filter(p => {
+    if (filterCurrency !== "all" && p.payment_currency !== filterCurrency) return false;
+    if (filterStatus !== "all" && p.payment_status.toLowerCase() !== filterStatus) return false;
+    if (filterClient && !p.client_name.toLowerCase().includes(filterClient.toLowerCase())) return false;
+    
+    if (filterDate !== "all") {
+      const pDate = new Date(p.date);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (filterDate === "today" && pDate.toDateString() !== today.toDateString()) return false;
+      if (filterDate === "yesterday" && pDate.toDateString() !== yesterday.toDateString()) return false;
+      if (filterDate === "week") {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        if (pDate < weekAgo) return false;
+      }
+    }
+    
+    return true;
+  });
+
+  const uniqueCurrencies = Array.from(new Set(payments.map(p => p.payment_currency))).sort();
+  const uniqueClients = Array.from(new Set(payments.map(p => p.client_name))).sort();
+
+  const ESCROW_BOOKINGS = [
+    { bkg:"BKG-7781", asset:"D6 Dozer", stage:"Awaiting payout", stageTone:"bg-[#25D366] text-white", escrow:"KES 320,000", action:"Approve payout (HITL)", actionColor:"text-[#128C7E]" },
+    { bkg:"BKG-7774", asset:"Boda",     stage:"Dispute opened",  stageTone:"bg-[#EF4444] text-white", escrow:"UGX 180,000", action:"Open case",             actionColor:"text-[#128C7E]" },
+  ];
+
+  const APPROVALS = [
+    { dot:"bg-[#FBBF24]", title:"Refund > KES 75,000",  sub:"PMT-10491 • Reason: callback failed after debit", badge:"HITL", badgeTone:"bg-[#128C7E] text-white" },
+    { dot:"bg-[#EF4444]", title:"Manual Token Mint",     sub:"PMT-10492 • Mint 125,000 TOK to keep service live", badge:"HIC",  badgeTone:"bg-[#EF4444] text-white" },
+    { dot:"bg-[#FBBF24]", title:"Escrow Release",        sub:"BKG-7781 • Approve payout to owner (instant settlement, chained).", badge:"HITL", badgeTone:"bg-[#128C7E] text-white" },
+  ];
+
+  const BLADE_EVENTS = [
+    "10:21:08 webhook_confirmed (momo_callback_ok)",
+    "10:21:10 mint_enqueue (usage_event_id ue_9a21)",
+    "10:21:14 fifo_blocked (balance low? none)",
+    "10:21:15 ai_hint (suggest top-up bundle)",
+    "10:21:22 approval_required (manual mint)",
+  ];
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden relative">
@@ -95,17 +214,16 @@ export function MoneyPage() {
 
           {/* ── Header ─────────────────────────────────────────────── */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-3">
-            <div className="text-[11px] text-[#667781] mb-0.5">SCREEN 11&ensp;Tokenomics &amp; Revenue &gt; Payments &amp; Mobile Money Gateways</div>
+            <div className="text-[11px] text-[#667781] mb-0.5">Tokenomics &amp; Revenue &gt; Payments</div>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-black text-[16px] text-[#111B21]">The Money Switchboard</span>
                   <span className="text-[10px] font-black bg-[#128C7E] text-white px-2 py-0.5 rounded-full">HITL/HIC</span>
                 </div>
-                <div className="text-[11px] text-[#667781] mt-0.5">Unified: Mobile Money + Cards + Tokens + VEBA Escrow + ERP + Waswa AI</div>
+                <div className="text-[11px] text-[#667781] mt-0.5">Unified: Mobile Money + Tokens</div>
               </div>
               <div className="flex gap-2 shrink-0">
-                <Pill>+ New Gateway</Pill>
                 <Pill color="green">Run Payout</Pill>
                 <Pill>Export</Pill>
               </div>
@@ -116,75 +234,104 @@ export function MoneyPage() {
 
           {/* 4 KPIs */}
           <div className="grid grid-cols-4 gap-3">
-            <KpiCard label="Tx success rate"    value="96.8%" sub="⚠ M-Pesa KE 91.2% (drop)" dot="bg-[#25D366]" />
-            <KpiCard label="Webhook backlog"    value="248"   sub="⚠ retries queued (p95 4m)" dot="bg-[#F97316]" />
-            <KpiCard label="Settlement delay p95" value="2h 14m" sub="⚠ >1h threshold (VEBA)" dot="bg-[#EF4444]" />
-            <KpiCard label="Recon mismatch"     value="0.72%" sub="⚠ >0.5% value (MTD)"       dot="bg-[#EF4444]" />
+            {loading ? (
+              <>
+                <KpiCardSkeleton />
+                <KpiCardSkeleton />
+                <KpiCardSkeleton />
+                <KpiCardSkeleton />
+              </>
+            ) : (
+              <>
+                <KpiCard label="Successful Transactions" value={formatCurrency(stats.successful.total)} sub="All currencies combined" dot="bg-[#25D366]" />
+                <KpiCard label="Pending Transactions" value={formatCurrency(stats.pending.total)} sub="Awaiting confirmation" dot="bg-[#F97316]" />
+                <KpiCard label="Failed Transactions" value={formatCurrency(stats.failed.total)} sub="Failed or reversed" dot="bg-[#EF4444]" />
+                <KpiCard label="Total Volume" value={formatCurrency(stats.successful.total + stats.pending.total + stats.failed.total)} sub="All transactions" dot="bg-[#128C7E]" />
+              </>
+            )}
           </div>
 
-          {/* 2-col: Gateway Health | Token+VEBA Flow */}
+          {/* 2-col: Statistics by Currency & Status | Empty space */}
           <div className="grid grid-cols-[1.2fr_0.8fr] gap-3 items-start">
-            {/* Gateway Health */}
+            {/* Statistics by Currency */}
             <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-[#E9EDEF]">
-                <div className="font-black text-[13px] text-[#111B21]">Gateway Health</div>
-                <div className="text-[11px] text-[#667781]">Mobile Money + Cards + Aggregators (real-time)</div>
+                <div className="font-black text-[13px] text-[#111B21]">Transaction Statistics by Currency</div>
+                <div className="text-[11px] text-[#667781]">Count & amount by status per currency</div>
               </div>
-              <table className="w-full text-[12px]">
-                <thead><tr className="border-b border-[#E9EDEF]">
-                  {["Provider","Region","SR%","p95","Webhook"].map(h => (
-                    <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {GATEWAYS.map((g,i) => (
-                    <tr key={i} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer">
-                      <td className="px-3 py-2.5 flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${gwDot[g.dot]} shrink-0`} />
-                        <span className="text-[#111B21]">{g.provider}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-[#667781]">{g.region}</td>
-                      <td className="px-3 py-2.5 text-[#111B21]">{g.sr}</td>
-                      <td className="px-3 py-2.5 text-[#667781]">{g.p95}</td>
-                      <td className="px-3 py-2.5 text-[#667781]">{g.wh}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-3 py-2 text-[10px] text-[#667781] italic border-t border-[#E9EDEF]">Tip: Click a provider row to open Azure blade → configs, webhooks, SLA feed.</div>
+              {loading ? (
+                <div className="p-4 flex justify-center">
+                  <Loader />
+                </div>
+              ) : (
+                <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-[#E9EDEF] bg-[#F8FAFC]">
+                        <th className="text-left px-3 py-2 font-black text-[#667781]">Currency</th>
+                        <th className="text-left px-3 py-2 font-black text-[#667781]">Status</th>
+                        <th className="text-right px-3 py-2 font-black text-[#667781]">Count</th>
+                        <th className="text-right px-3 py-2 font-black text-[#667781]">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {uniqueCurrencies.length > 0 ? (
+                        uniqueCurrencies.flatMap(currency => [
+                          stats.successful.byCurrency[currency] && (
+                            <tr key={`${currency}-success`} className="border-b border-[#E9EDEF] hover:bg-[#F8FAFC]">
+                              <td className="px-3 py-2.5 font-black text-[#111B21]">{currency}</td>
+                              <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#25D366] text-white">successful</span></td>
+                              <td className="px-3 py-2.5 text-right text-[#111B21] font-black">{stats.successful.byCurrency[currency].count}</td>
+                              <td className="px-3 py-2.5 text-right text-[#25D366] font-black">{formatCurrency(stats.successful.byCurrency[currency].sum)}</td>
+                            </tr>
+                          ),
+                          stats.pending.byCurrency[currency] && (
+                            <tr key={`${currency}-pending`} className="border-b border-[#E9EDEF] hover:bg-[#F8FAFC]">
+                              <td className="px-3 py-2.5 font-black text-[#111B21]">{currency}</td>
+                              <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#F97316] text-white">pending</span></td>
+                              <td className="px-3 py-2.5 text-right text-[#111B21] font-black">{stats.pending.byCurrency[currency].count}</td>
+                              <td className="px-3 py-2.5 text-right text-[#F97316] font-black">{formatCurrency(stats.pending.byCurrency[currency].sum)}</td>
+                            </tr>
+                          ),
+                          stats.failed.byCurrency[currency] && (
+                            <tr key={`${currency}-failed`} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC]">
+                              <td className="px-3 py-2.5 font-black text-[#111B21]">{currency}</td>
+                              <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#EF4444] text-white">failed</span></td>
+                              <td className="px-3 py-2.5 text-right text-[#111B21] font-black">{stats.failed.byCurrency[currency].count}</td>
+                              <td className="px-3 py-2.5 text-right text-[#EF4444] font-black">{formatCurrency(stats.failed.byCurrency[currency].sum)}</td>
+                            </tr>
+                          ),
+                        ].filter(Boolean))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-4 text-center text-[12px] text-[#667781]">No data available</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            {/* Token + VEBA Escrow Flow */}
-            <div className="flex flex-col gap-3">
-              <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
-                <div className="font-black text-[13px] text-[#111B21]">Token + VEBA Escrow Flow</div>
-                <div className="text-[11px] text-[#667781] mb-3">Pay-in → Webhook → Mint → FIFO → Escrow → Settlement → ERP</div>
-                {PIPELINE.map(p => (
-                  <div key={p.step} className="flex items-center justify-between mb-2.5 text-[12px]">
-                    <span className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${p.dot} shrink-0`} />
-                      <span className="text-[#111B21]">{p.step}</span>
-                    </span>
-                    <span className="text-[#667781] font-mono text-[11px]">{p.val}</span>
+            {/* Summary Stats Card */}
+            <div className="bg-gradient-to-br from-[#128C7E] to-[#0D999B] rounded-xl p-4 text-white flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] opacity-90 mb-4">Overall Statistics</div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-[10px] opacity-75">Total Transactions</div>
+                    <div className="text-[20px] font-black">{stats.successful.count + stats.pending.count + stats.failed.count}</div>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-[10px] opacity-75">Total Volume</div>
+                    <div className="text-[18px] font-black">{formatCurrency(stats.successful.total + stats.pending.total + stats.failed.total)}</div>
+                  </div>
+                </div>
               </div>
-
-              {/* Waswa AI Payment Co-Pilot */}
-              <div className="bg-[#128C7E] text-white rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-black text-[13px]">Waswa AI • Payment Co-Pilot</span>
-                  <span className="text-[10px] font-black bg-[#25D366] text-[#075E54] px-2 py-0.5 rounded-full">LIVE</span>
-                </div>
-                <div className="text-[11px] leading-relaxed opacity-90 mb-3">
-                  <div className="flex items-start gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#EF4444] mt-1 shrink-0" /><span>Airtel KE outage likely — failover to M-Pesa suggested</span></div>
-                  <div className="flex items-start gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-[#F97316] mt-1 shrink-0" /><span>19 webhook fails → safe retry plan prepared (max 5)</span></div>
-                  <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-full bg-[#FBBF24] mt-1 shrink-0" /><span>Leakage risk: 23 hirers attempted contact share pre…</span></div>
-                </div>
-                <div className="flex gap-2">
-                  <button className="h-7 px-3 rounded-full bg-[#25D366] text-[#075E54] text-[11px] font-black border-none cursor-pointer">Open approvals</button>
-                  <button className="h-7 px-3 rounded-full bg-white/15 text-white text-[11px] font-black border-none cursor-pointer">Run safe retry</button>
-                </div>
+              <div className="mt-4 pt-4 border-t border-white/20 text-[10px] opacity-75">
+                <div>✓ {stats.successful.count} successful</div>
+                <div>⏳ {stats.pending.count} pending</div>
+                <div>✗ {stats.failed.count} failed</div>
               </div>
             </div>
           </div>
@@ -192,128 +339,122 @@ export function MoneyPage() {
           {/* ════════════════════ MID SCROLL ════════════════════════════ */}
 
           {/* Filters */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {["Provider: All ▾","Channel: MoMo/Card ▾","Status: Any ▾"].map(f => (
-              <span key={f} className="h-8 px-3 rounded-lg bg-white border border-[#E9EDEF] text-[12px] text-[#111B21] flex items-center">{f}</span>
-            ))}
-            <span className="h-8 px-3 rounded-lg bg-white border border-[#E9EDEF] text-[12px] text-[#667781] flex items-center">Currency</span>
-            <span className="h-8 px-3 rounded-lg bg-white border border-[#E9EDEF] text-[12px] text-[#667781] flex items-center">Search tx/boo…</span>
-            <span className="ml-auto text-[11px] font-black text-[#111B21] bg-white border border-[#E9EDEF] rounded-lg h-8 px-3 flex items-center">USD/UGX</span>
+          <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
+            <div className="font-black text-[12px] text-[#111B21] mb-3">Filter Transactions</div>
+            <div className="grid grid-cols-4 gap-3">
+              {/* Currency Filter */}
+              <div>
+                <label className="text-[10px] text-[#667781] mb-1 block">Currency</label>
+                <select 
+                  value={filterCurrency} 
+                  onChange={(e) => setFilterCurrency(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#E9EDEF] px-2 text-[11px] text-[#111B21] outline-none focus:border-[#128C7E]/50"
+                >
+                  <option value="all">All Currencies</option>
+                  {uniqueCurrencies.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div>
+                <label className="text-[10px] text-[#667781] mb-1 block">Status</label>
+                <select 
+                  value={filterStatus} 
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#E9EDEF] px-2 text-[11px] text-[#111B21] outline-none focus:border-[#128C7E]/50"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="successful">Successful</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+
+              {/* Date Filter */}
+              <div>
+                <label className="text-[10px] text-[#667781] mb-1 block">Date Range</label>
+                <select 
+                  value={filterDate} 
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#E9EDEF] px-2 text-[11px] text-[#111B21] outline-none focus:border-[#128C7E]/50"
+                >
+                  <option value="all">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="week">Last 7 Days</option>
+                </select>
+              </div>
+
+              {/* Client Filter */}
+              <div>
+                <label className="text-[10px] text-[#667781] mb-1 block">Client</label>
+                <input 
+                  type="text" 
+                  placeholder="Search client..."
+                  value={filterClient}
+                  onChange={(e) => setFilterClient(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#E9EDEF] px-2 text-[11px] text-[#111B21] outline-none focus:border-[#128C7E]/50"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Transactions table */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E9EDEF]">
               <span className="font-black text-[13px] text-[#111B21]">Transactions</span>
-              <span className="text-[11px] text-[#667781] ml-3">Payments ↔ Token Mint ↔ VEBA Escrow</span>
+              <span className="text-[11px] text-[#667781] ml-3">{loading ? "Loading..." : `${filteredPayments.length} of ${payments.length} payments`} • Payments ↔ Token Mint ↔ VEBA Escrow</span>
             </div>
-            <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <table className="w-full text-[12px] min-w-[1100px]">
-              <thead><tr className="border-b border-[#E9EDEF] bg-[#F8FAFC]">
-                {["Tx ID","Tenant","Channel","Amount","Cur","State","Tokens","Webhook","Risk"].map(h => (
-                  <th key={h} className="text-left px-3 py-2 font-black text-[#667781] whitespace-nowrap">{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {TXS.map(tx => (
-                  <tr key={tx.id} onClick={() => setBladeOpen(true)} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer">
-                    <td className="px-3 py-2.5 whitespace-nowrap"><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${gwDot[tx.dot]} shrink-0`} /><span className="font-black text-[#111B21]">{tx.id}</span></span></td>
-                    <td className="px-3 py-2.5 text-[#111B21]">{tx.tenant}</td>
-                    <td className="px-3 py-2.5 text-[#667781]">{tx.ch}</td>
-                    <td className="px-3 py-2.5 font-black text-[#111B21] text-right">{tx.amt}</td>
-                    <td className="px-3 py-2.5 text-[#667781]">{tx.cur}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap"><span className="flex items-center gap-1.5"><span className="text-[#111B21]">{tx.state}</span><span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${txStateColor[tx.state] ?? "bg-[#E9EDEF] text-[#667781]"}`}>{tx.state}</span></span></td>
-                    <td className="px-3 py-2.5 text-[#667781] font-mono">{tx.tokens}</td>
-                    <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${whColor[tx.wh] ?? "bg-[#E9EDEF] text-[#667781]"}`}>{tx.wh}</span></td>
-                    <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${riskColor(tx.risk)}`}>{tx.risk.toFixed(2)}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-            <div className="px-3 py-2 text-[10px] text-[#667781] italic border-t border-[#E9EDEF]">Row action: click Tx ID → blade. High-risk actions require HITL/HIC approval.</div>
-          </div>
-
-          {/* ════════════════════ BOTTOM SCROLL ═════════════════════════ */}
-
-          {/* VEBA Escrow & Settlement */}
-          <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E9EDEF]">
-              <span className="font-black text-[13px] text-[#111B21]">VEBA Escrow &amp; Settlement</span>
-              <span className="text-[11px] text-[#667781] ml-3">Bookings ↔ disputes ↔ payouts (instant trust)</span>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-4 gap-3 mb-4">
-                {[
-                  { dot:"bg-[#25D366]", k:"Escrow balance",     v:"KES 12.4M", sub:"Locked funds" },
-                  { dot:"bg-[#F97316]", k:"Settlements pending",v:"22",        sub:"p95 2h 14m" },
-                  { dot:"bg-[#FBBF24]", k:"Disputes aging",     v:"7",         sub:">7d needs review" },
-                  { dot:"bg-[#25D366]", k:"Leakage prevented",  v:"143",       sub:"+9% WoW" },
-                ].map(s => (
-                  <div key={s.k} className="border border-[#E9EDEF] rounded-xl p-3">
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#667781] mb-1"><span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.k}</div>
-                    <div className="font-black text-[18px] text-[#111B21] leading-tight">{s.v}</div>
-                    <div className="text-[10px] text-[#667781] mt-0.5">{s.sub}</div>
-                  </div>
-                ))}
+            {loading ? (
+              <div className="p-8 flex justify-center">
+                <Loader />
               </div>
-              <table className="w-full text-[12px]">
-                <thead><tr className="border-b border-[#E9EDEF]">
-                  {["Booking","Asset","Stage","Escrow","Action"].map(h => (
-                    <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
+            ) : error ? (
+              <div className="p-4 text-center text-[12px] text-[#EF4444]">{error}</div>
+            ) : (
+              <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <table className="w-full text-[12px] min-w-[1100px]">
+                <thead><tr className="border-b border-[#E9EDEF] bg-[#F8FAFC]">
+                  {["Tx ID","Client","Currency","Amount","Status","Date","Token","Account"].map(h => (
+                    <th key={h} className="text-left px-3 py-2 font-black text-[#667781] whitespace-nowrap">{h}</th>
                   ))}
                 </tr></thead>
                 <tbody>
-                  {ESCROW_BOOKINGS.map(b => (
-                    <tr key={b.bkg} className="border-b border-[#E9EDEF] last:border-0">
-                      <td className="px-3 py-2.5 font-black text-[#111B21]">{b.bkg}</td>
-                      <td className="px-3 py-2.5 text-[#111B21]">{b.asset}</td>
-                      <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${b.stageTone}`}>{b.stage}</span></td>
-                      <td className="px-3 py-2.5 text-[#111B21]">{b.escrow}</td>
-                      <td className={`px-3 py-2.5 font-black ${b.actionColor} cursor-pointer`}>{b.action}</td>
-                    </tr>
-                  ))}
+                  {filteredPayments.length > 0 ? (
+                    filteredPayments.slice(0, 15).map((payment) => (
+                      <tr key={payment.transaction_uid} onClick={() => openBlade(payment)} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC] cursor-pointer">
+                        <td className="px-3 py-2.5 whitespace-nowrap"><span className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${gwDot[statusDot[payment.payment_status.toLowerCase()] ?? "warn"]} shrink-0`} /><span className="font-black text-[#111B21] text-[10px]">{payment.transaction_uid.substring(0, 8).toUpperCase()}</span></span></td>
+                        <td className="px-3 py-2.5 text-[#111B21] text-[11px]">{payment.client_name}</td>
+                        <td className="px-3 py-2.5 text-[#667781]">{payment.payment_currency}</td>
+                        <td className="px-3 py-2.5 font-black text-[#111B21] text-right">{formatCurrency(parseInt(payment.total_cost))}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${txStateColor[payment.payment_status.toLowerCase()] ?? "bg-[#E9EDEF] text-[#667781]"}`}>{payment.payment_status}</span></td>
+                        <td className="px-3 py-2.5 text-[#667781] text-[11px]">{payment.date}</td>
+                        <td className="px-3 py-2.5 text-[#667781] font-mono text-[10px]">{payment.token_validity ? payment.token_validity : "—"}</td>
+                        <td className="px-3 py-2.5 text-[#667781] font-mono text-[10px]">{payment.payment_account.substring(0, 10)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={8} className="px-3 py-4 text-center text-[12px] text-[#667781]">No transactions match your filters</td></tr>
+                  )}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* Approvals Queue */}
-          <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E9EDEF] flex items-center gap-3">
-              <span className="font-black text-[13px] text-[#111B21]">Approvals Queue (HITL/HIC)</span>
-              <span className="text-[11px] text-[#667781]">High-risk actions are never auto-executed</span>
-            </div>
-            <div className="p-4 flex flex-col gap-3">
-              {APPROVALS.map((a,i) => (
-                <div key={i} className="flex items-center justify-between border border-[#E9EDEF] rounded-xl p-3">
-                  <div className="flex items-start gap-2.5">
-                    <span className={`w-3 h-3 rounded-full ${a.dot} mt-0.5 shrink-0`} />
-                    <div>
-                      <div className="font-black text-[13px] text-[#111B21]">{a.title}</div>
-                      <div className="text-[11px] text-[#667781] mt-0.5">{a.sub}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${a.badgeTone}`}>{a.badge}</span>
-                    <Pill>View</Pill>
-                    <Pill color="green" onClick={() => setModalOpen(true)}>Act</Pill>
-                  </div>
-                </div>
-              ))}
-            </div>
+              </div>
+            )}
+            <div className="px-3 py-2 text-[10px] text-[#667781] italic border-t border-[#E9EDEF]">Row action: click Tx ID → blade. High-risk actions require HITL/HIC approval.</div>
           </div>
 
         </div>
       </main>
 
       {/* ── Blade: Tx Detail ─────────────────────────────────────── */}
-      {bladeOpen && (
+      {bladeOpen && selectedPayment && (
         <div className="w-[420px] shrink-0 bg-white border-l border-[#E9EDEF] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-[#E9EDEF] shrink-0">
             <div className="flex items-center gap-2">
-              <span className="font-black text-[14px] text-[#111B21]">Tx Detail • PMT-10492</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[10px] font-black">PENDING</span>
+              <span className="font-black text-[14px] text-[#111B21]">Tx Detail</span>
+              <span className={`px-2 py-0.5 rounded-full text-white text-[10px] font-black ${txStateColor[selectedPayment.payment_status.toLowerCase()] ?? "bg-[#E9EDEF]"}`}>{selectedPayment.payment_status}</span>
             </div>
             <button onClick={() => setBladeOpen(false)} className="w-7 h-7 rounded-lg bg-[#F0F2F5] border border-[#E9EDEF] text-[#667781] font-black text-[13px] cursor-pointer grid place-items-center hover:bg-[#E9EDEF]">✕</button>
           </div>
@@ -321,52 +462,22 @@ export function MoneyPage() {
 
             <BSection title="Summary">
               <div className="p-4"><KV rows={[
-                {k:"Amount",     v:"UGX 2,500,000"},
-                {k:"Channel",    v:"M-Pesa (UG)"},
-                {k:"Token mint", v:"Queued (14)", vColor:"text-[#F97316]"},
-                {k:"Tenant",     v:"3D-TOP"},
+                {k:"Amount",     v:`${selectedPayment.payment_currency} ${formatCurrency(parseInt(selectedPayment.total_cost))}`},
+                {k:"Client",     v:selectedPayment.client_name},
+                {k:"Date",       v:selectedPayment.date},
+                {k:"Account",    v:selectedPayment.payment_account},
+                {k:"Token ID",   v:selectedPayment.token_number},
+                {k:"Validity",   v:selectedPayment.token_validity ? selectedPayment.token_validity + " days" : "N/A"},
               ]} /></div>
             </BSection>
 
-            <BSection title="Pipeline Trace">
-              <div className="p-4 flex flex-col gap-3">
-                {BLADE_TRACE.map(t => (
-                  <div key={t.step} className="flex items-center justify-between text-[12px]">
-                    <span className="flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${t.dot} shrink-0`} /><span className="text-[#111B21]">{t.step}</span></span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${t.badgeTone}`}>{t.badge}</span>
-                  </div>
-                ))}
-              </div>
-            </BSection>
-
-            <BSection title="Actions (RBAC gated)">
-              <div className="p-4">
-                <div className="border border-[#E9EDEF] rounded-xl p-3 mb-3">
-                  <div className="font-black text-[12px] text-[#111B21]">Safe Retry Plan</div>
-                  <div className="text-[11px] text-[#667781] mt-0.5 mb-2">Retries webhook callback (max 5) — no double-mint.</div>
-                  <div className="flex gap-2">
-                    <button className="h-7 px-3 rounded-lg bg-[#25D366] text-[#075E54] text-[11px] font-black border-none cursor-pointer">Run retry</button>
-                    <Pill>Open approvals</Pill>
-                  </div>
-                </div>
-                <div className="border border-[#EF4444]/20 bg-[#FEF2F2] rounded-xl p-3">
-                  <div className="font-black text-[12px] text-[#111B21]">High-Risk (HITL/HIC)</div>
-                  <div className="text-[11px] text-[#667781] mt-0.5 mb-2">Manual mint / Refund / Escrow release require approval + audit hash</div>
-                  <div className="flex gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-full bg-[#EF4444] text-white text-[10px] font-black">HIC required</span>
-                    <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[10px] font-black">HITL review</span>
-                  </div>
-                  <button onClick={() => setModalOpen(true)} className="w-full h-8 rounded-lg bg-[#128C7E] text-white text-[11px] font-black border-none cursor-pointer">Start approval request</button>
-                </div>
-              </div>
-            </BSection>
 
             <BSection title="Audit (Irrefutable)">
               <div className="p-4">
-                <div className="text-[11px] text-[#667781] mb-0.5">hash_chain_id</div>
-                <div className="font-black text-[13px] text-[#111B21] font-mono mb-2">hc_7c2f…b91e</div>
-                <div className="text-[11px] text-[#667781] mb-0.5">actor</div>
-                <div className="font-black text-[12px] text-[#111B21] mb-0">SystemAdmin • tim@…</div>
+                <div className="text-[11px] text-[#667781] mb-0.5">transaction_uid</div>
+                <div className="font-black text-[11px] text-[#111B21] font-mono mb-2 break-all">{selectedPayment.transaction_uid}</div>
+                <div className="text-[11px] text-[#667781] mb-0.5">payment_account</div>
+                <div className="font-black text-[11px] text-[#111B21] mb-0 break-all">{selectedPayment.payment_account}</div>
               </div>
             </BSection>
 
@@ -473,6 +584,16 @@ const pillStyles: Record<string, string> = {
   ghost: "bg-white border border-[#E9EDEF] text-[#667781]",
 };
 
+function Loader() {
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <div className="w-2 h-2 rounded-full bg-[#128C7E] animate-bounce" style={{ animationDelay: "0s" }}></div>
+      <div className="w-2 h-2 rounded-full bg-[#128C7E] animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+      <div className="w-2 h-2 rounded-full bg-[#128C7E] animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+    </div>
+  );
+}
+
 function Pill({ color = "ghost", onClick, children }: { color?: string; onClick?: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} className={`h-7 px-3 rounded-full text-[11px] font-black border-none cursor-pointer hover:brightness-105 active:opacity-85 transition-all whitespace-nowrap ${pillStyles[color] ?? pillStyles.ghost}`}>{children}</button>;
 }
@@ -484,6 +605,17 @@ function KpiCard({ label, value, sub, dot }: { label: string; value: string; sub
       <div className="text-[11px] text-[#667781]">{label}</div>
       <div className="text-[22px] font-black text-[#111B21] mt-1 leading-tight">{value}</div>
       <div className="text-[10px] text-[#667781] mt-1">{sub}</div>
+    </div>
+  );
+}
+
+function KpiCardSkeleton() {
+  return (
+    <div className="bg-white border border-[#E9EDEF] rounded-xl p-3 relative animate-pulse">
+      <span className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-[#E9EDEF]" />
+      <div className="h-3 bg-[#E9EDEF] rounded w-24 mb-2"></div>
+      <div className="h-6 bg-[#E9EDEF] rounded w-32 mb-2"></div>
+      <div className="h-2.5 bg-[#E9EDEF] rounded w-20"></div>
     </div>
   );
 }
