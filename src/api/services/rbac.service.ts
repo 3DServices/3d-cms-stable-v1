@@ -23,6 +23,10 @@ import type {
   CreateRoleResponse,
   UpdateRoleRequest,
   DeleteRoleRequest,
+  CreateUserRequest,
+  CreateUserResponse,
+  CreatePermissionRequest,
+  CreatePermissionResponse,
 } from "../types";
 
 /** List all roles for a given account root. */
@@ -93,4 +97,20 @@ export function getUserPermissions(
     `${ENDPOINTS.RBAC.USER_PERMISSIONS}/${accountUid}/permissions`,
     opts,
   );
+}
+
+/** Create a new user account. */
+export function createUser(
+  payload: CreateUserRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<CreateUserResponse>> {
+  return post<CreateUserResponse>(ENDPOINTS.USERS.CREATE, { data: payload }, opts);
+}
+
+/** Create a new permission. */
+export function createPermission(
+  payload: CreatePermissionRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<CreatePermissionResponse>> {
+  return post<CreatePermissionResponse>(ENDPOINTS.RBAC.PERMISSIONS_CREATE, { data: payload }, opts);
 }

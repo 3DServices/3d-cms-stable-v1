@@ -71,3 +71,35 @@ export interface UpdateRoleRequest {
 export interface DeleteRoleRequest {
   deleted_by: string;
 }
+
+// ── Create User ─────────────────────────────────────────────────────────────
+
+export interface CreateUserRequest {
+  account_name: string;
+  username: string;
+  account_type: string;
+  assigned_role: string;
+  email: string;
+  password: string;
+  root_account: string;
+  author: string;
+  billing_type: string;
+}
+
+export interface CreateUserResponse {
+  account_uid: string;
+}
+
+// ── Create Permission ───────────────────────────────────────────────────────
+
+export interface CreatePermissionRequest {
+  permission_name: string;
+  permission_description: string;
+  permission_module: string;
+  account_root: string;
+  created_by: string;
+}
+
+export interface CreatePermissionResponse {
+  permission_uid: string;
+}

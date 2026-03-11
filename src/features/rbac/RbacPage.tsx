@@ -17,6 +17,8 @@ import { PoliciesTable } from "./components/PoliciesTable";
 import { RoleTemplatesTable } from "./components/RoleTemplatesTable";
 import { RbacDetailBlade } from "./components/RbacDetailBlade";
 import { CreateRoleModal } from "./components/CreateRoleModal";
+import { CreateUserModal } from "./components/CreateUserModal";
+import { CreatePermissionModal } from "./components/CreatePermissionModal";
 import type { Role } from "./components/RolesTable";
 import type { PermissionSet } from "./components/PermissionSetsTable";
 import type { ObjectAcl } from "./components/ObjectAclsTable";
@@ -90,6 +92,8 @@ export function RbacPage() {
   const [bladeOpen, setBladeOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [permModalOpen, setPermModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   // ── API state: Roles ──────────────────────────────────────────────────────
@@ -100,16 +104,25 @@ export function RbacPage() {
   const [permissionSets, setPermissionSets] = useState<PermissionSet[]>([]);
   const [permsLoading, setPermsLoading] = useState(true);
 
-  useEffect(() => {
+  function refreshRoles() {
+    setRolesLoading(true);
     getAllRoles("engine")
       .then(res => setRoles(res.data.map(mapRbacRoleToRole)))
       .catch(() => {})
       .finally(() => setRolesLoading(false));
+  }
 
+  function refreshPermissions() {
+    setPermsLoading(true);
     getAllPermissions("engine")
       .then(res => setPermissionSets(res.data.map(mapRbacPermToPermissionSet)))
       .catch(() => {})
       .finally(() => setPermsLoading(false));
+  }
+
+  useEffect(() => {
+    refreshRoles();
+    refreshPermissions();
   }, []);
 
   // Track selected IDs for each section
@@ -149,7 +162,9 @@ export function RbacPage() {
                 <div className="text-[11px] text-[#667781] mt-0.5">Least privilege at scale &#8226; Maker-checker for role changes &#8226; Immutable audit trail</div>
               </div>
               <div className="flex gap-2 shrink-0">
-                <Pill onClick={() => setModalOpen(true)} color="green">+ Create Role</Pill>
+                <Pill onClick={() => setUserModalOpen(true)} color="green">+ Create User</Pill>
+                <Pill onClick={() => setPermModalOpen(true)} color="green">+ Create Permission</Pill>
+                <Pill onClick={() => setModalOpen(true)} color="dark">+ Create Role</Pill>
                 <Pill>Export</Pill>
               </div>
             </div>
@@ -292,6 +307,12 @@ export function RbacPage() {
 
       {/* ── Modal: Create Role ───────────────────────────────────── */}
       <CreateRoleModal open={modalOpen} onClose={() => setModalOpen(false)} />
+
+      {/* ── Modal: Create User ───────────────────────────────────── */}
+      <CreateUserModal open={userModalOpen} onClose={() => setUserModalOpen(false)} onCreated={refreshRoles} />
+
+      {/* ── Modal: Create Permission ─────────────────────────────── */}
+      <CreatePermissionModal open={permModalOpen} onClose={() => setPermModalOpen(false)} onCreated={refreshPermissions} />
     </div>
   );
 }

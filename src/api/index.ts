@@ -91,6 +91,10 @@ export type {
   CreateRoleResponse,
   UpdateRoleRequest,
   DeleteRoleRequest,
+  CreateUserRequest,
+  CreateUserResponse,
+  CreatePermissionRequest,
+  CreatePermissionResponse,
 } from "./types";
 
 // ── Domain services ──────────────────────────────────────────────────────────
@@ -125,4 +129,4 @@ export {
 } from "./services/tenants.service";
 export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getAllTokens, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";
-export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions } from "./services/rbac.service";
+export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions, createUser, createPermission } from "./services/rbac.service";
