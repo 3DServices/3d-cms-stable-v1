@@ -88,9 +88,18 @@ export const ENDPOINTS = {
     ROLES_DELETE:       "/rbac/roles",           // append /{role_uid}/delete
     PERMISSIONS:        "/rbac/permissions",
     PERMISSIONS_CREATE: "/rbac/permissions/create",
+    PERMISSIONS_UPDATE: "/rbac/permissions",        // append /{permission_uid}/update
+    PERMISSIONS_DELETE: "/rbac/permissions",        // append /{permission_uid}/delete
     USER_PERMISSIONS:   "/rbac/users",           // append /{account_uid}/permissions
+    STATS_ACTIVE_ROLES:      "/rbac/stats/active-roles",
+    STATS_TOTAL_PERMISSIONS: "/rbac/stats/total-permissions",
+    STATS_ACTIVE_CLIENTS:    "/rbac/stats/active-clients",
+    STATS_ACTIVE_3D_CLIENTS: "/rbac/stats/active-3d-clients",
+    STATS_CLIENT_USERS:      "/rbac/stats/client-users",
   },
   USERS: {
     CREATE: "/users/create",
+    ALL: "/users/all",
+    ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
   },
 } as const;

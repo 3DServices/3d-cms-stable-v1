@@ -4,25 +4,10 @@ export interface Role {
   name: string;
   owner: string;
   tenant: string;
-  scope: string;
   users: number;
   permissions: number;
-  status: "Active" | "Disabled" | "Draft";
   lastModified: string;
-  tags: string[];
 }
-
-const stDot: Record<string, string> = {
-  Active:   "bg-[#25D366]",
-  Disabled: "bg-[#EF4444]",
-  Draft:    "bg-[#FBBF24]",
-};
-
-const stText: Record<string, string> = {
-  Active:   "text-[#1A7A3A]",
-  Disabled: "text-[#EF4444]",
-  Draft:    "text-[#F97316]",
-};
 
 interface Props {
   roles: Role[];
@@ -44,7 +29,7 @@ export function RolesTable({ roles, onSelect, selectedId }: Props) {
         <table className="w-full text-[12px] min-w-[900px]">
           <thead>
             <tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
-              {["ID", "Name", "Owner", "Tenant", "Scope", "Users", "Permissions", "Status", "Modified", "Tags"].map(h => (
+              {["ID", "Name", "Owner", "Tenant", "Users", "Permissions", "Modified"].map(h => (
                 <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
               ))}
             </tr>
@@ -60,23 +45,9 @@ export function RolesTable({ roles, onSelect, selectedId }: Props) {
                 <td className="px-3 py-2.5 font-black text-[#111B21]">{r.name}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.owner}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.tenant}</td>
-                <td className="px-3 py-2.5 text-[#667781]">{r.scope}</td>
                 <td className="px-3 py-2.5 text-[#111B21]">{r.users}</td>
                 <td className="px-3 py-2.5 text-[#111B21]">{r.permissions}</td>
-                <td className="px-3 py-2.5">
-                  <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${stDot[r.status]}`} />
-                    <span className={`font-black ${stText[r.status]}`}>{r.status}</span>
-                  </span>
-                </td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.lastModified}</td>
-                <td className="px-3 py-2.5">
-                  <div className="flex gap-1 flex-wrap">
-                    {r.tags.map(t => (
-                      <span key={t} className="text-[10px] bg-[#F0F2F5] text-[#667781] px-1.5 py-0.5 rounded-full">{t}</span>
-                    ))}
-                  </div>
-                </td>
               </tr>
             ))}
           </tbody>

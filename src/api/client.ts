@@ -21,11 +21,14 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 // ── Auth helper (placeholder) ────────────────────────────────────────────────
 
 /**
- * Returns the current auth token, or `null` if the user isn't authenticated.
- * TODO: Wire this to AuthContext / a token store once auth is live.
+ * Returns the current auth token (account_uid from the session cookie),
+ * or `null` if the user isn't authenticated.
  */
 function getAuthToken(): string | null {
-  return null;
+  const match = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("_nvxs_account_uid="));
+  return match ? decodeURIComponent(match.split("=")[1]) : null;
 }
 
 // ── Shared fetch logic ───────────────────────────────────────────────────────

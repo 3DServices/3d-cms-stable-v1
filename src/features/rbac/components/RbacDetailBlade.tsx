@@ -1,18 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { getRoleByUid, deleteRole } from "../../../api";
+import type { RbacPermission } from "../../../api";
 import type { Role } from "./RolesTable";
 
-const TABS = ["Overview", "Permissions", "Activity", "Audit"];
+const TABS = ["Overview", "Permissions", "Audit"];
 
 interface Props {
   role: Role;
   onClose: () => void;
+  onEdit: (role: Role) => void;
+  onDisabled?: () => void;
 }
 
-export function RbacDetailBlade({ role, onClose }: Props) {
+export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
   const [tab, setTab] = useState("Overview");
+  const [permissions, setPermissions] = useState<RbacPermission[]>([]);
+  const [permsLoading, setPermsLoading] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+
+  // Fetch role detail (with permissions) when role changes
+  useEffect(() => {
+    setPermsLoading(true);
+    getRoleByUid(role.id)
+      .then(res => setPermissions(res.data.permissions ?? []))
+      .catch(() => setPermissions([]))
+      .finally(() => setPermsLoading(false));
+  }, [role.id]);
+
+  async function handleDisable() {
+    if (!confirm(`Disable role "${role.name}"? This will soft-delete the role.`)) return;
+    setDisabling(true);
+    try {
+      await deleteRole(role.id, { deleted_by: "system" });
+      onDisabled?.();
+      onClose();
+    } catch {
+      alert("Failed to disable role.");
+    } finally {
+      setDisabling(false);
+    }
+  }
 
   return (
-    <div className="w-[420px] shrink-0 bg-white border-l border-[#E9EDEF] flex flex-col overflow-hidden">
+    <div className="w-[420px] h-full shrink-0 bg-white border-l border-[#E9EDEF] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#E9EDEF] shrink-0">
         <div>
@@ -40,8 +70,6 @@ export function RbacDetailBlade({ role, onClose }: Props) {
                 { k: "ID:", v: role.id },
                 { k: "Owner:", v: role.owner },
                 { k: "Tenant:", v: role.tenant },
-                { k: "Scope:", v: role.scope },
-                { k: "Status:", v: role.status },
                 { k: "Modified:", v: role.lastModified },
               ]} />
             </div>
@@ -50,49 +78,32 @@ export function RbacDetailBlade({ role, onClose }: Props) {
             <div className="p-4">
               <KV rows={[
                 { k: "Users:", v: String(role.users) },
-                { k: "Perms:", v: String(role.permissions) },
+                { k: "Perms:", v: permsLoading ? "..." : String(permissions.length) },
               ]} />
             </div>
           </BSection>
-          {role.tags.length > 0 && (
-            <BSection title="Tags">
-              <div className="p-4 flex gap-1.5 flex-wrap">
-                {role.tags.map(t => (
-                  <span key={t} className="text-[11px] bg-[#F0F2F5] text-[#667781] px-2 py-1 rounded-full">{t}</span>
-                ))}
-              </div>
-            </BSection>
-          )}
         </>)}
 
         {tab === "Permissions" && (
           <BSection title="Bound Permission Sets">
-            <div className="p-4 text-[12px] text-[#667781]">
-              <div className="flex flex-col gap-2">
-                {["GPS.Read", "GPS.Write", "Billing.View", "Alerts.Manage", "Tokens.Mint"].slice(0, role.permissions).map(p => (
-                  <div key={p} className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#128C7E]" />
-                    <span className="font-black text-[#111B21]">{p}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </BSection>
-        )}
-
-        {tab === "Activity" && (
-          <BSection title="Recent Activity">
-            <div className="p-4 flex flex-col gap-3">
-              {[
-                { time: "2 hours ago", action: "Permission set GPS.Write added", by: "admin@navas.io" },
-                { time: "1 day ago", action: "Role scope changed to Platform", by: "ops@navas.io" },
-                { time: "3 days ago", action: "Role created from template", by: "admin@navas.io" },
-              ].map((a, i) => (
-                <div key={i} className="flex flex-col gap-0.5">
-                  <div className="text-[12px] font-black text-[#111B21]">{a.action}</div>
-                  <div className="text-[11px] text-[#667781]">{a.time} by {a.by}</div>
+            <div className="p-4">
+              {permsLoading ? (
+                <div className="text-[12px] text-[#667781]">Loading permissions...</div>
+              ) : permissions.length === 0 ? (
+                <div className="text-[12px] text-[#667781]">No permissions assigned to this role.</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {permissions.map(p => (
+                    <div key={p.permission_uid} className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#128C7E]" />
+                      <div className="flex flex-col">
+                        <span className="font-black text-[12px] text-[#111B21]">{p.permission_name}</span>
+                        <span className="text-[10px] text-[#667781]">{p.permission_module} &mdash; {p.permission_description || "No description"}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </BSection>
         )}
@@ -126,9 +137,14 @@ export function RbacDetailBlade({ role, onClose }: Props) {
 
       {/* Actions */}
       <div className="flex items-center gap-2 px-5 py-3 border-t border-[#E9EDEF] shrink-0">
-        <button className="h-8 px-4 rounded-lg bg-[#128C7E] text-white text-[11px] font-black border-none cursor-pointer hover:brightness-105">Edit Role</button>
-        <button className="h-8 px-4 rounded-lg bg-white border border-[#E9EDEF] text-[#667781] text-[11px] font-black cursor-pointer hover:bg-[#F0F2F5]">Duplicate</button>
-        <button className="h-8 px-4 rounded-lg bg-white border border-[#EF4444] text-[#EF4444] text-[11px] font-black cursor-pointer hover:bg-[#FEF2F2]">Disable</button>
+        <button onClick={() => onEdit(role)} className="h-8 px-4 rounded-lg bg-[#128C7E] text-white text-[11px] font-black border-none cursor-pointer hover:brightness-105">Edit Role</button>
+        <button
+          onClick={handleDisable}
+          disabled={disabling}
+          className="h-8 px-4 rounded-lg bg-white border border-[#EF4444] text-[#EF4444] text-[11px] font-black cursor-pointer hover:bg-[#FEF2F2] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {disabling ? "Disabling..." : "Disable"}
+        </button>
       </div>
     </div>
   );

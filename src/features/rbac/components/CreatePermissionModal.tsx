@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { createPermission } from "../../../api";
+import { createPermission, getAllPermissions } from "../../../api";
+import type { RbacPermission } from "../../../api";
 
 interface Props {
   open: boolean;
@@ -7,40 +8,97 @@ interface Props {
   onCreated?: () => void;
 }
 
-const MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"] as const;
+const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"];
 
 export function CreatePermissionModal({ open, onClose, onCreated }: Props) {
   const [permissionName, setPermissionName] = useState("");
   const [description, setDescription] = useState("");
-  const [module, setModule] = useState<string>(MODULES[0]);
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
+  const [customModule, setCustomModule] = useState("");
 
+  const [modules, setModules] = useState<string[]>(DEFAULT_MODULES);
+  const [modulesLoading, setModulesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch existing modules from permissions on open
+  useEffect(() => {
+    if (!open) return;
+    setModulesLoading(true);
+    getAllPermissions("engine")
+      .then((res) => {
+        const existing = new Set<string>();
+        (res.data as RbacPermission[]).forEach((p) => {
+          if (p.permission_module) existing.add(p.permission_module.toLowerCase());
+        });
+        // Merge defaults with any new modules from DB
+        DEFAULT_MODULES.forEach((m) => existing.add(m));
+        setModules([...existing].sort());
+      })
+      .catch(() => setModules(DEFAULT_MODULES))
+      .finally(() => setModulesLoading(false));
+  }, [open]);
 
   // Reset form when modal closes
   useEffect(() => {
     if (!open) {
       setPermissionName("");
       setDescription("");
-      setModule(MODULES[0]);
+      setSelectedModules(new Set());
+      setCustomModule("");
       setError(null);
     }
   }, [open]);
 
+  function toggleModule(mod: string) {
+    setSelectedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(mod)) next.delete(mod);
+      else next.add(mod);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selectedModules.size === modules.length) {
+      setSelectedModules(new Set());
+    } else {
+      setSelectedModules(new Set(modules));
+    }
+  }
+
+  // Build the list of modules to create permissions for
+  const activeModules = [...selectedModules];
+  if (customModule.trim() && !selectedModules.has(customModule.trim().toLowerCase())) {
+    activeModules.push(customModule.trim().toLowerCase());
+  }
+
   async function handleSubmit() {
-    if (!permissionName.trim() || !description.trim()) return;
+    if (!permissionName.trim() || !description.trim() || activeModules.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
-      await createPermission({
-        permission_name: permissionName.trim(),
-        permission_description: description.trim(),
-        permission_module: module,
-        account_root: "engine",
-        created_by: "system",
-      });
+      // Create one permission per selected module
+      const results = await Promise.allSettled(
+        activeModules.map((mod) =>
+          createPermission({
+            permission_name: `${mod}.${permissionName.trim()}`,
+            permission_description: description.trim(),
+            permission_module: mod,
+            account_root: "engine",
+            created_by: "system",
+          })
+        )
+      );
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0 && failures.length < results.length) {
+        setError(`${results.length - failures.length} created, ${failures.length} failed`);
+      } else if (failures.length === results.length) {
+        const first = failures[0] as PromiseRejectedResult;
+        throw first.reason;
+      }
       onCreated?.();
-      onClose();
+      if (failures.length === 0) onClose();
     } catch (err: any) {
       setError(err?.apiMessage ?? err?.message ?? "Failed to create permission");
     } finally {
@@ -50,11 +108,12 @@ export function CreatePermissionModal({ open, onClose, onCreated }: Props) {
 
   if (!open) return null;
 
-  const canSubmit = permissionName.trim() && description.trim() && !submitting;
+  const allSelected = modules.length > 0 && selectedModules.size === modules.length;
+  const canSubmit = permissionName.trim() && description.trim() && activeModules.length > 0 && !submitting;
 
   return (
     <div className="fixed inset-0 bg-black/35 z-50 grid place-items-center" onClick={onClose}>
-      <div className="w-[min(520px,calc(100vw-24px))] max-h-[calc(100vh-24px)] bg-white rounded-xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-[min(560px,calc(100vw-24px))] max-h-[calc(100vh-24px)] bg-white rounded-xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-[#075E54] text-white px-5 py-3 flex items-center justify-between shrink-0">
           <div>
@@ -70,16 +129,71 @@ export function CreatePermissionModal({ open, onClose, onCreated }: Props) {
             <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[12px] text-[#EF4444] font-black">{error}</div>
           )}
 
-          <MSection title="Permission Details">
+          {/* Module Selection */}
+          <MSection title={`1. Select Modules (${activeModules.length} selected)`}>
+            {modulesLoading ? (
+              <div className="text-[12px] text-[#667781]">Loading modules...</div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* Select All */}
+                <label className="flex items-center gap-2.5 text-[12px] cursor-pointer pb-2 border-b border-[#E9EDEF]">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="w-4 h-4 accent-[#128C7E]"
+                  />
+                  <span className="font-black text-[#128C7E]">Select All</span>
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  {modules.map((m) => (
+                    <label
+                      key={m}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors text-[12px] ${
+                        selectedModules.has(m)
+                          ? "bg-[#EAF7F3] border border-[#128C7E] text-[#075E54] font-black"
+                          : "bg-white border border-[#E9EDEF] hover:bg-[#F8FAFC] text-[#111B21]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedModules.has(m)}
+                        onChange={() => toggleModule(m)}
+                        className="w-4 h-4 accent-[#128C7E]"
+                      />
+                      {m}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-[#E9EDEF]">
+                  <span className="text-[11px] text-[#667781] font-black shrink-0">Custom:</span>
+                  <input
+                    value={customModule}
+                    onChange={(e) => setCustomModule(e.target.value)}
+                    placeholder="Enter a new module name..."
+                    className="flex-1 h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
+                  />
+                </div>
+              </div>
+            )}
+          </MSection>
+
+          {/* Permission Details */}
+          <MSection title="2. Permission Details">
             <div className="flex flex-col gap-3">
-              <Field label="Permission Name" required>
+              <Field label="Action Name" required>
                 <input
                   value={permissionName}
                   onChange={e => setPermissionName(e.target.value)}
-                  placeholder="e.g. billing.view"
+                  placeholder="e.g. view, manage, create, delete"
                   className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
                 />
-                <div className="text-[10px] text-[#667781] mt-1">Use dot notation: module.action (e.g. billing.view, gps.manage)</div>
+                <div className="text-[10px] text-[#667781] mt-1">
+                  Will create: {activeModules.length > 0
+                    ? activeModules.map((m) => `${m}.${permissionName.trim() || "action"}`).join(", ")
+                    : "Select modules above"}
+                </div>
               </Field>
               <Field label="Description" required>
                 <input
@@ -88,13 +202,6 @@ export function CreatePermissionModal({ open, onClose, onCreated }: Props) {
                   placeholder="e.g. View billing records and invoices"
                   className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
                 />
-              </Field>
-              <Field label="Module" required>
-                <select value={module} onChange={e => setModule(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]">
-                  {MODULES.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
               </Field>
             </div>
           </MSection>
