@@ -112,3 +112,18 @@ export type {
   ActiveSubscriptionsResponse,
   ClientTransaction,
 } from "./billing.types";
+
+export type {
+  AuditDomain,
+  AuditSeverity,
+  AuditEvent,
+  AuditKpis,
+  HashBlock,
+  ApprovalType,
+  AuditApproval,
+  ComplianceItem,
+  ComplianceSnapshot,
+  ExportAuditPackRequest,
+  ExportAuditPackResponse,
+  AuditFilters,
+} from "./audit.types";

@@ -5,9 +5,10 @@ import type { RbacPermission } from "../../../api";
 interface Props {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-export function CreateRoleModal({ open, onClose }: Props) {
+export function CreateRoleModal({ open, onClose, onCreated }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState("Tenant");
@@ -19,6 +20,7 @@ export function CreateRoleModal({ open, onClose }: Props) {
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
 
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch permissions when modal opens
   useEffect(() => {
@@ -26,7 +28,7 @@ export function CreateRoleModal({ open, onClose }: Props) {
     setPermsLoading(true);
     getAllPermissions("engine")
       .then(res => setPermissions(res.data))
-      .catch(() => {})
+      .catch(() => setError("Failed to load permissions"))
       .finally(() => setPermsLoading(false));
   }, [open]);
 
@@ -38,6 +40,7 @@ export function CreateRoleModal({ open, onClose }: Props) {
       setScope("Tenant");
       setTenant("engine");
       setSelectedPerms(new Set());
+      setError(null);
     }
   }, [open]);
 
@@ -58,20 +61,22 @@ export function CreateRoleModal({ open, onClose }: Props) {
     }
   }
 
-  async function handleAssign() {
+  async function handleCreate() {
     if (!name.trim() || selectedPerms.size === 0) return;
     setSubmitting(true);
+    setError(null);
     try {
       await createRole({
         role_name: name.trim(),
         role_description: description.trim(),
         account_root: tenant,
-        created_by: "current_user",
+        created_by: "system",
         permissions: Array.from(selectedPerms),
       });
+      onCreated?.();
       onClose();
-    } catch {
-      // error handling can be added later
+    } catch (err: any) {
+      setError(err?.apiMessage ?? err?.message ?? "Failed to create role");
     } finally {
       setSubmitting(false);
     }
@@ -103,6 +108,10 @@ export function CreateRoleModal({ open, onClose }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-5 bg-[#FBFBFB]">
+          {error && (
+            <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[12px] text-[#EF4444] font-black">{error}</div>
+          )}
+
           <MSection title="Role Details">
             <div className="flex flex-col gap-3">
               <Field label="Role Name" required>
@@ -186,11 +195,11 @@ export function CreateRoleModal({ open, onClose }: Props) {
         <div className="flex items-center justify-between px-5 py-3 border-t border-[#E9EDEF] bg-white shrink-0">
           <button onClick={onClose} className="h-10 px-5 rounded-lg bg-white border border-[#E9EDEF] text-[13px] font-black text-[#111B21] cursor-pointer">Cancel</button>
           <button
-            onClick={handleAssign}
+            onClick={handleCreate}
             disabled={!name.trim() || selectedPerms.size === 0 || submitting}
             className="h-10 px-6 rounded-lg bg-[#25D366] text-[#075E54] text-[13px] font-black border-none cursor-pointer hover:brightness-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? "Assigning..." : "Assign Role"}
+            {submitting ? "Creating..." : "Create Role"}
           </button>
         </div>
       </div>

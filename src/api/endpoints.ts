@@ -96,10 +96,30 @@ export const ENDPOINTS = {
     STATS_ACTIVE_CLIENTS:    "/rbac/stats/active-clients",
     STATS_ACTIVE_3D_CLIENTS: "/rbac/stats/active-3d-clients",
     STATS_CLIENT_USERS:      "/rbac/stats/client-users",
+    STATS_ROLE_USER_COUNTS:  "/rbac/stats/role-user-counts",
+    STATS_PERM_ROLE_COUNTS:  "/rbac/stats/permission-role-counts",
   },
   USERS: {
     CREATE: "/users/create",
     ALL: "/users/all",
     ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
+  },
+  AUDIT: {
+    /** CMS-wide audit event stream (all modules). Supports ?domain=&severity=&range= query params */
+    EVENTS:         "/audit/events",
+    /** Aggregated KPI summary for audit dashboard */
+    KPIS:           "/audit/kpis",
+    /** Hash-chain blocks for tamper evidence */
+    HASH_CHAIN:     "/audit/hash-chain",
+    /** HITL / HIC approval queue (cross-module) */
+    APPROVALS:      "/audit/approvals",
+    /** Approve a pending approval */
+    APPROVE:        "/audit/approvals",      // append /{id}/approve
+    /** Reject a pending approval */
+    REJECT:         "/audit/approvals",      // append /{id}/reject
+    /** Compliance snapshot (retention, crypto, gaps) */
+    COMPLIANCE:     "/audit/compliance",
+    /** Request an audit pack export (HIC-gated) */
+    EXPORT:         "/audit/export",
   },
 } as const;

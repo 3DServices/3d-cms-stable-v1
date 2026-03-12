@@ -77,10 +77,7 @@ export function deleteRole(
   payload: DeleteRoleRequest,
   opts?: RequestOptions,
 ): Promise<ApiResponse<string>> {
-  return del<string>(`${ENDPOINTS.RBAC.ROLES_DELETE}/${roleUid}/delete`, {
-    ...opts,
-    headers: { "Content-Type": "application/json", ...opts?.headers },
-  });
+  return del<string>(`${ENDPOINTS.RBAC.ROLES_DELETE}/${roleUid}/delete`, { data: payload }, opts);
 }
 
 /** List all permissions for a given account root. */
@@ -152,7 +149,7 @@ export function deletePermission(
   permissionUid: string,
   opts?: RequestOptions,
 ): Promise<ApiResponse<string>> {
-  return del<string>(`${ENDPOINTS.RBAC.PERMISSIONS_DELETE}/${permissionUid}/delete`, opts);
+  return del<string>(`${ENDPOINTS.RBAC.PERMISSIONS_DELETE}/${permissionUid}/delete`, { data: { deleted_by: "system" } }, opts);
 }
 
 // ── RBAC Dashboard Stats ──────────────────────────────────────────────────
@@ -180,4 +177,14 @@ export function getActive3dClientsCount(opts?: RequestOptions): Promise<ApiRespo
 /** Get total users belonging to clients. */
 export function getClientUsersCount(opts?: RequestOptions): Promise<ApiResponse<{ total_client_users: number }>> {
   return get<{ total_client_users: number }>(ENDPOINTS.RBAC.STATS_CLIENT_USERS, opts);
+}
+
+/** Get user count per role (keyed by role_uid). */
+export function getRoleUserCounts(opts?: RequestOptions): Promise<ApiResponse<Record<string, number>>> {
+  return get<Record<string, number>>(ENDPOINTS.RBAC.STATS_ROLE_USER_COUNTS, opts);
+}
+
+/** Get role count per permission (keyed by permission_uid). */
+export function getPermissionRoleCounts(opts?: RequestOptions): Promise<ApiResponse<Record<string, number>>> {
+  return get<Record<string, number>>(ENDPOINTS.RBAC.STATS_PERM_ROLE_COUNTS, opts);
 }

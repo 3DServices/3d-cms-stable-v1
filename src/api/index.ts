@@ -101,6 +101,18 @@ export type {
   UpdatePermissionRequest,
   DeletePermissionRequest,
   RbacStats,
+  AuditDomain,
+  AuditSeverity,
+  AuditEvent,
+  AuditKpis,
+  HashBlock,
+  ApprovalType,
+  AuditApproval,
+  ComplianceItem,
+  ComplianceSnapshot,
+  ExportAuditPackRequest,
+  ExportAuditPackResponse,
+  AuditFilters,
 } from "./types";
 
 // ── Domain services ──────────────────────────────────────────────────────────
@@ -135,4 +147,5 @@ export {
 } from "./services/tenants.service";
 export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getAllTokens, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";
-export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions, createUser, getAllUsers, assignUserRole, createPermission, updatePermission, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount } from "./services/rbac.service";
+export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions, createUser, getAllUsers, assignUserRole, createPermission, updatePermission, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "./services/rbac.service";
+export { getAuditEvents, getAuditKpis, getHashChain, getAuditApprovals, approveAuditRequest, rejectAuditRequest, getComplianceSnapshot, requestAuditExport } from "./services/audit.service";

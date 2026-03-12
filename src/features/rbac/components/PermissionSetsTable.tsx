@@ -63,7 +63,7 @@ export function PermissionSetsTable({ sets, onSelect, onEdit, onDelete, onCreate
                     ))}
                   </div>
                 </td>
-                <td className="px-3 py-2.5 text-[#111B21]">{s.rolesUsing}</td>
+                <td className="px-3 py-2.5 text-[#111B21]">{s.rolesUsing < 0 ? "--" : s.rolesUsing}</td>
                 <td className="px-3 py-2.5 text-[#667781] max-w-[200px] truncate">{s.description}</td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1.5">

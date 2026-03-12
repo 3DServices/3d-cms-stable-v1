@@ -15,6 +15,8 @@ import { Sidebar }     from "../components/navigation";
 
 // ── Auth context ─────────────────────────────────────────────────────────────
 import { AuthProvider } from "../auth/AuthContext";
+import { PermissionsProvider } from "../auth/PermissionsContext";
+import { ProtectedRoute } from "../auth/ProtectedRoute";
 
 // ── Feature pages ────────────────────────────────────────────────────────────
 import { AegisDashboardPage }  from "../features/aegis";
@@ -49,6 +51,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+    <PermissionsProvider>
     <div className="h-dvh flex flex-col bg-[#F0F2F5] overflow-hidden w-full">
       <TopBar />
       <StatusStrip />
@@ -58,30 +61,33 @@ export default function App() {
         <Sidebar />
 
         <Routes>
-          {/* ── Built pages ──────────────────────────────────────────────── */}
+          {/* ── Dashboard (no permission required — landing page) ─────── */}
           <Route path="/"               element={<AegisDashboardPage />} />
           <Route path="/aegis"          element={<AegisDashboardPage />} />
-          <Route path="/noc-bridge"     element={<NocBridgePage />} />
-          <Route path="/ops"            element={<OpsWarRoomPage />} />
-          <Route path="/gatehouse"      element={<GatehousePage />} />
-          <Route path="/alarms-factory" element={<AlarmFactoryPage />} />
-          <Route path="/tenant-tower"   element={<TenantTowerPage />} />
-          <Route path="/billing-invoicing" element={<BillingInvoicingPage />} />
-          <Route path="/money"            element={<MoneyPage />} />
-          <Route path="/protocol"         element={<ProtocolPage />} />
-          <Route path="/firmware"         element={<FirmwarePage />} />
-          <Route path="/sim"             element={<SimPage />} />
-          <Route path="/asset-digital-twin" element={<AssetDigitalTwinPage />} />
-          {/* ── Placeholder pages (to be built) ──────────────────────────── */}
-          <Route path="/health"   element={<SystemHealthPage />} />
-          <Route path="/alarms"   element={<AlarmsPage />} />
-          <Route path="/tokens"   element={<TokensPage />} />
-          <Route path="/billing"  element={<BillingPage />} />
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/veba"     element={<VebaPage />} />
-          <Route path="/ai"       element={<AIWorkloadsPage />} />
-          <Route path="/rbac"     element={<RbacPage />} />
-          <Route path="/audit"    element={<AuditPage />} />
+
+          {/* ── Built pages (permission-guarded) ─────────────────────── */}
+          <Route path="/noc-bridge"     element={<ProtectedRoute permission="noc.view"><NocBridgePage /></ProtectedRoute>} />
+          <Route path="/ops"            element={<ProtectedRoute permission="ops.view"><OpsWarRoomPage /></ProtectedRoute>} />
+          <Route path="/gatehouse"      element={<ProtectedRoute permission="gatehouse.view"><GatehousePage /></ProtectedRoute>} />
+          <Route path="/alarms-factory" element={<ProtectedRoute permission="alarms.view"><AlarmFactoryPage /></ProtectedRoute>} />
+          <Route path="/tenant-tower"   element={<ProtectedRoute permission="tenants.view"><TenantTowerPage /></ProtectedRoute>} />
+          <Route path="/billing-invoicing" element={<ProtectedRoute permission="billing.view"><BillingInvoicingPage /></ProtectedRoute>} />
+          <Route path="/money"            element={<ProtectedRoute permission="money.view"><MoneyPage /></ProtectedRoute>} />
+          <Route path="/protocol"         element={<ProtectedRoute permission="protocol.view"><ProtocolPage /></ProtectedRoute>} />
+          <Route path="/firmware"         element={<ProtectedRoute permission="firmware.view"><FirmwarePage /></ProtectedRoute>} />
+          <Route path="/sim"             element={<ProtectedRoute permission="sim.view"><SimPage /></ProtectedRoute>} />
+          <Route path="/asset-digital-twin" element={<ProtectedRoute permission="assets.view"><AssetDigitalTwinPage /></ProtectedRoute>} />
+
+          {/* ── Placeholder pages (permission-guarded) ───────────────── */}
+          <Route path="/health"   element={<ProtectedRoute permission="health.view"><SystemHealthPage /></ProtectedRoute>} />
+          <Route path="/alarms"   element={<ProtectedRoute permission="alarms.view"><AlarmsPage /></ProtectedRoute>} />
+          <Route path="/tokens"   element={<ProtectedRoute permission="tokens.view"><TokensPage /></ProtectedRoute>} />
+          <Route path="/billing"  element={<ProtectedRoute permission="billing.view"><BillingPage /></ProtectedRoute>} />
+          <Route path="/payments" element={<ProtectedRoute permission="payments.view"><PaymentsPage /></ProtectedRoute>} />
+          <Route path="/veba"     element={<ProtectedRoute permission="veba.view"><VebaPage /></ProtectedRoute>} />
+          <Route path="/ai"       element={<ProtectedRoute permission="ai.view"><AIWorkloadsPage /></ProtectedRoute>} />
+          <Route path="/rbac"     element={<ProtectedRoute permission="rbac.view"><RbacPage /></ProtectedRoute>} />
+          <Route path="/audit"    element={<ProtectedRoute permission="audit.view"><AuditPage /></ProtectedRoute>} />
 
           {/* ── 404 ─────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFoundPage />} />
@@ -92,6 +98,7 @@ export default function App() {
         Kafka lag 4.8s • Redis p95 3ms • Cassandra p95 27ms • SSE clients 2.1k • Uptime 99.82%
       </footer>
     </div>
+    </PermissionsProvider>
     </AuthProvider>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { updateRole, getAllPermissions } from "../../../api";
+import { updateRole, getAllPermissions, getRoleByUid } from "../../../api";
 import type { RbacPermission } from "../../../api";
 import type { Role } from "./RolesTable";
 
@@ -18,21 +18,30 @@ export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [permsLoading, setPermsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Populate form & fetch available permissions when modal opens
+  // Fetch role detail + all permissions when modal opens
   useEffect(() => {
-    if (open && role) {
-      setRoleName(role.name);
-      setRoleDescription("");
-      setError(null);
-      // Fetch all permissions for the checkboxes
-      setPermsLoading(true);
-      getAllPermissions("engine")
-        .then(res => setAllPermissions(res.data))
-        .catch(() => {})
-        .finally(() => setPermsLoading(false));
-    }
+    if (!open || !role) return;
+    setRoleName(role.name);
+    setRoleDescription("");
+    setSelectedPermUids(new Set());
+    setError(null);
+    setLoading(true);
+
+    Promise.all([
+      getRoleByUid(role.id),
+      getAllPermissions("engine"),
+    ])
+      .then(([roleRes, permsRes]) => {
+        setRoleDescription(roleRes.data.role_description ?? "");
+        setSelectedPermUids(
+          new Set(roleRes.data.permissions.map(p => p.permission_uid))
+        );
+        setAllPermissions(permsRes.data);
+      })
+      .catch(() => setError("Failed to load role data"))
+      .finally(() => setLoading(false));
   }, [open, role]);
 
   function togglePerm(uid: string) {
@@ -42,6 +51,14 @@ export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
       else next.add(uid);
       return next;
     });
+  }
+
+  function toggleAll() {
+    if (selectedPermUids.size === allPermissions.length) {
+      setSelectedPermUids(new Set());
+    } else {
+      setSelectedPermUids(new Set(allPermissions.map(p => p.permission_uid)));
+    }
   }
 
   async function handleSubmit() {
@@ -66,11 +83,20 @@ export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
 
   if (!open || !role) return null;
 
-  const canSubmit = roleName.trim() && !submitting;
+  // Group permissions by module
+  const byModule = allPermissions.reduce<Record<string, RbacPermission[]>>((acc, p) => {
+    const mod = p.permission_module;
+    if (!acc[mod]) acc[mod] = [];
+    acc[mod].push(p);
+    return acc;
+  }, {});
+
+  const allSelected = allPermissions.length > 0 && selectedPermUids.size === allPermissions.length;
+  const canSubmit = roleName.trim() && !submitting && !loading;
 
   return (
     <div className="fixed inset-0 bg-black/35 z-50 grid place-items-center" onClick={onClose}>
-      <div className="w-[min(560px,calc(100vw-24px))] max-h-[calc(100vh-24px)] bg-white rounded-xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="w-[min(720px,calc(100vw-24px))] max-h-[calc(100vh-24px)] bg-white rounded-xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-[#075E54] text-white px-5 py-3 flex items-center justify-between shrink-0">
           <div>
@@ -86,52 +112,78 @@ export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
             <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[12px] text-[#EF4444] font-black">{error}</div>
           )}
 
-          <MSection title="Role Details">
-            <div className="flex flex-col gap-3">
-              <Field label="Role UID">
-                <div className="h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781] bg-[#F8FAFC] flex items-center font-mono">{role.id}</div>
-              </Field>
-              <Field label="Role Name" required>
-                <input
-                  value={roleName}
-                  onChange={e => setRoleName(e.target.value)}
-                  placeholder="e.g. Platform Admin"
-                  className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
-                />
-              </Field>
-              <Field label="Description">
-                <input
-                  value={roleDescription}
-                  onChange={e => setRoleDescription(e.target.value)}
-                  placeholder="e.g. Full access to all platform resources"
-                  className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
-                />
-              </Field>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="w-6 h-6 border-2 border-[#128C7E] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <div className="text-[12px] text-[#667781]">Loading role data...</div>
             </div>
-          </MSection>
-
-          <MSection title="Permissions">
-            {permsLoading ? (
-              <div className="text-[12px] text-[#667781]">Loading permissions...</div>
-            ) : allPermissions.length === 0 ? (
-              <div className="text-[12px] text-[#667781]">No permissions available.</div>
-            ) : (
-              <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {allPermissions.map(p => (
-                  <label key={p.permission_uid} className="flex items-center gap-2 cursor-pointer py-1 px-1 rounded hover:bg-[#F8FAFC]">
+          ) : (
+            <>
+              <MSection title="Role Details">
+                <div className="flex flex-col gap-3">
+                  <Field label="Role UID">
+                    <div className="h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781] bg-[#F8FAFC] flex items-center font-mono">{role.id}</div>
+                  </Field>
+                  <Field label="Role Name" required>
                     <input
-                      type="checkbox"
-                      checked={selectedPermUids.has(p.permission_uid)}
-                      onChange={() => togglePerm(p.permission_uid)}
-                      className="accent-[#128C7E]"
+                      value={roleName}
+                      onChange={e => setRoleName(e.target.value)}
+                      placeholder="e.g. Platform Admin"
+                      className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
                     />
-                    <span className="text-[12px] font-black text-[#111B21]">{p.permission_name}</span>
-                    <span className="text-[10px] text-[#667781]">({p.permission_module})</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </MSection>
+                  </Field>
+                  <Field label="Description">
+                    <input
+                      value={roleDescription}
+                      onChange={e => setRoleDescription(e.target.value)}
+                      placeholder="e.g. Full access to all platform resources"
+                      className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]"
+                    />
+                  </Field>
+                </div>
+              </MSection>
+
+              <MSection title={`Permissions (${selectedPermUids.size} of ${allPermissions.length} selected)`}>
+                {allPermissions.length === 0 ? (
+                  <div className="text-[12px] text-[#667781]">No permissions available.</div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {/* Select all */}
+                    <label className="flex items-center gap-2.5 text-[12px] cursor-pointer pb-2 border-b border-[#E9EDEF]">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="w-4 h-4 accent-[#128C7E]"
+                      />
+                      <span className="font-black text-[#128C7E]">Select All</span>
+                    </label>
+
+                    {/* Grouped by module */}
+                    {Object.entries(byModule).map(([mod, perms]) => (
+                      <div key={mod}>
+                        <div className="text-[11px] font-black text-[#667781] uppercase mb-1.5">{mod}</div>
+                        <div className="flex flex-col gap-1.5 pl-1">
+                          {perms.map(p => (
+                            <label key={p.permission_uid} className="flex items-center gap-2.5 text-[12px] cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedPermUids.has(p.permission_uid)}
+                                onChange={() => togglePerm(p.permission_uid)}
+                                className="w-4 h-4 accent-[#128C7E]"
+                              />
+                              <span className="font-black text-[#111B21]">{p.permission_name}</span>
+                              <span className="text-[#667781] text-[11px]">{p.permission_description}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </MSection>
+            </>
+          )}
         </div>
 
         {/* Footer */}
