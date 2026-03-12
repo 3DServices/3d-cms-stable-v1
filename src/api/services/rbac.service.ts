@@ -23,6 +23,16 @@ import type {
   CreateRoleResponse,
   UpdateRoleRequest,
   DeleteRoleRequest,
+  CreateUserRequest,
+  CreateUserResponse,
+  AssignRoleRequest,
+  AssignRoleResponse,
+  UserAccount,
+  CreatePermissionRequest,
+  CreatePermissionResponse,
+  UpdatePermissionRequest,
+  DeletePermissionRequest,
+  RbacStats,
 } from "../types";
 
 /** List all roles for a given account root. */
@@ -93,4 +103,81 @@ export function getUserPermissions(
     `${ENDPOINTS.RBAC.USER_PERMISSIONS}/${accountUid}/permissions`,
     opts,
   );
+}
+
+/** Create a new user account. */
+export function createUser(
+  payload: CreateUserRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<CreateUserResponse>> {
+  return post<CreateUserResponse>(ENDPOINTS.USERS.CREATE, { data: payload }, opts);
+}
+
+/** Get all users for an account root. */
+export function getAllUsers(
+  accountRoot: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<UserAccount[]>> {
+  return post<UserAccount[]>(ENDPOINTS.USERS.ALL, { data: { primary_account: accountRoot } }, opts);
+}
+
+/** Assign a role to an existing user. */
+export function assignUserRole(
+  userUid: string,
+  payload: AssignRoleRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<AssignRoleResponse>> {
+  return put<AssignRoleResponse>(`${ENDPOINTS.USERS.ASSIGN_ROLE}/${userUid}/assign-role`, { data: payload }, opts);
+}
+
+/** Create a new permission. */
+export function createPermission(
+  payload: CreatePermissionRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<CreatePermissionResponse>> {
+  return post<CreatePermissionResponse>(ENDPOINTS.RBAC.PERMISSIONS_CREATE, { data: payload }, opts);
+}
+
+/** Update an existing permission. */
+export function updatePermission(
+  permissionUid: string,
+  payload: UpdatePermissionRequest,
+  opts?: RequestOptions,
+): Promise<ApiResponse<string>> {
+  return put<string>(`${ENDPOINTS.RBAC.PERMISSIONS_UPDATE}/${permissionUid}/update`, { data: payload }, opts);
+}
+
+/** Delete a permission (soft delete). */
+export function deletePermission(
+  permissionUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<string>> {
+  return del<string>(`${ENDPOINTS.RBAC.PERMISSIONS_DELETE}/${permissionUid}/delete`, opts);
+}
+
+// ── RBAC Dashboard Stats ──────────────────────────────────────────────────
+
+/** Get count of active roles. */
+export function getActiveRolesCount(opts?: RequestOptions): Promise<ApiResponse<{ total_active_roles: number }>> {
+  return get<{ total_active_roles: number }>(ENDPOINTS.RBAC.STATS_ACTIVE_ROLES, opts);
+}
+
+/** Get count of all permissions. */
+export function getTotalPermissionsCount(opts?: RequestOptions): Promise<ApiResponse<{ total_permissions: number }>> {
+  return get<{ total_permissions: number }>(ENDPOINTS.RBAC.STATS_TOTAL_PERMISSIONS, opts);
+}
+
+/** Get count of actively logged-in clients (last 24h). */
+export function getActiveClientsCount(opts?: RequestOptions): Promise<ApiResponse<{ total_active_clients: number }>> {
+  return get<{ total_active_clients: number }>(ENDPOINTS.RBAC.STATS_ACTIVE_CLIENTS, opts);
+}
+
+/** Get count of actively logged-in 3D/internal users (last 24h). */
+export function getActive3dClientsCount(opts?: RequestOptions): Promise<ApiResponse<{ total_active_3d_clients: number }>> {
+  return get<{ total_active_3d_clients: number }>(ENDPOINTS.RBAC.STATS_ACTIVE_3D_CLIENTS, opts);
+}
+
+/** Get total users belonging to clients. */
+export function getClientUsersCount(opts?: RequestOptions): Promise<ApiResponse<{ total_client_users: number }>> {
+  return get<{ total_client_users: number }>(ENDPOINTS.RBAC.STATS_CLIENT_USERS, opts);
 }

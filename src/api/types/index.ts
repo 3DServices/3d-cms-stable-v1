@@ -88,6 +88,16 @@ export type {
   CreateRoleResponse,
   UpdateRoleRequest,
   DeleteRoleRequest,
+  CreateUserRequest,
+  CreateUserResponse,
+  AssignRoleRequest,
+  AssignRoleResponse,
+  UserAccount,
+  CreatePermissionRequest,
+  CreatePermissionResponse,
+  UpdatePermissionRequest,
+  DeletePermissionRequest,
+  RbacStats,
 } from "./rbac.types";
 
 export type {

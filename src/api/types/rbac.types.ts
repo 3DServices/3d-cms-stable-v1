@@ -71,3 +71,85 @@ export interface UpdateRoleRequest {
 export interface DeleteRoleRequest {
   deleted_by: string;
 }
+
+// ── Create User ─────────────────────────────────────────────────────────────
+
+export interface CreateUserRequest {
+  account_name: string;
+  username: string;
+  account_type: string;
+  assigned_role: string;
+  email: string;
+  password: string;
+  root_account: string;
+  author: string;
+  billing_type: string;
+}
+
+export interface CreateUserResponse {
+  account_uid: string;
+}
+
+// ── Assign Role to User ─────────────────────────────────────────────────────
+
+export interface AssignRoleRequest {
+  role_name: string;
+  updated_by: string;
+}
+
+export interface AssignRoleResponse {
+  account_uid: string;
+  role_name: string;
+}
+
+// ── User (from /users/all) ──────────────────────────────────────────────────
+
+export interface UserAccount {
+  account_uid: string;
+  account_name: string;
+  username: string;
+  email: string;
+  account_type: string;
+  account_role: string;
+  access_status: string;
+  primary_account: string;
+  date_created: string;
+}
+
+// ── Create Permission ───────────────────────────────────────────────────────
+
+export interface CreatePermissionRequest {
+  permission_name: string;
+  permission_description: string;
+  permission_module: string;
+  account_root: string;
+  created_by: string;
+}
+
+export interface CreatePermissionResponse {
+  permission_uid: string;
+}
+
+// ── Update Permission ─────────────────────────────────────────────────────
+
+export interface UpdatePermissionRequest {
+  permission_name?: string;
+  permission_description?: string;
+  permission_module?: string;
+}
+
+// ── Delete Permission ─────────────────────────────────────────────────────
+
+export interface DeletePermissionRequest {
+  deleted_by: string;
+}
+
+// ── RBAC Stats ──────────────────────────────────────────────────────────────
+
+export interface RbacStats {
+  total_active_roles: number;
+  total_permissions: number;
+  total_active_clients: number;
+  total_active_3d_clients: number;
+  total_client_users: number;
+}

@@ -3,33 +3,22 @@ export interface PermissionSet {
   id: string;
   name: string;
   owner: string;
-  tenant: string;
   module: string;
   actions: string[];
   rolesUsing: number;
-  status: "Active" | "Disabled" | "Draft";
-  lastModified: string;
+  description: string;
 }
-
-const stDot: Record<string, string> = {
-  Active:   "bg-[#25D366]",
-  Disabled: "bg-[#EF4444]",
-  Draft:    "bg-[#FBBF24]",
-};
-
-const stText: Record<string, string> = {
-  Active:   "text-[#1A7A3A]",
-  Disabled: "text-[#EF4444]",
-  Draft:    "text-[#F97316]",
-};
 
 interface Props {
   sets: PermissionSet[];
   onSelect: (set: PermissionSet) => void;
+  onEdit: (set: PermissionSet) => void;
+  onDelete: (set: PermissionSet) => void;
+  onCreate: () => void;
   selectedId?: string;
 }
 
-export function PermissionSetsTable({ sets, onSelect, selectedId }: Props) {
+export function PermissionSetsTable({ sets, onSelect, onEdit, onDelete, onCreate, selectedId }: Props) {
   return (
     <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
@@ -37,14 +26,22 @@ export function PermissionSetsTable({ sets, onSelect, selectedId }: Props) {
           <div className="font-black text-[13px] text-[#111B21]">Permission Sets</div>
           <div className="text-[11px] text-[#667781] mt-0.5">Grouped permissions bound to modules and blades</div>
         </div>
-        <div className="text-[11px] text-[#667781]">{sets.length} sets</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onCreate}
+            className="h-8 px-3 rounded-full text-[11px] font-black bg-[#25D366] text-[#075E54] border-none cursor-pointer hover:brightness-105 transition-all whitespace-nowrap"
+          >
+            + Create Permission
+          </button>
+          <div className="text-[11px] text-[#667781] whitespace-nowrap">{sets.length} sets</div>
+        </div>
       </div>
       <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <table className="w-full text-[12px] min-w-[800px]">
           <thead>
             <tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
-              {["ID", "Name", "Owner", "Tenant", "Module", "Actions", "Roles Using", "Status", "Modified"].map(h => (
-                <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
+              {["ID", "Name", "Owner", "Module", "Actions", "Roles Using", "Description", ""].map(h => (
+                <th key={h || "actions"} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
               ))}
             </tr>
           </thead>
@@ -58,7 +55,6 @@ export function PermissionSetsTable({ sets, onSelect, selectedId }: Props) {
                 <td className="px-3 py-2.5 font-mono text-[#667781]">{s.id}</td>
                 <td className="px-3 py-2.5 font-black text-[#111B21]">{s.name}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{s.owner}</td>
-                <td className="px-3 py-2.5 text-[#667781]">{s.tenant}</td>
                 <td className="px-3 py-2.5 text-[#111B21]">{s.module}</td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1 flex-wrap">
@@ -68,13 +64,23 @@ export function PermissionSetsTable({ sets, onSelect, selectedId }: Props) {
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-[#111B21]">{s.rolesUsing}</td>
+                <td className="px-3 py-2.5 text-[#667781] max-w-[200px] truncate">{s.description}</td>
                 <td className="px-3 py-2.5">
-                  <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${stDot[s.status]}`} />
-                    <span className={`font-black ${stText[s.status]}`}>{s.status}</span>
-                  </span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); onEdit(s); }}
+                      className="h-6 px-2 rounded text-[10px] font-black bg-[#F0F2F5] text-[#667781] hover:bg-[#E9EDEF] border-none cursor-pointer transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); onDelete(s); }}
+                      className="h-6 px-2 rounded text-[10px] font-black bg-[#FEF2F2] text-[#EF4444] hover:bg-[#FEE2E2] border-none cursor-pointer transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
-                <td className="px-3 py-2.5 text-[#667781]">{s.lastModified}</td>
               </tr>
             ))}
           </tbody>
