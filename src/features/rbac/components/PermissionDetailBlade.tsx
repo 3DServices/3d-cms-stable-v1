@@ -54,7 +54,7 @@ export function PermissionDetailBlade({ permission, onClose, onEdit, onDelete }:
         <BSection title="Usage">
           <div className="p-4">
             <KV rows={[
-              { k: "Roles Using:", v: String(permission.rolesUsing) },
+              { k: "Roles Using:", v: permission.rolesUsing < 0 ? "--" : String(permission.rolesUsing) },
             ]} />
           </div>
         </BSection>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getAllUsers, getAllRoles, getAllPermissions, assignUserRole, updateRole } from "../../../api";
+import { getAllUsers, getAllRoles, getAllPermissions, assignUserRole } from "../../../api";
 import type { UserAccount, RbacRole, RbacPermission } from "../../../api";
 
 interface Props {
@@ -15,7 +15,7 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
 
   const [selectedUserUid, setSelectedUserUid] = useState("");
   const [selectedRoleUid, setSelectedRoleUid] = useState("");
-  const [selectedPermUids, setSelectedPermUids] = useState<Set<string>>(new Set());
+  const [rolePermUids, setRolePermUids] = useState<Set<string>>(new Set());
 
   const [usersLoading, setUsersLoading] = useState(false);
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -44,17 +44,17 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
       .finally(() => setPermsLoading(false));
   }, [open]);
 
-  // When a role is selected, pre-check its permissions
+  // When a role is selected, show its permissions (read-only)
   useEffect(() => {
     if (!selectedRoleUid) {
-      setSelectedPermUids(new Set());
+      setRolePermUids(new Set());
       return;
     }
     const role = roles.find(r => r.role_uid === selectedRoleUid);
     if (role?.permissions) {
-      setSelectedPermUids(new Set(role.permissions.map(p => p.permission_uid)));
+      setRolePermUids(new Set(role.permissions.map(p => p.permission_uid)));
     } else {
-      setSelectedPermUids(new Set());
+      setRolePermUids(new Set());
     }
   }, [selectedRoleUid, roles]);
 
@@ -63,28 +63,11 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
     if (!open) {
       setSelectedUserUid("");
       setSelectedRoleUid("");
-      setSelectedPermUids(new Set());
+      setRolePermUids(new Set());
       setError(null);
       setUserSearch("");
     }
   }, [open]);
-
-  function togglePerm(uid: string) {
-    setSelectedPermUids(prev => {
-      const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid);
-      else next.add(uid);
-      return next;
-    });
-  }
-
-  function toggleAll() {
-    if (selectedPermUids.size === permissions.length) {
-      setSelectedPermUids(new Set());
-    } else {
-      setSelectedPermUids(new Set(permissions.map(p => p.permission_uid)));
-    }
-  }
 
   async function handleSubmit() {
     if (!selectedUserUid || !selectedRoleUid) return;
@@ -94,18 +77,10 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      // 1. Assign the role to the user
       await assignUserRole(selectedUserUid, {
         role_name: role.role_name,
         updated_by: "system",
       });
-
-      // 2. Update the role's permissions to match the checked permissions
-      await updateRole(selectedRoleUid, {
-        permissions: [...selectedPermUids],
-        updated_by: "system",
-      });
-
       onAssigned?.();
       onClose();
     } catch (err: any) {
@@ -127,7 +102,7 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
     return acc;
   }, {});
 
-  const allSelected = permissions.length > 0 && selectedPermUids.size === permissions.length;
+  const rolePermCount = rolePermUids.size;
 
   // Filter users by search
   const filteredUsers = users.filter(u =>
@@ -226,45 +201,35 @@ export function AssignRoleModal({ open, onClose, onAssigned }: Props) {
             )}
           </MSection>
 
-          {/* Step 3: Customize Permissions */}
-          <MSection title={`3. Permissions (${selectedPermUids.size} of ${permissions.length} selected)`}>
+          {/* Step 3: Role Permissions (read-only) */}
+          <MSection title={`3. Role Permissions (${rolePermCount} included)`}>
             {permsLoading ? (
               <div className="text-[12px] text-[#667781] text-center py-4">Loading permissions...</div>
-            ) : permissions.length === 0 ? (
-              <div className="text-[12px] text-[#667781] text-center py-4">No permissions found</div>
+            ) : !selectedRoleUid ? (
+              <div className="text-[12px] text-[#667781] text-center py-4">Select a role above to see its permissions</div>
+            ) : rolePermCount === 0 ? (
+              <div className="text-[12px] text-[#667781] text-center py-4">This role has no permissions assigned</div>
             ) : (
               <div className="flex flex-col gap-3">
-                {/* Select all */}
-                <label className="flex items-center gap-2.5 text-[12px] cursor-pointer pb-2 border-b border-[#E9EDEF]">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="w-4 h-4 accent-[#128C7E]"
-                  />
-                  <span className="font-black text-[#128C7E]">Select All</span>
-                </label>
-
-                {/* Grouped by module */}
-                {Object.entries(byModule).map(([mod, perms]) => (
-                  <div key={mod}>
-                    <div className="text-[11px] font-black text-[#667781] uppercase mb-1.5">{mod}</div>
-                    <div className="flex flex-col gap-1.5 pl-1">
-                      {perms.map(p => (
-                        <label key={p.permission_uid} className="flex items-center gap-2.5 text-[12px] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedPermUids.has(p.permission_uid)}
-                            onChange={() => togglePerm(p.permission_uid)}
-                            className="w-4 h-4 accent-[#128C7E]"
-                          />
-                          <span className="font-black text-[#111B21]">{p.permission_name}</span>
-                          <span className="text-[#667781] text-[11px]">{p.permission_description}</span>
-                        </label>
-                      ))}
+                <div className="text-[10px] text-[#667781] pb-2 border-b border-[#E9EDEF]">These permissions are defined by the role. To modify them, edit the role directly.</div>
+                {Object.entries(byModule).map(([mod, perms]) => {
+                  const modulePerms = perms.filter(p => rolePermUids.has(p.permission_uid));
+                  if (modulePerms.length === 0) return null;
+                  return (
+                    <div key={mod}>
+                      <div className="text-[11px] font-black text-[#667781] uppercase mb-1.5">{mod}</div>
+                      <div className="flex flex-col gap-1.5 pl-1">
+                        {modulePerms.map(p => (
+                          <div key={p.permission_uid} className="flex items-center gap-2.5 text-[12px]">
+                            <span className="w-2 h-2 rounded-full bg-[#128C7E] shrink-0" />
+                            <span className="font-black text-[#111B21]">{p.permission_name}</span>
+                            <span className="text-[#667781] text-[11px]">{p.permission_description}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </MSection>

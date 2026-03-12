@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { updatePermission } from "../../../api";
+import { updatePermission, getAllPermissions } from "../../../api";
+import type { RbacPermission } from "../../../api";
 import type { PermissionSet } from "./PermissionSetsTable";
 
 interface Props {
@@ -9,23 +10,46 @@ interface Props {
   onUpdated?: () => void;
 }
 
-const MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"] as const;
+const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"];
 
 export function EditPermissionModal({ open, permission, onClose, onUpdated }: Props) {
   const [permissionName, setPermissionName] = useState("");
   const [description, setDescription] = useState("");
-  const [module, setModule] = useState<string>(MODULES[0]);
+  const [module, setModule] = useState<string>("");
+  const [modules, setModules] = useState<string[]>(DEFAULT_MODULES);
+  const [modulesLoading, setModulesLoading] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Populate form when permission changes
+  // Populate form and fetch dynamic module list when permission changes
   useEffect(() => {
     if (open && permission) {
       setPermissionName(permission.name);
       setDescription(permission.description);
       setModule(permission.module);
       setError(null);
+
+      // Fetch all permissions to build dynamic module list
+      setModulesLoading(true);
+      getAllPermissions("engine")
+        .then((res) => {
+          const existing = new Set<string>();
+          (res.data as RbacPermission[]).forEach((p) => {
+            if (p.permission_module) existing.add(p.permission_module.toLowerCase());
+          });
+          DEFAULT_MODULES.forEach((m) => existing.add(m));
+          // Ensure current permission's module is always included
+          if (permission.module) existing.add(permission.module.toLowerCase());
+          setModules([...existing].sort());
+        })
+        .catch(() => {
+          // Fallback: use defaults + current module
+          const fallback = new Set(DEFAULT_MODULES);
+          if (permission.module) fallback.add(permission.module.toLowerCase());
+          setModules([...fallback].sort());
+        })
+        .finally(() => setModulesLoading(false));
     }
   }, [open, permission]);
 
@@ -93,11 +117,15 @@ export function EditPermissionModal({ open, permission, onClose, onUpdated }: Pr
                 />
               </Field>
               <Field label="Module" required>
-                <select value={module} onChange={e => setModule(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]">
-                  {MODULES.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
+                {modulesLoading ? (
+                  <div className="h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781] bg-[#F8FAFC] flex items-center">Loading modules...</div>
+                ) : (
+                  <select value={module} onChange={e => setModule(e.target.value)} className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] bg-white outline-none focus:border-[#128C7E]">
+                    {modules.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                )}
               </Field>
             </div>
           </MSection>

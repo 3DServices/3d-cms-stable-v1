@@ -90,15 +90,39 @@ export function CreatePermissionModal({ open, onClose, onCreated }: Props) {
           })
         )
       );
-      const failures = results.filter((r) => r.status === "rejected");
-      if (failures.length > 0 && failures.length < results.length) {
-        setError(`${results.length - failures.length} created, ${failures.length} failed`);
-      } else if (failures.length === results.length) {
-        const first = failures[0] as PromiseRejectedResult;
-        throw first.reason;
+
+      const created: string[] = [];
+      const skipped: string[] = [];
+      const failed: string[] = [];
+
+      results.forEach((r, i) => {
+        const mod = activeModules[i];
+        if (r.status === "fulfilled") {
+          created.push(mod);
+        } else {
+          const err = r.reason;
+          // 400 from backend typically means permission already exists
+          if (err?.status === 400) {
+            skipped.push(mod);
+          } else {
+            failed.push(mod);
+          }
+        }
+      });
+
+      // All were duplicates
+      if (skipped.length === activeModules.length) {
+        setError(`All ${skipped.length} permissions already exist: ${skipped.join(", ")}`);
+      } else if (skipped.length > 0 || failed.length > 0) {
+        const parts: string[] = [];
+        if (created.length > 0) parts.push(`${created.length} created`);
+        if (skipped.length > 0) parts.push(`${skipped.length} already exist (${skipped.join(", ")})`);
+        if (failed.length > 0) parts.push(`${failed.length} failed (${failed.join(", ")})`);
+        setError(parts.join(" · "));
       }
-      onCreated?.();
-      if (failures.length === 0) onClose();
+
+      if (created.length > 0) onCreated?.();
+      if (failed.length === 0 && skipped.length === 0) onClose();
     } catch (err: any) {
       setError(err?.apiMessage ?? err?.message ?? "Failed to create permission");
     } finally {

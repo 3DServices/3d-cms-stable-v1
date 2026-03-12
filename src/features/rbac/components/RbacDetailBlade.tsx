@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { getRoleByUid, deleteRole } from "../../../api";
-import type { RbacPermission } from "../../../api";
+import { getRoleByUid, deleteRole, getAuditEvents } from "../../../api";
+import type { RbacPermission, AuditEvent } from "../../../api";
 import type { Role } from "./RolesTable";
 
 const TABS = ["Overview", "Permissions", "Audit"];
@@ -16,7 +16,9 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
   const [tab, setTab] = useState("Overview");
   const [permissions, setPermissions] = useState<RbacPermission[]>([]);
   const [permsLoading, setPermsLoading] = useState(false);
-  const [disabling, setDisabling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   // Fetch role detail (with permissions) when role changes
   useEffect(() => {
@@ -27,17 +29,27 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
       .finally(() => setPermsLoading(false));
   }, [role.id]);
 
-  async function handleDisable() {
-    if (!confirm(`Disable role "${role.name}"? This will soft-delete the role.`)) return;
-    setDisabling(true);
+  // Fetch audit events when Audit tab is selected
+  useEffect(() => {
+    if (tab !== "Audit") return;
+    setAuditLoading(true);
+    getAuditEvents({ domain: "RBAC", search: role.id })
+      .then(res => setAuditEvents(res.data ?? []))
+      .catch(() => setAuditEvents([]))
+      .finally(() => setAuditLoading(false));
+  }, [tab, role.id]);
+
+  async function handleDelete() {
+    if (!confirm(`Delete role "${role.name}"? This action cannot be undone.`)) return;
+    setDeleting(true);
     try {
       await deleteRole(role.id, { deleted_by: "system" });
       onDisabled?.();
       onClose();
     } catch {
-      alert("Failed to disable role.");
+      alert("Failed to delete role.");
     } finally {
-      setDisabling(false);
+      setDeleting(false);
     }
   }
 
@@ -77,7 +89,7 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
           <BSection title="Usage Summary">
             <div className="p-4">
               <KV rows={[
-                { k: "Users:", v: String(role.users) },
+                { k: "Users:", v: role.users < 0 ? "--" : String(role.users) },
                 { k: "Perms:", v: permsLoading ? "..." : String(permissions.length) },
               ]} />
             </div>
@@ -110,26 +122,30 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
 
         {tab === "Audit" && (
           <BSection title="Audit Trail">
-            <div className="p-4 flex flex-col gap-3">
-              {[
-                { ts: "2026-03-10 14:22:01", op: "UPDATE", field: "permissions", old: "3", new: "5", user: "admin@navas.io", ticket: "CHG-4421" },
-                { ts: "2026-03-09 09:11:45", op: "UPDATE", field: "scope", old: "Tenant", new: "Platform", user: "ops@navas.io", ticket: "CHG-4418" },
-                { ts: "2026-03-07 16:05:33", op: "CREATE", field: "-", old: "-", new: "-", user: "admin@navas.io", ticket: "CHG-4410" },
-              ].map((a, i) => (
-                <div key={i} className="border border-[#E9EDEF] rounded-lg p-3 bg-[#F8FAFC]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${a.op === "CREATE" ? "bg-[#EAF7F3] text-[#128C7E]" : "bg-[#FFF7ED] text-[#F97316]"}`}>{a.op}</span>
-                    <span className="text-[11px] text-[#667781]">{a.ts}</span>
-                  </div>
-                  <div className="text-[11px] text-[#667781]">
-                    {a.op === "CREATE"
-                      ? <span>Role created by <span className="font-black text-[#111B21]">{a.user}</span></span>
-                      : <span>Field <span className="font-black text-[#111B21]">{a.field}</span>: {a.old} &rarr; {a.new} by <span className="font-black text-[#111B21]">{a.user}</span></span>
-                    }
-                  </div>
-                  <div className="text-[10px] text-[#128C7E] mt-1">Ticket: {a.ticket}</div>
+            <div className="p-4">
+              {auditLoading ? (
+                <div className="text-[12px] text-[#667781]">Loading audit events...</div>
+              ) : auditEvents.length === 0 ? (
+                <div className="text-[12px] text-[#667781]">No audit events found for this role.</div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {auditEvents.map(evt => (
+                    <div key={evt.id} className="flex gap-3 text-[12px]">
+                      <div className="flex flex-col items-center shrink-0">
+                        <span className={`w-2 h-2 rounded-full mt-1.5 ${evt.severity === "Crit" ? "bg-[#EF4444]" : evt.severity === "Alarm" ? "bg-[#F97316]" : evt.severity === "Warn" ? "bg-[#EAB308]" : "bg-[#128C7E]"}`} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-[#111B21]">{evt.action}</span>
+                          <span className="text-[10px] text-[#667781]">{evt.timestamp?.replace("T", " ").slice(0, 19)}</span>
+                        </div>
+                        <div className="text-[11px] text-[#667781] truncate">{evt.object}</div>
+                        <div className="text-[10px] text-[#667781]">by {evt.actor}{evt.ip_address ? ` from ${evt.ip_address}` : ""}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </BSection>
         )}
@@ -139,11 +155,11 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
       <div className="flex items-center gap-2 px-5 py-3 border-t border-[#E9EDEF] shrink-0">
         <button onClick={() => onEdit(role)} className="h-8 px-4 rounded-lg bg-[#128C7E] text-white text-[11px] font-black border-none cursor-pointer hover:brightness-105">Edit Role</button>
         <button
-          onClick={handleDisable}
-          disabled={disabling}
+          onClick={handleDelete}
+          disabled={deleting}
           className="h-8 px-4 rounded-lg bg-white border border-[#EF4444] text-[#EF4444] text-[11px] font-black cursor-pointer hover:bg-[#FEF2F2] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {disabling ? "Disabling..." : "Disable"}
+          {deleting ? "Deleting..." : "Delete"}
         </button>
       </div>
     </div>

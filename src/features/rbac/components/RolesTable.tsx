@@ -45,7 +45,7 @@ export function RolesTable({ roles, onSelect, selectedId }: Props) {
                 <td className="px-3 py-2.5 font-black text-[#111B21]">{r.name}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.owner}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.tenant}</td>
-                <td className="px-3 py-2.5 text-[#111B21]">{r.users}</td>
+                <td className="px-3 py-2.5 text-[#111B21]">{r.users < 0 ? "--" : r.users}</td>
                 <td className="px-3 py-2.5 text-[#111B21]">{r.permissions}</td>
                 <td className="px-3 py-2.5 text-[#667781]">{r.lastModified}</td>
               </tr>

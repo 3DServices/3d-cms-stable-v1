@@ -8,7 +8,7 @@
  *         Policies, Role Templates) + right detail blade + create modal
  */
 import { useEffect, useState } from "react";
-import { getAllRoles, getAllPermissions, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount } from "../../api";
+import { getAllRoles, getAllPermissions, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "../../api";
 import type { RbacRole, RbacPermission } from "../../api";
 import { RolesTable } from "./components/RolesTable";
 import { PermissionSetsTable } from "./components/PermissionSetsTable";
@@ -40,7 +40,7 @@ function mapRbacRoleToRole(r: RbacRole): Role {
     name: r.role_name,
     owner: r.created_by,
     tenant: r.account_root,
-    users: 0,
+    users: -1,
     permissions: r.permissions?.length ?? 0,
     lastModified: r.updated_at?.slice(0, 10) ?? r.created_at?.slice(0, 10) ?? "",
   };
@@ -53,7 +53,7 @@ function mapRbacPermToPermissionSet(p: RbacPermission): PermissionSet {
     owner: p.created_by ?? "system",
     module: p.permission_module,
     actions: [p.permission_name.split(".")[1] ?? "view"],
-    rolesUsing: 0,
+    rolesUsing: -1,
     description: p.permission_description ?? "",
   };
 }
@@ -117,19 +117,44 @@ export function RbacPage() {
   const [active3dClientsCount, setActive3dClientsCount] = useState(0);
   const [clientUsersCount, setClientUsersCount] = useState(0);
 
+  // ── Error state ────────────────────────────────────────────────────────
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   function refreshRoles() {
     setRolesLoading(true);
-    getAllRoles("engine")
-      .then(res => setRoles(res.data.map(mapRbacRoleToRole)))
-      .catch(() => {})
+    setFetchError(null);
+    Promise.all([
+      getAllRoles("engine"),
+      getRoleUserCounts().catch(() => ({ data: {} as Record<string, number> })),
+    ])
+      .then(([rolesRes, countsRes]) => {
+        const counts = countsRes.data;
+        setRoles(rolesRes.data.map(r => {
+          const role = mapRbacRoleToRole(r);
+          role.users = counts[r.role_uid] ?? -1;
+          return role;
+        }));
+      })
+      .catch(() => setFetchError("Failed to load roles"))
       .finally(() => setRolesLoading(false));
   }
 
   function refreshPermissions() {
     setPermsLoading(true);
-    getAllPermissions("engine")
-      .then(res => setPermissionSets(res.data.map(mapRbacPermToPermissionSet)))
-      .catch(() => {})
+    setFetchError(null);
+    Promise.all([
+      getAllPermissions("engine"),
+      getPermissionRoleCounts().catch(() => ({ data: {} as Record<string, number> })),
+    ])
+      .then(([permsRes, countsRes]) => {
+        const counts = countsRes.data;
+        setPermissionSets(permsRes.data.map(p => {
+          const perm = mapRbacPermToPermissionSet(p);
+          perm.rolesUsing = counts[p.permission_uid] ?? 0;
+          return perm;
+        }));
+      })
+      .catch(() => setFetchError("Failed to load permissions"))
       .finally(() => setPermsLoading(false));
   }
 
@@ -145,14 +170,39 @@ export function RbacPage() {
   }
 
   useEffect(() => {
-    getAllRoles("engine")
-      .then(res => setRoles(res.data.map(mapRbacRoleToRole)))
-      .catch(() => {})
+    // Roles + user counts
+    Promise.all([
+      getAllRoles("engine"),
+      getRoleUserCounts().catch(() => ({ data: {} as Record<string, number> })),
+    ])
+      .then(([rolesRes, countsRes]) => {
+        const counts = countsRes.data;
+        setRoles(rolesRes.data.map(r => {
+          const role = mapRbacRoleToRole(r);
+          role.users = counts[r.role_uid] ?? -1;
+          return role;
+        }));
+      })
+      .catch(() => setFetchError("Failed to load roles"))
       .finally(() => setRolesLoading(false));
-    getAllPermissions("engine")
-      .then(res => setPermissionSets(res.data.map(mapRbacPermToPermissionSet)))
-      .catch(() => {})
+
+    // Permissions + role counts
+    Promise.all([
+      getAllPermissions("engine"),
+      getPermissionRoleCounts().catch(() => ({ data: {} as Record<string, number> })),
+    ])
+      .then(([permsRes, countsRes]) => {
+        const counts = countsRes.data;
+        setPermissionSets(permsRes.data.map(p => {
+          const perm = mapRbacPermToPermissionSet(p);
+          perm.rolesUsing = counts[p.permission_uid] ?? 0;
+          return perm;
+        }));
+      })
+      .catch(() => setFetchError("Failed to load permissions"))
       .finally(() => setPermsLoading(false));
+
+    // Stats KPIs
     Promise.all([
       getActiveRolesCount().then(res => setActiveRolesCount(res.data.total_active_roles)).catch(() => {}),
       getTotalPermissionsCount().then(res => setTotalPermsCount(res.data.total_permissions)).catch(() => {}),
@@ -197,6 +247,14 @@ export function RbacPage() {
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden relative">
       <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex flex-col gap-3 p-3">
+
+          {/* ── Error Banner ──────────────────────────────────────────── */}
+          {fetchError && (
+            <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#FEF2F2] border border-[#FECACA]">
+              <span className="text-[12px] text-[#EF4444] font-black">{fetchError}</span>
+              <button onClick={() => setFetchError(null)} className="text-[#EF4444] text-[14px] font-black bg-transparent border-none cursor-pointer hover:opacity-70">X</button>
+            </div>
+          )}
 
           {/* ── Header ─────────────────────────────────────────────────── */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-3">
@@ -386,7 +444,7 @@ export function RbacPage() {
       )}
 
       {/* ── Modal: Create Role ───────────────────────────────────── */}
-      <CreateRoleModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <CreateRoleModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={() => { refreshRoles(); refreshStats(); }} />
 
       {/* ── Modal: Create User ───────────────────────────────────── */}
       <CreateUserModal open={userModalOpen} onClose={() => setUserModalOpen(false)} onCreated={refreshRoles} />

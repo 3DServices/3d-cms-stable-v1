@@ -4,8 +4,10 @@
  */
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { usePermissions } from "../../auth/PermissionsContext";
 
-export interface SidebarItem { key: string; label: string; path?: string; }
+/** Each sidebar item can optionally require a permission to be visible. */
+export interface SidebarItem { key: string; label: string; path?: string; permission?: string; }
 interface SidebarTip  { title: string; body: string; }
 interface SidebarProps {
   title?:    string;
@@ -17,39 +19,39 @@ interface SidebarProps {
 }
 
 const DEFAULT_ITEMS: SidebarItem[] = [
-  // ── Core dashboards ───────────────────────────────────────────────────────
-  { key: "aegis",              label: "Dashboard",         path: "/"                  },
-  { key: "noc-bridge",         label: "NOC Bridge",              path: "/noc-bridge"        },
-  { key: "protocol",           label: "Protocol Port",           path: "/protocol"          },
-  { key: "sim",                label: "Signal Vault",            path: "/sim"               },
-  { key: "ops",                label: "Ops War Room",            path: "/ops"               },
-  { key: "gatehouse",          label: "Monitoring Alpha",         path: "/gatehouse"         },
-  { key: "alarms-factory",     label: "Alarm Factory",           path: "/alarms-factory"    },
-  { key: "tenant-tower",       label: "Tenant Tower",            path: "/tenant-tower"      },
-  // { key: "billing-invoicing",  label: "Billing & Invoicing",     path: "/billing-invoicing" },
-  // { key: "asset-digital-twin",  label: "Asset Digital Twin",     path: "/asset-digital-twin" },
+  // ── Core dashboards (Dashboard has no permission — always visible) ──────
+  { key: "aegis",              label: "Dashboard",               path: "/"                  },
+  { key: "noc-bridge",         label: "NOC Bridge",              path: "/noc-bridge",        permission: "noc.view" },
+  { key: "protocol",           label: "Protocol Port",           path: "/protocol",          permission: "protocol.view" },
+  { key: "sim",                label: "Signal Vault",            path: "/sim",               permission: "sim.view" },
+  { key: "ops",                label: "Ops War Room",            path: "/ops",               permission: "ops.view" },
+  { key: "gatehouse",          label: "Monitoring Alpha",        path: "/gatehouse",         permission: "gatehouse.view" },
+  { key: "alarms-factory",     label: "Alarm Factory",           path: "/alarms-factory",    permission: "alarms.view" },
+  { key: "tenant-tower",       label: "Tenant Tower",            path: "/tenant-tower",      permission: "tenants.view" },
+  // { key: "billing-invoicing",  label: "Billing & Invoicing",     path: "/billing-invoicing", permission: "billing.view" },
+  // { key: "asset-digital-twin", label: "Asset Digital Twin",      path: "/asset-digital-twin", permission: "assets.view" },
 
   // ── System & Ops ─────────────────────────────────────────────────────────
-  // { key: "health",             label: "System Health",           path: "/health"            },
-  { key: "alarms",             label: "Alarms Center",           path: "/alarms"            },
+  // { key: "health",             label: "System Health",           path: "/health",            permission: "health.view" },
+  { key: "alarms",             label: "Alarms Center",           path: "/alarms",            permission: "alarms.view" },
   // { key: "ingestion",          label: "Ingestion Pipeline",      path: "/health"            },
   // { key: "kafka",              label: "Kafka",                   path: "/health"            },
   // { key: "compute",            label: "Compute",                 path: "/health"            },
   // { key: "task-manager",       label: "Task Manager (Diag)",     path: "/health"            },
 
   // ── Tokenomics & Finance ─────────────────────────────────────────────────
-  { key: "tokens",             label: "Token Engine",            path: "/tokens"            },
-  { key: "billing",            label: "Billing",                 path: "/billing"           },
-  // { key: "payments",           label: "Payments",    path: "/payments"          },
-  { key: "money",              label: "Money Switchboard",       path: "/money"             },
+  { key: "tokens",             label: "Token Engine",            path: "/tokens",            permission: "tokens.view" },
+  { key: "billing",            label: "Billing",                 path: "/billing",           permission: "billing.view" },
+  // { key: "payments",           label: "Payments",                path: "/payments",          permission: "payments.view" },
+  { key: "money",              label: "Money Switchboard",       path: "/money",             permission: "money.view" },
 
   // ── Platform ─────────────────────────────────────────────────────────────
-  { key: "veba",               label: "VEBA Marketplace",        path: "/veba"              },
-  // { key: "ai-workloads",       label: "AI Workloads",            path: "/ai"                },
-  { key: "rbac",               label: "RBAC / Access Control",   path: "/rbac"              },
+  { key: "veba",               label: "VEBA Marketplace",        path: "/veba",              permission: "veba.view" },
+  // { key: "ai-workloads",       label: "AI Workloads",            path: "/ai",                permission: "ai.view" },
+  { key: "rbac",               label: "RBAC / Access Control",   path: "/rbac",              permission: "rbac.view" },
   // { key: "runbooks",           label: "Runbooks",                path: "/audit"             },
-  { key: "audit",              label: "Audit Trail",             path: "/audit"             },
-  
+  { key: "audit",              label: "Audit Trail",             path: "/audit",             permission: "audit.view" },
+
 ];
 
 const DEFAULT_TIP: SidebarTip = {
@@ -74,6 +76,12 @@ export function Sidebar({
   open     = false,
 }: SidebarProps) {
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+
+  // Filter nav items: show if no permission required OR user has the permission
+  const visibleItems = items.filter(
+    (item) => !item.permission || hasPermission(item.permission),
+  );
 
   const handleLogout = () => {
     clearAllCookies();
@@ -92,7 +100,7 @@ export function Sidebar({
       <div className="text-[11px] text-[#667781]">{subtitle}</div>
 
       <nav className="flex flex-col gap-1.5" aria-label="Secondary navigation">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const to = item.path ?? `/${item.key}`;
           return (
             <NavLink
