@@ -10,19 +10,19 @@
 import { useEffect, useState } from "react";
 import { getAllRoles, getAllPermissions, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "../../api";
 import type { RbacRole, RbacPermission } from "../../api";
+import { PermissionGate } from "../../auth/PermissionGate";
+import { usePermissionGuard } from "../../auth/usePermissionGuard";
 import { RolesTable } from "./components/RolesTable";
 import { PermissionSetsTable } from "./components/PermissionSetsTable";
 // import { ObjectAclsTable } from "./components/ObjectAclsTable";
 // import { PoliciesTable } from "./components/PoliciesTable";
 // import { RoleTemplatesTable } from "./components/RoleTemplatesTable";
 import { RbacDetailBlade } from "./components/RbacDetailBlade";
-import { CreateRoleModal } from "./components/CreateRoleModal";
 import { EditRoleModal } from "./components/EditRoleModal";
-import { CreateUserModal } from "./components/CreateUserModal";
-import { CreatePermissionModal } from "./components/CreatePermissionModal";
 import { EditPermissionModal } from "./components/EditPermissionModal";
-import { AssignRoleModal } from "./components/AssignRoleModal";
 import { PermissionDetailBlade } from "./components/PermissionDetailBlade";
+import { RbacWizard } from "./components/wizard/RbacWizard";
+import type { StepNumber } from "./components/wizard/useWizardState";
 import type { Role } from "./components/RolesTable";
 import type { PermissionSet } from "./components/PermissionSetsTable";
 // import type { ObjectAcl } from "./components/ObjectAclsTable";
@@ -87,16 +87,15 @@ function mapRbacPermToPermissionSet(p: RbacPermission): PermissionSet {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function RbacPage() {
+  const guard = usePermissionGuard();
   const [sectionTab, setSectionTab] = useState<SectionTab>("Roles");
   const [bladeOpen, setBladeOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [userModalOpen, setUserModalOpen] = useState(false);
-  const [permModalOpen, setPermModalOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardInitialStep, setWizardInitialStep] = useState<StepNumber>(1);
   const [editPermModalOpen, setEditPermModalOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<PermissionSet | null>(null);
   const [editRoleModalOpen, setEditRoleModalOpen] = useState(false);
-  const [assignRoleModalOpen, setAssignRoleModalOpen] = useState(false);
   const [permBladeOpen, setPermBladeOpen] = useState(false);
   const [selectedPerm, setSelectedPerm] = useState<PermissionSet | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -233,11 +232,11 @@ export function RbacPage() {
   async function handleDeletePermission(perm: PermissionSet) {
     if (!confirm(`Delete permission "${perm.name}"? This will also remove it from all roles.`)) return;
     try {
-      await deletePermission(perm.id);
+      await guard("rbac.delete", () => deletePermission(perm.id));
       refreshPermissions();
       refreshStats();
-    } catch {
-      alert("Failed to delete permission.");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to delete permission.");
     }
   }
 
@@ -268,10 +267,21 @@ export function RbacPage() {
                 <div className="text-[11px] text-[#667781] mt-0.5">Least privilege at scale &#8226; Maker-checker for role changes &#8226; Immutable audit trail</div>
               </div>
               <div className="flex gap-2 shrink-0">
-                <Pill onClick={() => setUserModalOpen(true)} color="green">+ Create User</Pill>
-                <Pill onClick={() => setPermModalOpen(true)} color="green">+ Create Permission</Pill>
-                <Pill onClick={() => setModalOpen(true)} color="dark">+ Create Role</Pill>
-                <Pill onClick={() => setAssignRoleModalOpen(true)} color="dark">Assign Role</Pill>
+                <PermissionGate permission="rbac.create">
+                  <Pill onClick={() => { setWizardInitialStep(3); setWizardOpen(true); }} color="green">+ Create User</Pill>
+                </PermissionGate>
+                <PermissionGate permission="rbac.create">
+                  <Pill onClick={() => { setWizardInitialStep(1); setWizardOpen(true); }} color="green">+ Create Permission</Pill>
+                </PermissionGate>
+                <PermissionGate permission="rbac.create">
+                  <Pill onClick={() => { setWizardInitialStep(2); setWizardOpen(true); }} color="dark">+ Create Role</Pill>
+                </PermissionGate>
+                <PermissionGate permission="rbac.assign">
+                  <Pill onClick={() => { setWizardInitialStep(4); setWizardOpen(true); }} color="dark">Assign Role</Pill>
+                </PermissionGate>
+                <PermissionGate permissions={["rbac.create", "rbac.assign"]}>
+                  <Pill onClick={() => { setWizardInitialStep(1); setWizardOpen(true); }} color="dark">Full Setup</Pill>
+                </PermissionGate>
                 <Pill>Export</Pill>
               </div>
             </div>
@@ -338,7 +348,7 @@ export function RbacPage() {
                   onSelect={s => { setSelectedPsId(s.id); setSelectedPerm(s); setPermBladeOpen(true); }}
                   onEdit={handleEditPermission}
                   onDelete={handleDeletePermission}
-                  onCreate={() => setPermModalOpen(true)}
+                  onCreate={() => { setWizardInitialStep(1); setWizardOpen(true); }}
                   selectedId={selectedPsId}
                 />
           )}
@@ -443,23 +453,19 @@ export function RbacPage() {
         />
       )}
 
-      {/* ── Modal: Create Role ───────────────────────────────────── */}
-      <CreateRoleModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={() => { refreshRoles(); refreshStats(); }} />
-
-      {/* ── Modal: Create User ───────────────────────────────────── */}
-      <CreateUserModal open={userModalOpen} onClose={() => setUserModalOpen(false)} onCreated={refreshRoles} />
-
-      {/* ── Modal: Create Permission ─────────────────────────────── */}
-      <CreatePermissionModal open={permModalOpen} onClose={() => setPermModalOpen(false)} onCreated={refreshPermissions} />
+      {/* ── RBAC Setup Wizard ─────────────────────────────────── */}
+      <RbacWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        initialStep={wizardInitialStep}
+        onDataChanged={() => { refreshRoles(); refreshPermissions(); refreshStats(); }}
+      />
 
       {/* ── Modal: Edit Role ─────────────────────────────────────── */}
       <EditRoleModal open={editRoleModalOpen} role={selectedRole} onClose={() => setEditRoleModalOpen(false)} onUpdated={() => { refreshRoles(); refreshStats(); }} />
 
       {/* ── Modal: Edit Permission ──────────────────────────────── */}
       <EditPermissionModal open={editPermModalOpen} permission={editingPermission} onClose={() => setEditPermModalOpen(false)} onUpdated={() => { refreshPermissions(); refreshStats(); }} />
-
-      {/* ── Modal: Assign Role ─────────────────────────────────── */}
-      <AssignRoleModal open={assignRoleModalOpen} onClose={() => setAssignRoleModalOpen(false)} onAssigned={() => { refreshRoles(); refreshStats(); }} />
     </div>
   );
 }

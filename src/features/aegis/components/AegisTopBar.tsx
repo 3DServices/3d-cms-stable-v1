@@ -9,16 +9,9 @@
  * All styles: Tailwind utility classes only.
  */
 import React, { useState, useEffect } from "react";
-
-// Cookie helper
-function getCookie(name: string) {
-  try {
-    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return v ? decodeURIComponent(v.pop() || "") : null;
-  } catch (e) {
-    return null;
-  }
-}
+import { getCookie } from "../../../utils/cookies";
+import { getRaw } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 
 interface AegisTopBarProps {
   tenant?:       string;
@@ -70,10 +63,9 @@ export function AegisTopBar({
         return;
       }
       try {
-        const resp = await fetch(
-          `https://narvas.3dservices.co.ug/users/${accountUid}/details`
+        const json = await getRaw<{ status: string; data: any }>(
+          `${ENDPOINTS.AUTH.USER_DETAILS}/${accountUid}/details`
         );
-        const json = await resp.json();
         if (json?.status === "success" && json?.data) {
           setUserDetails(json.data);
         }

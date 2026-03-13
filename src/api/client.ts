@@ -4,7 +4,8 @@
  * Thin wrapper around native `fetch` that handles:
  *  - Base URL resolution (from VITE_API_BASE_URL env var)
  *  - JSON content-type headers
- *  - Auth token injection
+ *  - Auth token injection (reads JWT from cookie or falls back to account_uid)
+ *  - 401 response interception with automatic token refresh
  *  - Generic ApiResponse<T> envelope parsing
  *  - Consistent error handling via ApiError
  *
@@ -13,22 +14,72 @@
 
 import type { ApiResponse, RequestOptions } from "./types";
 import { ApiError } from "./types";
+import { getCookie, clearAllCookies } from "../utils/cookies";
 
 // ── Base URL ─────────────────────────────────────────────────────────────────
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-// ── Auth helper (placeholder) ────────────────────────────────────────────────
+// ── Auth token management ────────────────────────────────────────────────────
 
 /**
- * Returns the current auth token (account_uid from the session cookie),
- * or `null` if the user isn't authenticated.
+ * In-memory JWT access token.
+ * Preferred over cookies for XSS resistance — the token never touches
+ * `document.cookie` or `localStorage`.
+ *
+ * Falls back to reading `_nvxs_account_uid` cookie while the backend
+ * is still in the interim (pre-JWT) phase.
  */
+let accessToken: string | null = null;
+
+/** Set the in-memory access token (called after login or refresh). */
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+/** Get the current auth token. Prefers in-memory JWT, falls back to cookie. */
 function getAuthToken(): string | null {
-  const match = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("_nvxs_account_uid="));
-  return match ? decodeURIComponent(match.split("=")[1]) : null;
+  if (accessToken) return accessToken;
+  // Interim fallback: read account_uid from cookie
+  return getCookie("_nvxs_account_uid") ?? null;
+}
+
+// ── Token refresh ────────────────────────────────────────────────────────────
+
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Attempt a silent token refresh.
+ * Deduplicates concurrent refresh attempts (only one in-flight at a time).
+ */
+async function tryRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const url = new URL("/auth/refresh", BASE_URL);
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        credentials: "include", // send HttpOnly refresh-token cookie
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!resp.ok) return false;
+
+      const json = await resp.json();
+      if (json?.data?.access_token) {
+        setAccessToken(json.data.access_token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 // ── Shared fetch logic ───────────────────────────────────────────────────────
@@ -58,12 +109,41 @@ async function baseFetch(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  return fetch(url.toString(), {
+  const response = await fetch(url.toString(), {
     method,
     headers,
     body: body != null ? JSON.stringify(body) : undefined,
+    credentials: "include", // always send cookies (for HttpOnly refresh token)
     ...fetchOpts,
   });
+
+  // ── 401 interceptor: attempt silent refresh then retry once ──────────
+  if (response.status === 401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      // Retry the original request with the new token
+      const retryHeaders = { ...headers };
+      const newToken = getAuthToken();
+      if (newToken) {
+        retryHeaders["Authorization"] = `Bearer ${newToken}`;
+      }
+      return fetch(url.toString(), {
+        method,
+        headers: retryHeaders,
+        body: body != null ? JSON.stringify(body) : undefined,
+        credentials: "include",
+        ...fetchOpts,
+      });
+    }
+
+    // Refresh failed — session is dead, force logout
+    clearAllCookies();
+    setAccessToken(null);
+    sessionStorage.removeItem("_nvxs_redirect_in_progress");
+    window.location.href = "/";
+  }
+
+  return response;
 }
 
 // ── Envelope request (expects { data, message, status }) ─────────────────────

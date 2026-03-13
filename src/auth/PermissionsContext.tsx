@@ -1,8 +1,12 @@
 /**
  * auth/PermissionsContext.tsx — Frontend RBAC permissions provider.
  *
- * Reads the logged-in user's account_uid from the _nvxs_account_uid cookie,
- * calls GET /rbac/users/{account_uid}/permissions, and exposes:
+ * Synchronized with AuthContext:
+ *   - Fetches permissions when auth status becomes "authenticated"
+ *   - Clears permissions on logout
+ *   - Falls back to reading _nvxs_account_uid cookie for backward compat
+ *
+ * Exposes:
  *   - permissions: string[]        — list of permission names (e.g. "audit.view")
  *   - role: string                 — user's role name
  *   - hasPermission(p): boolean    — check a single permission
@@ -20,17 +24,8 @@ import React, {
   ReactNode,
 } from "react";
 import { getUserPermissions } from "../api/services/rbac.service";
-
-// ── Cookie helper ────────────────────────────────────────────────────────────
-
-function getCookie(name: string): string | null {
-  try {
-    const v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
-    return v ? decodeURIComponent(v.pop() || "") : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth } from "./AuthContext";
+import { getCookie } from "../utils/cookies";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
 
@@ -52,12 +47,16 @@ const PermissionsContext = createContext<PermissionsContextValue | null>(null);
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
+  const { state: authState } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [role, setRole] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const fetchPermissions = useCallback(async () => {
-    const accountUid = getCookie("_nvxs_account_uid");
+    // Get account UID from AuthContext state or fall back to cookie
+    const accountUid =
+      authState.accountUid || getCookie("_nvxs_account_uid");
+
     if (!accountUid) {
       // Not logged in — clear state
       setPermissions([]);
@@ -66,6 +65,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    setLoading(true);
     try {
       const res = await getUserPermissions(accountUid);
       const data = res.data;
@@ -80,11 +80,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authState.accountUid]);
 
+  // React to auth state changes
   useEffect(() => {
-    fetchPermissions();
-  }, [fetchPermissions]);
+    if (authState.status === "authenticated") {
+      fetchPermissions();
+    } else if (authState.status === "logged_out") {
+      setPermissions([]);
+      setRole("");
+      setLoading(false);
+    }
+  }, [authState.status, fetchPermissions]);
+
+  // Initial fetch on mount (handles page refresh when cookie exists but AuthContext is fresh)
+  useEffect(() => {
+    const accountUid = getCookie("_nvxs_account_uid");
+    if (accountUid && authState.status === "logged_out") {
+      fetchPermissions();
+    }
+  }, []);
 
   const hasPermission = useCallback(
     (permission: string): boolean => {

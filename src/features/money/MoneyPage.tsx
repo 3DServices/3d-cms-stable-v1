@@ -137,8 +137,9 @@ export function MoneyPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("https://narvas.3dservices.co.ug/finance/payments");
-        const result = await response.json();
+        const { getRaw } = await import("../../api/client");
+        const { ENDPOINTS } = await import("../../api/endpoints");
+        const result = await getRaw<{ status: string; data: any[] }>(ENDPOINTS.FINANCE.PAYMENTS);
         
         if (result.status === "success" && Array.isArray(result.data)) {
           setPayments(result.data);

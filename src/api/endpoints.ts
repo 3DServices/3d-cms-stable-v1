@@ -14,13 +14,17 @@ export const ENDPOINTS = {
     GET_ALL: "/devices/simcards/all",
   },
   STATISTICS: {
-    SIMS_SUMMARY:     "/statistics/sims/summary",
-    UNITS_ONLINE:     "/statistics/units/online",
-    UNITS_OFFLINE:    "/statistics/units/offline",
-    TOKENS_EXPIRED:   "/statistics/tokens/expired",
-    TOKENS_ACTIVE:    "/statistics/tokens/active",
-    TOKENS_PAUSED:    "/statistics/tokens/paused",
-    HIGH_SUB_CLIENTS: "/statistics/clients/high-subscriptions",
+    SIMS_SUMMARY:        "/statistics/sims/summary",
+    UNITS_ONLINE:        "/statistics/units/online",
+    UNITS_OFFLINE:       "/statistics/units/offline",
+    TOKENS_EXPIRED:      "/statistics/tokens/expired",
+    TOKENS_ACTIVE:       "/statistics/tokens/active",
+    TOKENS_PAUSED:       "/statistics/tokens/paused",
+    HIGH_SUB_CLIENTS:    "/statistics/clients/high-subscriptions",
+    VEBA_UNITS_ENABLED:  "/statistics/veba/units/enabled",
+    VEBA_UNITS_DISABLED: "/statistics/veba/units/disabled",
+    VEBA_TOKENS_ACTIVE:  "/statistics/veba/tokens/active",
+    VEBA_TOKENS_EXPIRED: "/statistics/veba/tokens/expired",
   },
   BILLING: {
     CHURN_RATE:       "/billing/subscriptions/churn-rate",
@@ -76,9 +80,17 @@ export const ENDPOINTS = {
   },
   TOKENS: {
     GET_ALL:  "/tokens",
+    CREATE:   "/tokens/create",
+    BY_ID:    "/tokens",               // append /{token_id}
     BUY:      "/payments/tokens/buy",
     TRANSFER: "/tokens/transfer",
     BALANCE:  "/tokens",               // append /{client_uid}/balance
+  },
+  FINANCE: {
+    PAYMENTS: "/finance/payments",
+  },
+  PORTS: {
+    ACTIVITY: "/ports/activity",
   },
   RBAC: {
     ROLES:              "/rbac/roles",
@@ -98,6 +110,16 @@ export const ENDPOINTS = {
     STATS_CLIENT_USERS:      "/rbac/stats/client-users",
     STATS_ROLE_USER_COUNTS:  "/rbac/stats/role-user-counts",
     STATS_PERM_ROLE_COUNTS:  "/rbac/stats/permission-role-counts",
+  },
+  AUTH: {
+    LOGIN:          "/users/auth",
+    MFA_VERIFY:     "/auth/mfa/verify",
+    MFA_RESEND:     "/auth/mfa/resend",
+    REFRESH:        "/auth/refresh",
+    LOGOUT:         "/auth/logout",
+    FORGOT_PASSWORD:"/auth/forgot-password",
+    RESET_PASSWORD: "/auth/reset-password",
+    USER_DETAILS:   "/users",              // append /{account_uid}/details
   },
   USERS: {
     CREATE: "/users/create",

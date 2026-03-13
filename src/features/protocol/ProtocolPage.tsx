@@ -111,8 +111,9 @@ export function ProtocolPage() {
     const fetchPortActivity = async () => {
       try {
         setLoadingPorts(true);
-        const response = await fetch("https://narvas.3dservices.co.ug/ports/activity");
-        const data = await response.json();
+        const { getRaw } = await import("../../api/client");
+        const { ENDPOINTS } = await import("../../api/endpoints");
+        const data = await getRaw<{ ports: any[] }>(ENDPOINTS.PORTS.ACTIVITY);
         setPortData(data.ports);
       } catch (error) {
         console.error("Failed to fetch port activity:", error);
