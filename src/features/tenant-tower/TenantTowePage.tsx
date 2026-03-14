@@ -13,6 +13,7 @@ import type { Tenant, Client, ClientDevice, ClientTokenBalance, ExpiredTokensRes
 
 import { TrashRestoreModal } from "./components/TrashRestoreModal";
 import { ImportTenantsModal } from "./components/ImportTenantsModal";
+import { PermissionGate } from "../../auth/PermissionGate";
 // import { CreateSubOrgModal } from "./components/CreateSubOrgModal";
 import { TopUpModal } from "./components/TopUpModal";
 import { AllocateModal } from "./components/AllocateModal";
@@ -402,10 +403,16 @@ export function TenantTowerPage() {
           {/* ── Quick Actions ──────────────────────────────────────────────────── */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-2.5 flex items-center gap-3">
             <span className="font-black text-[13px] text-[#111B21] mr-2">Quick Actions</span>
-            <Pill color="green" onClick={() => { resetBladeForm(); setBladeTab("Basics"); setBladeOpen(true); }}>+ New Tenant</Pill>
+            <PermissionGate permission="tenants.create">
+              <Pill color="green" onClick={() => { resetBladeForm(); setBladeTab("Basics"); setBladeOpen(true); }}>+ New Tenant</Pill>
+            </PermissionGate>
             {/* <Pill onClick={() => setSubOrgOpen(true)}>Create Sub-Org</Pill> */}
-            <Pill onClick={() => setImportOpen(true)}>Import</Pill>
-            <Pill color="alarm" onClick={() => setTrashOpen(true)}>Trash/Restore</Pill>
+            <PermissionGate permission="tenants.create">
+              <Pill onClick={() => setImportOpen(true)}>Import</Pill>
+            </PermissionGate>
+            <PermissionGate permission="tenants.delete">
+              <Pill color="alarm" onClick={() => setTrashOpen(true)}>Trash/Restore</Pill>
+            </PermissionGate>
           </div>
 
           {/* ════════════════════ TOP SCROLL ════════════════════════════════════ */}

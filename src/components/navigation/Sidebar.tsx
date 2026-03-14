@@ -5,6 +5,7 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { usePermissions } from "../../auth/PermissionsContext";
+import { useAuth } from "../../auth/AuthContext";
 
 /** Each sidebar item can optionally require a permission to be visible. */
 export interface SidebarItem { key: string; label: string; path?: string; permission?: string; }
@@ -59,15 +60,6 @@ const DEFAULT_TIP: SidebarTip = {
   body:  'Type: "why burn↑" to trace token drains to infra.',
 };
 
-// ── Clear all cookies ──────────────────────────────────────────────────────
-function clearAllCookies() {
-  document.cookie.split(";").forEach((c) => {
-    const eqPos = c.indexOf("=");
-    const name = eqPos > -1 ? c.substring(0, eqPos).trim() : c.trim();
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
-  });
-}
-
 export function Sidebar({
   title    = "System Core Console",
   subtitle = "Primary Ops+Command Center",
@@ -76,16 +68,18 @@ export function Sidebar({
   open     = false,
 }: SidebarProps) {
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, loading } = usePermissions();
+  const { logout } = useAuth();
 
-  // Filter nav items: show if no permission required OR user has the permission
-  const visibleItems = items.filter(
-    (item) => !item.permission || hasPermission(item.permission),
-  );
+  // While permissions are loading, show all items in disabled state to prevent layout shift
+  const visibleItems = loading
+    ? items
+    : items.filter(
+        (item) => !item.permission || hasPermission(item.permission),
+      );
 
   const handleLogout = () => {
-    clearAllCookies();
-    window.location.href = "/";
+    logout();
   };
   return (
     <aside
@@ -102,26 +96,35 @@ export function Sidebar({
       <nav className="flex flex-col gap-1.5" aria-label="Secondary navigation">
         {visibleItems.map((item) => {
           const to = item.path ?? `/${item.key}`;
+          const isDisabled = loading && !!item.permission;
           return (
             <NavLink
               key={item.key}
               to={to}
               end={to === "/"}
-              onClick={() => onSelect?.(item.key)}
+              onClick={(e) => {
+                if (isDisabled) { e.preventDefault(); return; }
+                onSelect?.(item.key);
+              }}
               className={({ isActive }) =>
                 [
                   "relative h-[34px] rounded-lg border flex items-center",
-                  "px-2.5 text-[12px] cursor-pointer select-none no-underline",
+                  "px-2.5 text-[12px] select-none no-underline",
                   "transition-colors duration-100",
-                  isActive
+                  isDisabled
+                    ? "text-[#B0B7BD] border-[#E9EDEF] cursor-not-allowed opacity-60"
+                    : "cursor-pointer",
+                  !isDisabled && isActive
                     ? "bg-[#E9F7F4] text-[#111B21] border-[#C2E8E1]"
-                    : "text-[#667781] border-[#E9EDEF] hover:bg-[#F0F2F5]",
+                    : !isDisabled
+                      ? "text-[#667781] border-[#E9EDEF] hover:bg-[#F0F2F5]"
+                      : "",
                 ].join(" ")
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && (
+                  {isActive && !isDisabled && (
                     <span className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg bg-[#128C7E]" />
                   )}
                   <span className="pl-1">{item.label}</span>

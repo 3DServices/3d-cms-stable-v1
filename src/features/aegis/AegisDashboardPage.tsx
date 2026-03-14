@@ -46,8 +46,11 @@ import { AuditTrailCard }        from "./components/AuditTrailCard";
 import { WaswaDrawer }           from "../../components/waswa";
 import { TokenTopupModal }       from "../tokens/components/TokenTopupModal";
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+// ── Auth & API ──────────────────────────────────────────────────────────────
 import { useAuth } from "../../auth/AuthContext";
+import { getCookie } from "../../utils/cookies";
+import { getRaw } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Static data
@@ -157,31 +160,6 @@ const HITL_ROWS: ApprovalRow[] = [
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Cookie helpers (used for simple auth state persistence)
-function setCookie(name: string, value: string, days = 30) {
-  try {
-    const d = new Date();
-    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
-    const expires = "expires=" + d.toUTCString();
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires}; Path=/; SameSite=Lax${secure}`;
-  } catch (e) {
-    // ignore in non-browser environments
-  }
-}
-
-function getCookie(name: string) {
-  try {
-    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return v ? decodeURIComponent(v.pop() || "") : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-function eraseCookie(name: string) {
-  setCookie(name, "", -1);
-}
 
 
 export function AegisDashboard() {
@@ -207,54 +185,46 @@ export function AegisDashboard() {
   const [loadingVebaTokensActive, setLoadingVebaTokensActive] = useState(true);
   const [loadingVebaTokensExpired, setLoadingVebaTokensExpired] = useState(true);
 
-  // Fetch all statistics
+  // Fetch all statistics via centralised API client
   useEffect(() => {
     const fetchStats = async () => {
-      const base = "https://narvas.3dservices.co.ug";
       try {
-        const [onlineResp, offlineResp, enabledResp, disabledResp, activeResp, expiredResp] = await Promise.all([
-          fetch(`${base}/statistics/units/online`),
-          fetch(`${base}/statistics/units/offline`),
-          fetch(`${base}/statistics/veba/units/enabled`),
-          fetch(`${base}/statistics/veba/units/disabled`),
-          fetch(`${base}/statistics/veba/tokens/active`),
-          fetch(`${base}/statistics/veba/tokens/expired`),
+        const [onlineRes, offlineRes, enabledRes, disabledRes, activeRes, expiredRes] = await Promise.all([
+          getRaw<{ status: string; data: { count: number; total_configured_units: number } }>(ENDPOINTS.STATISTICS.UNITS_ONLINE),
+          getRaw<{ status: string; data: { count: number } }>(ENDPOINTS.STATISTICS.UNITS_OFFLINE),
+          getRaw<{ status: string; data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_UNITS_ENABLED),
+          getRaw<{ status: string; data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_UNITS_DISABLED),
+          getRaw<{ status: string; data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_ACTIVE),
+          getRaw<{ status: string; data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_EXPIRED),
         ]);
 
-        const onlineData = await onlineResp.json();
-        const offlineData = await offlineResp.json();
-        const enabledData = await enabledResp.json();
-        const disabledData = await disabledResp.json();
-        const activeData = await activeResp.json();
-        const expiredData = await expiredResp.json();
-
-        if (onlineData?.status === "success") {
-          setUnitsOnline({ count: onlineData.data?.count ?? 0, total: onlineData.data?.total_configured_units ?? 0 });
+        if (onlineRes?.status === "success") {
+          setUnitsOnline({ count: onlineRes.data?.count ?? 0, total: onlineRes.data?.total_configured_units ?? 0 });
         }
         setLoadingUnitsOnline(false);
 
-        if (offlineData?.status === "success") {
-          setUnitsOffline({ count: offlineData.data?.count ?? 0 });
+        if (offlineRes?.status === "success") {
+          setUnitsOffline({ count: offlineRes.data?.count ?? 0 });
         }
         setLoadingUnitsOffline(false);
 
-        if (enabledData?.status === "success") {
-          setVebaEnabled(enabledData.data?.count ?? 0);
+        if (enabledRes?.status === "success") {
+          setVebaEnabled(enabledRes.data?.count ?? 0);
         }
         setLoadingVebaEnabled(false);
 
-        if (disabledData?.status === "success") {
-          setVebaDisabled(disabledData.data?.count ?? 0);
+        if (disabledRes?.status === "success") {
+          setVebaDisabled(disabledRes.data?.count ?? 0);
         }
         setLoadingVebaDisabled(false);
 
-        if (activeData?.status === "success") {
-          setVebaTokensActive(activeData.data?.count ?? 0);
+        if (activeRes?.status === "success") {
+          setVebaTokensActive(activeRes.data?.count ?? 0);
         }
         setLoadingVebaTokensActive(false);
 
-        if (expiredData?.status === "success") {
-          setVebaTokensExpired(expiredData.data?.count ?? 0);
+        if (expiredRes?.status === "success") {
+          setVebaTokensExpired(expiredRes.data?.count ?? 0);
         }
         setLoadingVebaTokensExpired(false);
       } catch (e) {
@@ -524,40 +494,33 @@ function ActionPill({ color = "ghost", onClick, children }: { color?: string; on
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, login, verifyMfa } = useAuth();
+  const { state, login, verifyMfa, resendMfa } = useAuth();
 
-  const [email,    setEmail]    = useState(state.loginHint?.email ?? "");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [mfa,      setMfa]      = useState("371902");
+  const [mfa,      setMfa]      = useState("");
   const [busy,     setBusy]     = useState(false);
   const [err,      setErr]      = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     // Close modal if auth state indicates authenticated OR if account_uid cookie exists
     if (state.status === "authenticated" || getCookie("_nvxs_account_uid")) { onClose(); }
   }, [state.status]);
 
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   if (!open) return null;
 
   const handleLogin = async () => {
     setBusy(true); setErr(null);
     try {
-      const resp = await fetch("https://narvas.3dservices.co.ug/users/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: { username: email, password } }),
-      });
-      const json = await resp.json();
-      if (json?.status === "success" && json?.data?.account_uid) {
-        const d = json.data;
-        setCookie("_nvxs_account_uid", d.account_uid || "");
-        setCookie("_nvxs_account_type", d.account_type || "");
-        setCookie("_nvxs_account_root", d.account_root || "");
-        setCookie("_nvxs_account_role", d.account_role || "");
-        onClose();
-      } else {
-        setErr(json?.message || "Invalid credentials, try again");
-      }
+      await login(email, password);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Login failed");
     } finally { setBusy(false); }
@@ -568,6 +531,21 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
     try { await verifyMfa(mfa); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : "MFA failed"); }
     finally { setBusy(false); }
+  };
+
+  const handleResendMfa = async () => {
+    if (resendCooldown > 0) return;
+    try {
+      await resendMfa();
+      setResendCooldown(60);
+    } catch {
+      setErr("Failed to resend code. Try again.");
+    }
+  };
+
+  const handleForgotPassword = () => {
+    // TODO: Implement forgot password modal/flow once backend supports it
+    alert("Password reset is not yet available. Please contact your administrator.");
   };
 
   return (
@@ -629,7 +607,10 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
                   <input type="checkbox" defaultChecked className="accent-[#128C7E]" />
                   Remember device (30 days)
                 </label>
-                <button className="text-[12px] font-extrabold text-[#34B7F1] bg-transparent border-none cursor-pointer hover:underline">
+                <button
+                  onClick={handleForgotPassword}
+                  className="text-[12px] font-extrabold text-[#34B7F1] bg-transparent border-none cursor-pointer hover:underline"
+                >
                   Forgot password?
                 </button>
               </div>
@@ -681,8 +662,12 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
                   <input type="checkbox" defaultChecked className="accent-[#128C7E]" />
                   Trust this device (admin policy: 30d)
                 </label>
-                <button className="text-[12px] font-extrabold text-[#34B7F1] bg-transparent border-none cursor-pointer hover:underline">
-                  Resend code
+                <button
+                  onClick={handleResendMfa}
+                  disabled={resendCooldown > 0}
+                  className="text-[12px] font-extrabold text-[#34B7F1] bg-transparent border-none cursor-pointer hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
                 </button>
               </div>
 

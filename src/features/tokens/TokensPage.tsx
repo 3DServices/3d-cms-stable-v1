@@ -8,6 +8,9 @@
  *   MODAL:  Create Token Definition wizard (Step 2/4, sections A–E)
  */
 import React, { useState, useEffect } from "react";
+import { getRaw, post, put, del } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
+import { PermissionGate } from "../../auth/PermissionGate";
 
 // ─── Colour helpers ──────────────────────────────────────────────────────────
 const okBg  = "bg-[#25D366] text-[#053B33]";
@@ -931,15 +934,9 @@ export function TokensPage() {
         },
       };
 
-      const response = await fetch("https://narvas.3dservices.co.ug/tokens/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await post<any>(ENDPOINTS.TOKENS.CREATE, payload);
 
-      if (response.ok) {
+      if (response.status === "success") {
         // Reset form
         setCreateForm({
           token_name: "",
@@ -952,9 +949,6 @@ export function TokensPage() {
         setCreateBladeOpen(false);
         // Refresh tokens list
         fetchTokens();
-      } else {
-        const error = await response.json();
-        alert(`Failed to create token: ${error.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Failed to create token:", error);
@@ -966,8 +960,7 @@ export function TokensPage() {
 
   const handleViewToken = async (tokenId: string) => {
     try {
-      const response = await fetch(`https://narvas.3dservices.co.ug/tokens/${tokenId}`);
-      const data = await response.json();
+      const data = await getRaw<{ data: any }>(`${ENDPOINTS.TOKENS.BY_ID}/${tokenId}`);
       setSelectedToken(data.data);
       setEditMode(false);
       setSideBladeOpen(true);
@@ -979,8 +972,7 @@ export function TokensPage() {
 
   const handleEditToken = async (tokenId: string) => {
     try {
-      const response = await fetch(`https://narvas.3dservices.co.ug/tokens/${tokenId}`);
-      const data = await response.json();
+      const data = await getRaw<{ data: any }>(`${ENDPOINTS.TOKENS.BY_ID}/${tokenId}`);
       const token = data.data;
       setSelectedToken(token);
       setEditForm({
@@ -1018,24 +1010,12 @@ export function TokensPage() {
         }
       };
 
-      const response = await fetch(`https://narvas.3dservices.co.ug/tokens/${selectedToken.token_id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        setSideBladeOpen(false);
-        setSelectedToken(null);
-        setEditMode(false);
-        // Refresh tokens list
-        fetchTokens();
-      } else {
-        const error = await response.json();
-        alert(`Failed to update token: ${error.message || 'Unknown error'}`);
-      }
+      await put<any>(`${ENDPOINTS.TOKENS.BY_ID}/${selectedToken.token_id}`, payload);
+      setSideBladeOpen(false);
+      setSelectedToken(null);
+      setEditMode(false);
+      // Refresh tokens list
+      fetchTokens();
     } catch (error) {
       console.error("Failed to update token:", error);
       alert("Failed to update token. Please try again.");
@@ -1050,17 +1030,9 @@ export function TokensPage() {
     }
 
     try {
-      const response = await fetch(`https://narvas.3dservices.co.ug/tokens/${tokenId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        // Refresh tokens list
-        fetchTokens();
-      } else {
-        const error = await response.json();
-        alert(`Failed to delete token: ${error.message || 'Unknown error'}`);
-      }
+      await del<any>(`${ENDPOINTS.TOKENS.BY_ID}/${tokenId}`);
+      // Refresh tokens list
+      fetchTokens();
     } catch (error) {
       console.error("Failed to delete token:", error);
       alert("Failed to delete token. Please try again.");
@@ -1069,8 +1041,7 @@ export function TokensPage() {
 
   const fetchTokens = async () => {
     try {
-      const response = await fetch("https://narvas.3dservices.co.ug/tokens");
-      const data = await response.json();
+      const data = await getRaw<{ data: any[] }>(ENDPOINTS.TOKENS.GET_ALL);
       setTokens(data.data || []);
     } catch (error) {
       console.error("Failed to fetch tokens:", error);
@@ -1082,16 +1053,12 @@ export function TokensPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [activeRes, expiredRes, vebaActiveRes, vebaExpiredRes] = await Promise.all([
-          fetch("https://narvas.3dservices.co.ug/statistics/tokens/active"),
-          fetch("https://narvas.3dservices.co.ug/statistics/tokens/expired"),
-          fetch("https://narvas.3dservices.co.ug/statistics/veba/tokens/active"),
-          fetch("https://narvas.3dservices.co.ug/statistics/veba/tokens/expired"),
+        const [activeData, expiredData, vebaActiveData, vebaExpiredData] = await Promise.all([
+          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.TOKENS_ACTIVE),
+          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.TOKENS_EXPIRED),
+          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_ACTIVE),
+          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_EXPIRED),
         ]);
-        const activeData = await activeRes.json();
-        const expiredData = await expiredRes.json();
-        const vebaActiveData = await vebaActiveRes.json();
-        const vebaExpiredData = await vebaExpiredRes.json();
 
         const runningTokens = activeData.data.count;
         const expiredTokens = expiredData.data.count;
@@ -1176,12 +1143,14 @@ export function TokensPage() {
                 <div className="font-black text-[13px] text-[#111B21]">Tokens List</div>
                 <div className="text-[11px] text-[#667781] mt-0.5">Kafka → Cassandra (immutable) • Denominator enforced • idempotent keys</div>
               </div>
-              <button
-                onClick={() => setCreateBladeOpen(true)}
-                className="h-7 px-3 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer hover:brightness-105"
-              >
-                + Create Token
-              </button>
+              <PermissionGate permission="tokens.create">
+                <button
+                  onClick={() => setCreateBladeOpen(true)}
+                  className="h-7 px-3 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer hover:brightness-105"
+                >
+                  + Create Token
+                </button>
+              </PermissionGate>
             </div>
             <table className="w-full text-[11px] table-fixed">
               <thead><tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
@@ -1233,18 +1202,22 @@ export function TokensPage() {
                           >
                             Details
                           </button>
-                          <button
-                            onClick={() => handleEditToken(token.token_id)}
-                            className="px-2 py-1 text-[10px] bg-[#F97316] text-white rounded hover:bg-[#E55A0F] transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteToken(token.token_id)}
-                            className="px-2 py-1 text-[10px] bg-[#EF4444] text-white rounded hover:bg-[#D32F2F] transition-colors"
-                          >
-                            Delete
-                          </button>
+                          <PermissionGate permission="tokens.update">
+                            <button
+                              onClick={() => handleEditToken(token.token_id)}
+                              className="px-2 py-1 text-[10px] bg-[#F97316] text-white rounded hover:bg-[#E55A0F] transition-colors"
+                            >
+                              Edit
+                            </button>
+                          </PermissionGate>
+                          <PermissionGate permission="tokens.delete">
+                            <button
+                              onClick={() => handleDeleteToken(token.token_id)}
+                              className="px-2 py-1 text-[10px] bg-[#EF4444] text-white rounded hover:bg-[#D32F2F] transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </PermissionGate>
                         </div>
                       </td>
                     </tr>
