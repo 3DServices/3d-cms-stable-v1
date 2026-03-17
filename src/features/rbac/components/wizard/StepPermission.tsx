@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPermission, getAllPermissions } from "../../../../api";
 import type { RbacPermission } from "../../../../api";
+import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, Field, StepSuccessBanner, ErrorBanner, INPUT_CLS, BTN_PRIMARY } from "./WizardShared";
 
 const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function StepPermission({ onSuccess, onClose, onNext }: Props) {
+  const { state: { accountUid, accountRoot } } = useAuth();
   const [permissionName, setPermissionName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
@@ -73,8 +75,8 @@ export function StepPermission({ onSuccess, onClose, onNext }: Props) {
             permission_name: `${mod}.${permissionName.trim()}`,
             permission_description: description.trim(),
             permission_module: mod,
-            account_root: "engine",
-            created_by: "system",
+            account_root: accountRoot ?? "engine",
+            created_by: accountUid ?? "system",
           })
         )
       );

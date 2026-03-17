@@ -18,7 +18,7 @@ export interface WizardState {
   reset: () => void;
 }
 
-export function useWizardState(initialStep: StepNumber = 1): WizardState {
+export function useWizardState(initialStep: StepNumber = 1, maxSteps: number = 4): WizardState {
   const [activeStep, setActiveStep] = useState<StepNumber>(initialStep);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [stepData, setStepData] = useState<StepData>({});
@@ -35,8 +35,8 @@ export function useWizardState(initialStep: StepNumber = 1): WizardState {
   }, []);
 
   const goNext = useCallback(() => {
-    setActiveStep((prev) => (prev < 4 ? ((prev + 1) as StepNumber) : prev));
-  }, []);
+    setActiveStep((prev) => (prev < maxSteps ? ((prev + 1) as StepNumber) : prev));
+  }, [maxSteps]);
 
   const reset = useCallback(() => {
     setActiveStep(initialStep);

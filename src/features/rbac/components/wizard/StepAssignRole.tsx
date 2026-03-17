@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getAllUsers, getAllRoles, getAllPermissions, assignUserRole } from "../../../../api";
 import type { UserAccount, RbacRole, RbacPermission } from "../../../../api";
+import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, StepSuccessBanner, ErrorBanner, SELECT_CLS, BTN_PRIMARY } from "./WizardShared";
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function StepAssignRole({ preSelectedUserUid, onSuccess, onClose }: Props) {
+  const { state: { accountUid } } = useAuth();
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [roles, setRoles] = useState<RbacRole[]>([]);
   const [permissions, setPermissions] = useState<RbacPermission[]>([]);
@@ -70,7 +72,7 @@ export function StepAssignRole({ preSelectedUserUid, onSuccess, onClose }: Props
     try {
       await assignUserRole(selectedUserUid, {
         role_name: role.role_name,
-        updated_by: "system",
+        updated_by: accountUid ?? "system",
       });
       const user = users.find((u) => u.account_uid === selectedUserUid);
       setSuccess(`Role "${role.role_name}" assigned to ${user?.account_name ?? selectedUserUid} successfully.`);

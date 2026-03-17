@@ -21,7 +21,7 @@ import { RbacDetailBlade } from "./components/RbacDetailBlade";
 import { EditRoleModal } from "./components/EditRoleModal";
 import { EditPermissionModal } from "./components/EditPermissionModal";
 import { PermissionDetailBlade } from "./components/PermissionDetailBlade";
-import { RbacWizard } from "./components/wizard/RbacWizard";
+import { RbacWizard, type WizardMode } from "./components/wizard/RbacWizard";
 import type { StepNumber } from "./components/wizard/useWizardState";
 import type { Role } from "./components/RolesTable";
 import type { PermissionSet } from "./components/PermissionSetsTable";
@@ -93,6 +93,7 @@ export function RbacPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardInitialStep, setWizardInitialStep] = useState<StepNumber>(1);
+  const [wizardMode, setWizardMode] = useState<WizardMode>("quick");
   const [editPermModalOpen, setEditPermModalOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<PermissionSet | null>(null);
   const [editRoleModalOpen, setEditRoleModalOpen] = useState(false);
@@ -268,19 +269,19 @@ export function RbacPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <PermissionGate permission="rbac.create">
-                  <Pill onClick={() => { setWizardInitialStep(3); setWizardOpen(true); }} color="green">+ Create User</Pill>
+                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(3); setWizardOpen(true); }} color="green">+ Create User</Pill>
                 </PermissionGate>
                 <PermissionGate permission="rbac.create">
-                  <Pill onClick={() => { setWizardInitialStep(1); setWizardOpen(true); }} color="green">+ Create Permission</Pill>
+                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(1); setWizardOpen(true); }} color="green">+ Create Permission</Pill>
                 </PermissionGate>
                 <PermissionGate permission="rbac.create">
-                  <Pill onClick={() => { setWizardInitialStep(2); setWizardOpen(true); }} color="dark">+ Create Role</Pill>
+                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(2); setWizardOpen(true); }} color="dark">+ Create Role</Pill>
                 </PermissionGate>
                 <PermissionGate permission="rbac.assign">
-                  <Pill onClick={() => { setWizardInitialStep(4); setWizardOpen(true); }} color="dark">Assign Role</Pill>
+                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(4); setWizardOpen(true); }} color="dark">Assign Role</Pill>
                 </PermissionGate>
                 <PermissionGate permissions={["rbac.create", "rbac.assign"]}>
-                  <Pill onClick={() => { setWizardInitialStep(1); setWizardOpen(true); }} color="dark">Full Setup</Pill>
+                  <Pill onClick={() => { setWizardMode("full"); setWizardInitialStep(1); setWizardOpen(true); }} color="dark">Full Setup</Pill>
                 </PermissionGate>
                 <Pill>Export</Pill>
               </div>
@@ -348,7 +349,7 @@ export function RbacPage() {
                   onSelect={s => { setSelectedPsId(s.id); setSelectedPerm(s); setPermBladeOpen(true); }}
                   onEdit={handleEditPermission}
                   onDelete={handleDeletePermission}
-                  onCreate={() => { setWizardInitialStep(1); setWizardOpen(true); }}
+                  onCreate={() => { setWizardMode("quick"); setWizardInitialStep(1); setWizardOpen(true); }}
                   selectedId={selectedPsId}
                 />
           )}
@@ -457,6 +458,7 @@ export function RbacPage() {
       <RbacWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
+        mode={wizardMode}
         initialStep={wizardInitialStep}
         onDataChanged={() => { refreshRoles(); refreshPermissions(); refreshStats(); }}
       />

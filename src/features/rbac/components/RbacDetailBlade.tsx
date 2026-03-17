@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getRoleByUid, deleteRole, getAuditEvents } from "../../../api";
 import type { RbacPermission, AuditEvent } from "../../../api";
+import { useAuth } from "../../../auth/AuthContext";
 import type { Role } from "./RolesTable";
 
 const TABS = ["Overview", "Permissions", "Audit"];
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
+  const { state: { accountUid } } = useAuth();
   const [tab, setTab] = useState("Overview");
   const [permissions, setPermissions] = useState<RbacPermission[]>([]);
   const [permsLoading, setPermsLoading] = useState(false);
@@ -43,7 +45,7 @@ export function RbacDetailBlade({ role, onClose, onEdit, onDisabled }: Props) {
     if (!confirm(`Delete role "${role.name}"? This action cannot be undone.`)) return;
     setDeleting(true);
     try {
-      await deleteRole(role.id, { deleted_by: "system" });
+      await deleteRole(role.id, { deleted_by: accountUid ?? "system" });
       onDisabled?.();
       onClose();
     } catch {

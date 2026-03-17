@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createUser, getAllRoles } from "../../../../api";
 import type { RbacRole } from "../../../../api";
+import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, Field, StepSuccessBanner, ErrorBanner, INPUT_CLS, SELECT_CLS, BTN_PRIMARY } from "./WizardShared";
 
 interface Props {
@@ -8,9 +9,12 @@ interface Props {
   onSuccess: (userUid?: string) => void;
   onClose: () => void;
   onNext: () => void;
+  /** When "full", hides Role & Billing section and changes submit to "Proceed to Assign Role" */
+  mode?: "full" | "quick";
 }
 
-export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Props) {
+export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode = "quick" }: Props) {
+  const { state: { accountUid, accountRoot } } = useAuth();
   const [accountName, setAccountName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -25,7 +29,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Pr
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch roles
+  // Fetch roles for the dropdown
   useEffect(() => {
     setRolesLoading(true);
     getAllRoles("engine")
@@ -55,12 +59,16 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Pr
         assigned_role: assignedRole,
         email: email.trim(),
         password,
-        root_account: "engine",
-        author: "engine",
+        root_account: accountRoot ?? "engine",
+        author: accountUid ?? "engine",
         billing_type: billingType,
       });
       const uid = res.data?.account_uid;
-      setSuccess(`User "${accountName.trim()}" created successfully with role "${assignedRole}".`);
+      if (mode === "full") {
+        setSuccess(`User "${accountName.trim()}" created successfully.`);
+      } else {
+        setSuccess(`User "${accountName.trim()}" created successfully with role "${assignedRole}".`);
+      }
       onSuccess(uid);
     } catch (err: any) {
       setError(err?.apiMessage ?? err?.message ?? "Failed to create user");
@@ -69,7 +77,8 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Pr
     }
   }
 
-  const canSubmit = accountName.trim() && username.trim() && email.trim() && password.trim() && assignedRole && !submitting;
+  const canSubmit = accountName.trim() && username.trim() && email.trim() && password.trim()
+    && assignedRole && !submitting;
 
   return (
     <div>
@@ -102,9 +111,9 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Pr
         </div>
       </MSection>
 
-      <MSection title="Role & Billing">
+      <MSection title={mode === "full" ? "Account Settings" : "Role & Billing"}>
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${mode === "full" ? "grid-cols-2" : "grid-cols-2"}`}>
             <Field label="Account Type" required>
               <select value={accountType} onChange={(e) => setAccountType(e.target.value)} className={SELECT_CLS}>
                 <option value="Admin">Admin</option>
@@ -126,21 +135,21 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext }: Pr
                 </select>
               )}
             </Field>
+            <Field label="Billing Type" required>
+              <select value={billingType} onChange={(e) => setBillingType(e.target.value)} className={SELECT_CLS}>
+                <option value="per_month">Per Month</option>
+                <option value="per_year">Per Year</option>
+                <option value="per_unit">Per Unit</option>
+                <option value="prepaid">Prepaid</option>
+              </select>
+            </Field>
           </div>
-          <Field label="Billing Type" required>
-            <select value={billingType} onChange={(e) => setBillingType(e.target.value)} className={SELECT_CLS}>
-              <option value="per_month">Per Month</option>
-              <option value="per_year">Per Year</option>
-              <option value="per_unit">Per Unit</option>
-              <option value="prepaid">Prepaid</option>
-            </select>
-          </Field>
         </div>
       </MSection>
 
       <div className="flex justify-end">
         <button onClick={handleSubmit} disabled={!canSubmit} className={BTN_PRIMARY}>
-          {submitting ? "Creating..." : "Create User"}
+          {submitting ? "Creating..." : mode === "full" ? "Proceed to Assign Role" : "Create User"}
         </button>
       </div>
     </div>

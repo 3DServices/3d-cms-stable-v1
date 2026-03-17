@@ -2,27 +2,27 @@ import React from "react";
 import { usePermissions } from "../../../../auth/PermissionsContext";
 import type { StepNumber } from "./useWizardState";
 
-interface Step {
+export interface WizardStep {
   id: StepNumber;
   title: string;
   subtitle: string;
   permission: string;
 }
 
-const WIZARD_STEPS: Step[] = [
-  { id: 1, title: "Create Permissions", subtitle: "Define module actions", permission: "rbac.create" },
-  { id: 2, title: "Create Role", subtitle: "Bundle permissions", permission: "rbac.create" },
-  { id: 3, title: "Create User", subtitle: "Add user account", permission: "rbac.create" },
-  { id: 4, title: "Assign Role", subtitle: "Link role to user", permission: "rbac.assign" },
+export const FULL_SETUP_STEPS: WizardStep[] = [
+  { id: 1, title: "Create User", subtitle: "Add user account", permission: "rbac.create" },
+  { id: 2, title: "Assign Role", subtitle: "Link role to user", permission: "rbac.assign" },
+  { id: 3, title: "Assign Permissions", subtitle: "Define module actions", permission: "rbac.create" },
 ];
 
 interface Props {
+  steps: WizardStep[];
   activeStep: StepNumber;
   completedSteps: Set<number>;
   onStepClick: (step: StepNumber) => void;
 }
 
-export function WizardStepperSidebar({ activeStep, completedSteps, onStepClick }: Props) {
+export function WizardStepperSidebar({ steps, activeStep, completedSteps, onStepClick }: Props) {
   const { hasPermission } = usePermissions();
 
   return (
@@ -31,11 +31,11 @@ export function WizardStepperSidebar({ activeStep, completedSteps, onStepClick }
         Setup Steps
       </div>
 
-      {WIZARD_STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const isActive = activeStep === step.id;
         const isCompleted = completedSteps.has(step.id);
         const allowed = hasPermission(step.permission);
-        const isLast = idx === WIZARD_STEPS.length - 1;
+        const isLast = idx === steps.length - 1;
 
         return (
           <div key={step.id} className="relative">

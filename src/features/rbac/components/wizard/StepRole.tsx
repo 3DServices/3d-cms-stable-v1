@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getAllPermissions, createRole } from "../../../../api";
 import type { RbacPermission } from "../../../../api";
+import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, Field, StepSuccessBanner, ErrorBanner, INPUT_CLS, SELECT_CLS, BTN_PRIMARY } from "./WizardShared";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function StepRole({ preSelectedPermissionUids, onSuccess, onClose, onNext }: Props) {
+  const { state: { accountUid } } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState("Tenant");
@@ -66,7 +68,7 @@ export function StepRole({ preSelectedPermissionUids, onSuccess, onClose, onNext
         role_name: name.trim(),
         role_description: description.trim(),
         account_root: tenant,
-        created_by: "system",
+        created_by: accountUid ?? "system",
         permissions: Array.from(selectedPerms),
       });
       setSuccess(`Role "${name.trim()}" created successfully with ${selectedPerms.size} permission(s).`);

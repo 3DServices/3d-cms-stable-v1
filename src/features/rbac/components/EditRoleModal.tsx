@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { updateRole, getAllPermissions, getRoleByUid } from "../../../api";
 import type { RbacPermission } from "../../../api";
+import { useAuth } from "../../../auth/AuthContext";
 import type { Role } from "./RolesTable";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
+  const { state: { accountUid } } = useAuth();
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [allPermissions, setAllPermissions] = useState<RbacPermission[]>([]);
@@ -70,7 +72,7 @@ export function EditRoleModal({ open, role, onClose, onUpdated }: Props) {
         role_name: roleName.trim(),
         role_description: roleDescription.trim() || undefined,
         permissions: [...selectedPermUids],
-        updated_by: "system",
+        updated_by: accountUid ?? "system",
       });
       onUpdated?.();
       onClose();
