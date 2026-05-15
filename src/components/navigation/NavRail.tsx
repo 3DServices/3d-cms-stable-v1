@@ -4,34 +4,31 @@
  */
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { getModulesForNavRail } from "../../auth/modules";
 
 export interface NavRailItem { key: string; glyph: string; label: string; path?: string; }
 interface NavRailProps { items?: NavRailItem[]; }
 
-const DEFAULT_ITEMS: NavRailItem[] = [
-  { key: "home",               glyph: "⌂",  label: "Home",               path: "/"                  },
-  { key: "aegis",              glyph: "A",  label: "Aegis Dashboard",     path: "/aegis"             },
-  { key: "noc-bridge",         glyph: "⛑",  label: "NOC Bridge",          path: "/noc-bridge"        },
-  { key: "protocol",           glyph: "⚙",  label: "Protocol Port",        path: "/protocol"          },
-  { key: "firmware",           glyph: "⬆",  label: "Patch Orchestrator",   path: "/firmware"          },
-  { key: "sim",                glyph: "📡", label: "Signal Vault",         path: "/sim"               },
-  { key: "ops",                glyph: "!",  label: "Ops War Room",         path: "/ops"               },
-  { key: "gatehouse",          glyph: "G",  label: "Gatehouse",            path: "/gatehouse"         },
-  { key: "alarms-factory",     glyph: "⚡", label: "Alarm Factory",        path: "/alarms-factory"    },
-  { key: "tenant-tower",       glyph: "#",  label: "Tenant Tower",         path: "/tenant-tower"      },
-  { key: "billing-invoicing",  glyph: "I",  label: "Billing & Invoicing",  path: "/billing-invoicing" },
-  { key: "health",             glyph: "♥",  label: "System Health",        path: "/health"            },
-  { key: "alarms",             glyph: "⚠",  label: "Alarms",               path: "/alarms"            },
-  { key: "tokens",             glyph: "T",  label: "Tokens",               path: "/tokens"            },
-  { key: "billing",            glyph: "₿",  label: "Billing",              path: "/billing"           },
-  { key: "asset-digital-twin", glyph: "🖼", label: "Asset Digital Twin",    path: "/asset-digital-twin" },
+/**
+ * Default nav-rail items are derived from the module registry
+ * (`auth/modules.ts`). The "home" entry is a UI affordance, not a module,
+ * so it's prepended explicitly.
+ *
+ * Note: this rail does NOT permission-filter the items (intentional — the
+ * rail is a primary nav and shows all destinations; if the user lacks
+ * access, the route itself shows an Access Denied panel). Per-item
+ * permission filtering happens in the secondary <Sidebar>.
+ */
+const HOME_ITEM: NavRailItem = { key: "home", glyph: "⌂", label: "Home", path: "/" };
 
-  { key: "payments",           glyph: "$",  label: "Payments",             path: "/payments"          },
-  { key: "money",              glyph: "💳", label: "Money Switchboard",    path: "/money"             },
-  { key: "veba",               glyph: "V",  label: "VEBA",                 path: "/veba"              },
-  { key: "ai",                 glyph: "W",  label: "AI Workloads",         path: "/ai"                },
-  { key: "rbac",               glyph: "R",  label: "RBAC",                 path: "/rbac"              },
-  { key: "audit",              glyph: "📋", label: "Audit Trail",          path: "/audit"             },
+const DEFAULT_ITEMS: NavRailItem[] = [
+  HOME_ITEM,
+  ...getModulesForNavRail().map((m) => ({
+    key:   m.id,
+    glyph: m.navGlyph ?? "•",
+    label: m.navLabel ?? m.name,
+    path:  m.route,
+  })),
 ];
 
 export function NavRail({ items = DEFAULT_ITEMS }: NavRailProps) {

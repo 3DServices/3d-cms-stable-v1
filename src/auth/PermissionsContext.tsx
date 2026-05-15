@@ -9,7 +9,7 @@
  * Exposes:
  *   - permissions: string[]        — list of permission names (e.g. "audit.view")
  *   - role: string                 — user's role name
- *   - hasPermission(p): boolean    — check a single permission
+ *   - hasPermission(p): boolean    — check a single permission (alias-aware, Slice 3)
  *   - hasAnyPermission(ps): boolean — check if user has at least one
  *   - loading: boolean
  *
@@ -21,11 +21,13 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import { getUserPermissions } from "../api/services/rbac.service";
 import { useAuth } from "./AuthContext";
 import { getCookie } from "../utils/cookies";
+import { legacyAliasMemo } from "./permissionAliases";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
 
@@ -53,12 +55,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchPermissions = useCallback(async () => {
-    // Get account UID from AuthContext state or fall back to cookie
     const accountUid =
       authState.accountUid || getCookie("_nvxs_account_uid");
 
     if (!accountUid) {
-      // Not logged in — clear state
       setPermissions([]);
       setRole("");
       setLoading(false);
@@ -74,7 +74,6 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         (data.permissions ?? []).map((p) => p.permission_name),
       );
     } catch {
-      // API error — default to no permissions (safe fail-closed)
       setPermissions([]);
       setRole("");
     } finally {
@@ -82,7 +81,6 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.accountUid]);
 
-  // React to auth state changes
   useEffect(() => {
     if (authState.status === "authenticated") {
       fetchPermissions();
@@ -93,29 +91,44 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.status, fetchPermissions]);
 
-  // Initial fetch on mount (handles page refresh when cookie exists but AuthContext is fresh)
   useEffect(() => {
     const accountUid = getCookie("_nvxs_account_uid");
     if (accountUid && authState.status === "logged_out") {
       fetchPermissions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Build a Set for O(1) lookup; rebuilt only when the underlying list changes.
+  const permissionSet = useMemo(() => new Set(permissions), [permissions]);
+
+  /**
+   * Returns true if the user is granted `permission`, checking both the
+   * literal key and its legacy `module.action` alias (Slice 3). A user with
+   * `rbac.create` therefore also satisfies `can_create_user`, and vice-versa.
+   */
   const hasPermission = useCallback(
     (permission: string): boolean => {
-      // Bypass roles have full access
       if (BYPASS_ROLES.includes(role)) return true;
-      return permissions.includes(permission);
+      if (permissionSet.has(permission)) return true;
+      const alias = legacyAliasMemo(permission);
+      if (alias && permissionSet.has(alias)) return true;
+      return false;
     },
-    [permissions, role],
+    [permissionSet, role],
   );
 
   const hasAnyPermission = useCallback(
     (perms: string[]): boolean => {
       if (BYPASS_ROLES.includes(role)) return true;
-      return perms.some((p) => permissions.includes(p));
+      for (const p of perms) {
+        if (permissionSet.has(p)) return true;
+        const alias = legacyAliasMemo(p);
+        if (alias && permissionSet.has(alias)) return true;
+      }
+      return false;
     },
-    [permissions, role],
+    [permissionSet, role],
   );
 
   return (
