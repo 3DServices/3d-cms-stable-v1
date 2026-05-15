@@ -126,6 +126,18 @@ export const ENDPOINTS = {
     ALL: "/users/all",
     ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
   },
+  FLEET: {
+    LIST_UNITS:       "/system32/devices/configured/all",  // POST {data:{data_level,account_uid}}
+    CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
+    CLIENTS_ALL:      "/clients",                          // GET  append /{primary_uid}/all
+    USER_DETAILS:     "/users",                            // GET  append /{account_uid}/details
+    DEVICE_ACTION:    "/devices/action",                   // POST {data:{action,device_imei}}
+    DEVICE_UPDATE:    "/devices/update/properties",        // POST {data:{device_imei,...props}}
+    DEVICE_CFG_NEW:   "/system32/configurations/new",      // POST full config payload
+    DEVICE_CFG_UPDATE:"/configurations/update",            // POST Teltonika update payload
+    ACTIVE_TXNS:      "/system32/payment/transactions/active", // GET append /{userUid}
+    UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
+  },
   AUDIT: {
     /** CMS-wide audit event stream (all modules). Supports ?domain=&severity=&range= query params */
     EVENTS:         "/audit/events",
