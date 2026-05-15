@@ -1,8 +1,12 @@
 /**
  * App.tsx — Root application component with routing.
  *
- * All routes are defined here. Each feature exports its page
- * component via a barrel export in features/<name>/index.ts.
+ * Module routes are auto-generated from the module registry
+ * (`src/auth/modules.ts`) via `generateModuleRoutes()`. To add a new module:
+ *   1. Declare it in src/auth/modules.ts
+ *   2. Map its id to a page element in src/app/moduleRoutes.tsx
+ * Its route, permission gate, and (optionally) nav entry are then derived
+ * automatically — no edits to App.tsx are required.
  */
 import { Routes, Route } from "react-router-dom";
 import { useSessionMonitor } from "../hooks/useSessionMonitor";
@@ -18,32 +22,15 @@ import { AuthProvider } from "../auth/AuthContext";
 import { PermissionsProvider } from "../auth/PermissionsContext";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
 
-// ── Feature pages ────────────────────────────────────────────────────────────
-import { AegisDashboardPage }  from "../features/aegis";
-import { NocBridgePage }       from "../features/noc-bridge";
-import { OpsWarRoomPage }      from "../features/ops-war-room";
-import { GatehousePage }       from "../features/gatehouse";
-import { AlarmFactoryPage }    from "../features/alarm-factory";
-import { SystemHealthPage }    from "../features/health";
-import { AlarmsPage }          from "../features/alarms";
-import { TokensPage }          from "../features/tokens";
-import { BillingPage }         from "../features/billing";
-import { PaymentsPage }        from "../features/payments";
-import { VebaPage }            from "../features/veba";
-import { AIWorkloadsPage }     from "../features/ai-workloads";
-import { RbacPage }            from "../features/rbac";
-import { AuditPage }           from "../features/audit";
-import { TenantTowerPage }     from "../features/tenant-tower";
-import { BillingInvoicingPage } from "../features/billing-invoicing";
-import { MoneyPage }            from "../features/money";
-import { ProtocolPage }         from "../features/protocol";
-import { FirmwarePage }         from "../features/firmware";
-import { SimPage }             from "../features/sim";
+// ── Auto-generated module routes ─────────────────────────────────────────────
+import { generateModuleRoutes } from "./moduleRoutes";
 
-import { AssetDigitalTwinPage }  from "../features/asset-digital-twin";
-
-// ── 404 ──────────────────────────────────────────────────────────────────────
+// ── Landing & 404 (special-cased — not module-driven) ────────────────────────
+import { AegisDashboardPage } from "../features/aegis";
 import { NotFoundPage } from "./NotFoundPage";
+
+// ── RBAC sub-routes (nested under the rbac module) ───────────────────────────
+import { RoleCreatorPage } from "../features/rbac";
 
 
 export default function App() {
@@ -61,35 +48,31 @@ export default function App() {
         <Sidebar />
 
         <Routes>
-          {/* ── Dashboard (no permission required — landing page) ─────── */}
-          <Route path="/"               element={<AegisDashboardPage />} />
-          <Route path="/aegis"          element={<AegisDashboardPage />} />
+          {/* Landing (no permission required) */}
+          <Route path="/" element={<AegisDashboardPage />} />
 
-          {/* ── Built pages (permission-guarded) ─────────────────────── */}
-          <Route path="/noc-bridge"     element={<ProtectedRoute permission="noc.view"><NocBridgePage /></ProtectedRoute>} />
-          <Route path="/ops"            element={<ProtectedRoute permission="ops.view"><OpsWarRoomPage /></ProtectedRoute>} />
-          <Route path="/gatehouse"      element={<ProtectedRoute permission="gatehouse.view"><GatehousePage /></ProtectedRoute>} />
-          <Route path="/alarms-factory" element={<ProtectedRoute permission="alarms.view"><AlarmFactoryPage /></ProtectedRoute>} />
-          <Route path="/tenant-tower"   element={<ProtectedRoute permission="tenants.view"><TenantTowerPage /></ProtectedRoute>} />
-          <Route path="/billing-invoicing" element={<ProtectedRoute permission="billing.view"><BillingInvoicingPage /></ProtectedRoute>} />
-          <Route path="/money"            element={<ProtectedRoute permission="money.view"><MoneyPage /></ProtectedRoute>} />
-          <Route path="/protocol"         element={<ProtectedRoute permission="protocol.view"><ProtocolPage /></ProtectedRoute>} />
-          <Route path="/firmware"         element={<ProtectedRoute permission="firmware.view"><FirmwarePage /></ProtectedRoute>} />
-          <Route path="/sim"             element={<ProtectedRoute permission="sim.view"><SimPage /></ProtectedRoute>} />
-          <Route path="/asset-digital-twin" element={<ProtectedRoute permission="assets.view"><AssetDigitalTwinPage /></ProtectedRoute>} />
+          {/* Module routes — auto-generated from src/auth/modules.ts */}
+          {generateModuleRoutes()}
 
-          {/* ── Placeholder pages (permission-guarded) ───────────────── */}
-          <Route path="/health"   element={<ProtectedRoute permission="health.view"><SystemHealthPage /></ProtectedRoute>} />
-          <Route path="/alarms"   element={<ProtectedRoute permission="alarms.view"><AlarmsPage /></ProtectedRoute>} />
-          <Route path="/tokens"   element={<ProtectedRoute permission="tokens.view"><TokensPage /></ProtectedRoute>} />
-          <Route path="/billing"  element={<ProtectedRoute permission="billing.view"><BillingPage /></ProtectedRoute>} />
-          <Route path="/payments" element={<ProtectedRoute permission="payments.view"><PaymentsPage /></ProtectedRoute>} />
-          <Route path="/veba"     element={<ProtectedRoute permission="veba.view"><VebaPage /></ProtectedRoute>} />
-          <Route path="/ai"       element={<ProtectedRoute permission="ai.view"><AIWorkloadsPage /></ProtectedRoute>} />
-          <Route path="/rbac"     element={<ProtectedRoute permission="rbac.view"><RbacPage /></ProtectedRoute>} />
-          <Route path="/audit"    element={<ProtectedRoute permission="audit.view"><AuditPage /></ProtectedRoute>} />
+          {/* RBAC sub-routes (Role Creator) */}
+          <Route
+            path="/rbac/roles/new"
+            element={
+              <ProtectedRoute permission="rbac.view">
+                <RoleCreatorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rbac/roles/:uid/edit"
+            element={
+              <ProtectedRoute permission="rbac.view">
+                <RoleCreatorPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* ── 404 ─────────────────────────────────────────────────────── */}
+          {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
