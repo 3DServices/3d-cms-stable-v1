@@ -9,6 +9,12 @@
  *   MODAL:   HIC Manual Settlement Override (3 scroll sections)
  */
 import React, { useState } from "react";
+import { MarketplaceBrowse } from "./components/MarketplaceBrowse";
+import { MyListings } from "./components/MyListings";
+import { BookingRequestModal } from "./components/BookingRequestModal";
+import type { VebaListing } from "../../api/types";
+
+type VebaTab = "marketplace" | "my-listings" | "ops";
 
 // ─── Status dots ─────────────────────────────────────────────────────────────
 const sDot: Record<string, string> = {
@@ -83,6 +89,11 @@ export function VebaPage() {
   const [bladeOpen, setBladeOpen] = useState(false);
   const [bladeTab, setBladeTab] = useState("Overview");
   const [modalOpen, setModalOpen] = useState(false);
+  // Phase 2 — top-level tab toggle between buyer-facing marketplace browse
+  // and the existing operator-facing settlement control room.
+  const [activeTab, setActiveTab] = useState<VebaTab>("marketplace");
+  // Phase 3 — booking-request modal state.
+  const [bookingFor, setBookingFor] = useState<VebaListing | null>(null);
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden relative">
@@ -106,7 +117,62 @@ export function VebaPage() {
             </div>
           </div>
 
-          {/* ════════════════════ TOP SCROLL ════════════════════════════════ */}
+          {/* ── Phase 2 — Marketplace / Ops tab toggle ────────────────── */}
+          <div className="bg-white border border-[#E9EDEF] rounded-xl p-1.5 flex gap-1 self-start">
+            <button
+              type="button"
+              onClick={() => setActiveTab("marketplace")}
+              className={[
+                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
+                activeTab === "marketplace"
+                  ? "bg-[#128C7E] text-white"
+                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
+              ].join(" ")}
+            >
+              Marketplace
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("my-listings")}
+              className={[
+                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
+                activeTab === "my-listings"
+                  ? "bg-[#128C7E] text-white"
+                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
+              ].join(" ")}
+            >
+              My Listings
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("ops")}
+              className={[
+                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
+                activeTab === "ops"
+                  ? "bg-[#128C7E] text-white"
+                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
+              ].join(" ")}
+            >
+              Settlement Ops
+            </button>
+          </div>
+
+          {/* ── Marketplace tab ─────────────────────────────────────────── */}
+          {activeTab === "marketplace" && (
+            <MarketplaceBrowse onRequestBooking={(l) => setBookingFor(l)} />
+          )}
+
+          {/* ── My Listings tab ─────────────────────────────────────────── */}
+          {activeTab === "my-listings" && <MyListings />}
+
+          {/* ── Phase 3 booking-request modal (renders only when set) ──── */}
+          <BookingRequestModal
+            listing={bookingFor}
+            onClose={() => setBookingFor(null)}
+          />
+
+          {/* ── Settlement Ops tab (existing content) ───────────────────── */}
+          <div className={activeTab === "ops" ? "flex flex-col gap-3" : "hidden"}>
 
           {/* ── 4 KPI Cards ──────────────────────────────────────────────── */}
           <div className="grid grid-cols-4 gap-3">
@@ -305,6 +371,8 @@ export function VebaPage() {
               </div>
             </div>
           </div>
+
+          </div>{/* /Settlement Ops tab wrapper */}
 
         </div>
       </main>

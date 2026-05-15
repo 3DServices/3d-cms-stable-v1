@@ -28,63 +28,72 @@ export const ENDPOINTS = {
   },
   BILLING: {
     CHURN_RATE:       "/billing/subscriptions/churn-rate",
-    EXPIRING:         "/billing/subscriptions/expiring",   // ?days=30
+    EXPIRING:         "/billing/subscriptions/expiring",
   },
   PAYMENTS: {
-    TRANSACTIONS:     "/payments/transactions",            // append /{client_uid}/list
+    TRANSACTIONS:     "/payments/transactions",
   },
   METRICS: {
     SERVER:          "/metrics/server",
     API_PERFORMANCE: "/metrics/api/performance",
-    //STATISTICS: "/veba/statistics",
   },
   GATEWAYS: {
     MOBILE_MONEY:     "/gateways/mobile-money",
-    MOBILE_MONEY_BY:  "/gateways/mobile-money",   // append /{telecom_name}
+    MOBILE_MONEY_BY:  "/gateways/mobile-money",
     UPDATE:           "/gateways/mobile-money/update",
   },
   VEBA: {
-    STATISTICS: "/veba/statistics",
+    STATISTICS:          "/veba/statistics",
+    LISTINGS:            "/veba/listings",
+    LISTINGS_CREATE:     "/veba/listings/create",
+    LISTINGS_BY_ASSET:   "/veba/listings/asset",
+    LISTINGS_BY_UID:     "/veba/listings",
+    LISTINGS_UPDATE:     "/veba/listings",
+    LISTINGS_PAUSE:      "/veba/listings",
+    LISTINGS_REACTIVATE: "/veba/listings",
+    LISTINGS_ARCHIVE:    "/veba/listings",
+    BOOKING_REQUESTS:        "/veba/booking-requests",
+    BOOKING_REQUESTS_CREATE: "/veba/booking-requests/create",
   },
   TENANTS: {
     CREATE:          "/tenants/create",
     GET_ALL:         "/tenants/all",
     IMPORT:          "/tenants/import",
     IMPORT_TEMPLATE: "/tenants/import/template",
-    TRASH:           "/tenants",           // append /{id}/trash
-    RESTORE:         "/tenants",           // append /{id}/restore
+    TRASH:           "/tenants",
+    RESTORE:         "/tenants",
     GET_TRASHED:     "/tenants/trashed",
     KPIS:            "/tenants/kpis",
-    WALLET:          "/tenants",           // append /{id}/wallet
+    WALLET:          "/tenants",
     TOP_UP:          "/tenants/wallet/topup",
     ALLOCATE:        "/tenants/wallet/allocate",
     MINT:            "/tenants/wallet/mint",
     USAGE_EVENTS:    "/tenants/usage-events",
     APPROVALS:       "/tenants/approvals",
-    APPROVE:         "/tenants/approvals",   // append /{id}/approve
-    REJECT:          "/tenants/approvals",   // append /{id}/reject
+    APPROVE:         "/tenants/approvals",
+    REJECT:          "/tenants/approvals",
     AUDIT_TRAIL:     "/tenants/audit-trail",
-    DRAFTS:          "/tenants/drafts",           // POST save draft
-    DRAFT_APPROVAL:  "/tenants/drafts",           // append /{id}/request-approval
-    DRAFT_SUBMIT:    "/tenants/drafts",           // append /{id}/submit
+    DRAFTS:          "/tenants/drafts",
+    DRAFT_APPROVAL:  "/tenants/drafts",
+    DRAFT_SUBMIT:    "/tenants/drafts",
   },
   CLIENTS: {
     CREATE:      "/clients/create",
     GET_ALL:     "/clients/all",
-    BY_PROVIDER: "/clients",           // append /{service_provider}/all
-    DEVICES:     "/devices/configured",// append /{client_uid}/client
-    UPDATE:      "/clients",           // append /{client_uid}/update
-    TRASH:       "/clients",           // append /{client_uid}/trash
-    RESTORE:     "/clients",           // append /{client_uid}/restore
+    BY_PROVIDER: "/clients",
+    DEVICES:     "/devices/configured",
+    UPDATE:      "/clients",
+    TRASH:       "/clients",
+    RESTORE:     "/clients",
     GET_TRASHED: "/clients/trashed",
   },
   TOKENS: {
     GET_ALL:  "/tokens",
     CREATE:   "/tokens/create",
-    BY_ID:    "/tokens",               // append /{token_id}
+    BY_ID:    "/tokens",
     BUY:      "/payments/tokens/buy",
     TRANSFER: "/tokens/transfer",
-    BALANCE:  "/tokens",               // append /{client_uid}/balance
+    BALANCE:  "/tokens",
   },
   FINANCE: {
     PAYMENTS: "/finance/payments",
@@ -95,14 +104,14 @@ export const ENDPOINTS = {
   RBAC: {
     ROLES:              "/rbac/roles",
     ROLES_CREATE:       "/rbac/roles/create",
-    ROLES_BY_UID:       "/rbac/roles",           // append /{role_uid}
-    ROLES_UPDATE:       "/rbac/roles",           // append /{role_uid}/update
-    ROLES_DELETE:       "/rbac/roles",           // append /{role_uid}/delete
+    ROLES_BY_UID:       "/rbac/roles",
+    ROLES_UPDATE:       "/rbac/roles",
+    ROLES_DELETE:       "/rbac/roles",
     PERMISSIONS:        "/rbac/permissions",
     PERMISSIONS_CREATE: "/rbac/permissions/create",
-    PERMISSIONS_UPDATE: "/rbac/permissions",        // append /{permission_uid}/update
-    PERMISSIONS_DELETE: "/rbac/permissions",        // append /{permission_uid}/delete
-    USER_PERMISSIONS:   "/rbac/users",           // append /{account_uid}/permissions
+    PERMISSIONS_UPDATE: "/rbac/permissions",
+    PERMISSIONS_DELETE: "/rbac/permissions",
+    USER_PERMISSIONS:   "/rbac/users",
     STATS_ACTIVE_ROLES:      "/rbac/stats/active-roles",
     STATS_TOTAL_PERMISSIONS: "/rbac/stats/total-permissions",
     STATS_ACTIVE_CLIENTS:    "/rbac/stats/active-clients",
@@ -119,29 +128,21 @@ export const ENDPOINTS = {
     LOGOUT:         "/auth/logout",
     FORGOT_PASSWORD:"/auth/forgot-password",
     RESET_PASSWORD: "/auth/reset-password",
-    USER_DETAILS:   "/users",              // append /{account_uid}/details
+    USER_DETAILS:   "/users",
   },
   USERS: {
     CREATE: "/users/create",
     ALL: "/users/all",
-    ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
+    ASSIGN_ROLE: "/users",
   },
   AUDIT: {
-    /** CMS-wide audit event stream (all modules). Supports ?domain=&severity=&range= query params */
     EVENTS:         "/audit/events",
-    /** Aggregated KPI summary for audit dashboard */
     KPIS:           "/audit/kpis",
-    /** Hash-chain blocks for tamper evidence */
     HASH_CHAIN:     "/audit/hash-chain",
-    /** HITL / HIC approval queue (cross-module) */
     APPROVALS:      "/audit/approvals",
-    /** Approve a pending approval */
-    APPROVE:        "/audit/approvals",      // append /{id}/approve
-    /** Reject a pending approval */
-    REJECT:         "/audit/approvals",      // append /{id}/reject
-    /** Compliance snapshot (retention, crypto, gaps) */
+    APPROVE:        "/audit/approvals",
+    REJECT:         "/audit/approvals",
     COMPLIANCE:     "/audit/compliance",
-    /** Request an audit pack export (HIC-gated) */
     EXPORT:         "/audit/export",
   },
 } as const;
