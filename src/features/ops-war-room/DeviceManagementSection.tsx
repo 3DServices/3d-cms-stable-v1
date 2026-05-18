@@ -77,6 +77,39 @@ const FORMULA_KEYS: Partial<Record<TeltoKey, string>> = {
   custom_input4:       "custom_input4_formular",
 };
 
+// ─── Xirgo Global parameter list ─────────────────────────────────────────────
+const XIRGO_PARAMS = [
+  "regtime","sats","speed","course","altitude","lon","lat",
+  "avl_driver","adc2","adc6","adc12","adc16","cell_id","engine_hours",
+  "f0","f100","f102","f103",
+  "lls_lvl_add1","lls_lvl_add2","lls_lvl_add3","lls_lvl_add4",
+  "lls_temp_add1","lls_temp_add2","lls_temp_add3","lls_temp_add4",
+  "can_taho","dallas_id_end","dallas_id_end_hex","dallas_id_end_hex_raw",
+  "engine_temp","mcc","mnc","odo","ta",
+];
+
+// ─── Model-type detection helpers ────────────────────────────────────────────
+function isXirgoModel(model: string) {
+  return model === "xirgo_global" || model.startsWith("fms_500");
+}
+
+function toVendorCategory(hardwareModel: string): string {
+  if (isXirgoModel(hardwareModel))    return "xirgo_global";
+  if (isTeltonikaModel(hardwareModel)) return "teltonika";
+  if (hardwareModel === "wetrack2" || hardwareModel === "wetrack_lite") return "wetrack2_gto6";
+  if (hardwareModel === "gt06n-device" || hardwareModel === "et01")     return "other_gt06";
+  return hardwareModel;
+}
+function isTeltonikaModel(model: string) {
+  const m = model.toLowerCase();
+  return (
+    m === "teltonika" ||
+    m.startsWith("fmb") || m.startsWith("fmc") || m.startsWith("fmm") ||
+    m.startsWith("ftc") || m.startsWith("tat") || m.startsWith("tft") ||
+    m.startsWith("all_can") || m.startsWith("ecan")
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Device {
   device_imei:           string;
@@ -309,6 +342,57 @@ function TeltonikaConfigTable({ values, formulas, onChange }: {
   );
 }
 
+// ─── Xirgo config table ───────────────────────────────────────────────────────
+function XirgoConfigTable({ values, formulas, onChange }: {
+  values: TeltoValues; formulas: TeltoFormulas;
+  onChange: (v: TeltoValues, f: TeltoFormulas) => void;
+}) {
+  const setVal = (k: string, v: string) => onChange({ ...values, [k]: v }, formulas);
+  const setFml = (fk: string, v: string) => onChange(values, { ...formulas, [fk]: v });
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="bg-[#F8F9FA] text-[#667781]">
+            <th className="text-left px-3 py-2 font-extrabold w-[190px]">Config Key</th>
+            <th className="text-left px-3 py-2 font-extrabold w-[220px]">Source (Xirgo Parameter)</th>
+            <th className="text-left px-3 py-2 font-extrabold">Formula (optional)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {TELTO_KEYS.map((k) => {
+            const fk = FORMULA_KEYS[k];
+            return (
+              <tr key={k} className="border-t border-[#F0F2F5]">
+                <td className="px-3 py-2 font-semibold text-[#111B21] capitalize">{humanKey(k)}</td>
+                <td className="px-3 py-2">
+                  <select value={values[k] || ""} onChange={(e) => setVal(k, e.target.value)}
+                    className="w-full h-8 rounded border border-[#E9EDEF] px-2 text-[11px] bg-white outline-none focus:border-[#128C7E]">
+                    <option value="">Select Source</option>
+                    {XIRGO_PARAMS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </td>
+                <td className="px-3 py-2">
+                  {fk ? (
+                    <input
+                      value={formulas[fk] && formulas[fk] !== "no-config" ? formulas[fk] : ""}
+                      onChange={(e) => setFml(fk, e.target.value || "no-config")}
+                      placeholder="no-config"
+                      className="w-full h-8 rounded border border-[#E9EDEF] px-2 text-[11px] font-mono outline-none focus:border-[#128C7E]"
+                    />
+                  ) : (
+                    <span className="text-[#A0AAB4] text-[11px]">N/A</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Calibration rows ─────────────────────────────────────────────────────────
 function CalibrationRows({ entries, onChange }: {
   entries: CalibEntry[]; onChange: (e: CalibEntry[]) => void;
@@ -442,7 +526,7 @@ export function DeviceManagementSection() {
   const [regLoading,   setRegLoading]   = useState(true);
   const [regLoadErr,   setRegLoadErr]   = useState<string | null>(null);
   const [showRegModal, setShowRegModal] = useState(false);
-  const [regForm,      setRegForm]      = useState({ imei: "", model: "teltonika", clientUid: "", status: "" });
+  const [regForm,      setRegForm]      = useState({ imei: "", model: "", vendor: "", clientUid: "", status: "" });
   const [regSaving,    setRegSaving]    = useState(false);
   const [regSearch,    setRegSearch]    = useState("");
   const [regPage,      setRegPage]      = useState(1);
@@ -738,7 +822,7 @@ export function DeviceManagementSection() {
     setAdForm({
       imei: d.device_imei, name: "", sim: "", carMake: "", carModel: "",
       clientUid: d.client_uid, vin: "", carType: "",
-      model: d.hardware_model || "teltonika", paymentUid: "", status: "",
+      model: toVendorCategory(d.hardware_model || "teltonika"), paymentUid: "", status: "",
     });
     setAdValues(emptyTeltoValues()); setAdFormulas(emptyTeltoFormulas()); setAdCalib([]);
     setAdTab("props");
@@ -757,8 +841,8 @@ export function DeviceManagementSection() {
     const payload = buildNewConfigPayload(
       adForm.imei, adForm.model,
       { device_name: adForm.name, sim_uid: adForm.sim, car_make: adForm.carMake, car_model: adForm.carModel, client_uid: adForm.clientUid, vin_number: adForm.vin, car_type: adForm.carType },
-      adForm.model === "teltonika" ? adValues  : null,
-      adForm.model === "teltonika" ? adFormulas : null,
+      (isTeltonikaModel(adForm.model) || isXirgoModel(adForm.model)) ? adValues   : null,
+      (isTeltonikaModel(adForm.model) || isXirgoModel(adForm.model)) ? adFormulas : null,
       adForm.paymentUid, cfgUsr,
       mvs.length ? mvs : [""], vls.length ? vls : [""],
     );
@@ -778,6 +862,12 @@ export function DeviceManagementSection() {
     if (!regForm.imei || regForm.imei.length < 10) {
       setRegForm((f) => ({ ...f, status: "IMEI is required (min 10 digits)." })); return;
     }
+    if (!regForm.model) {
+      setRegForm((f) => ({ ...f, status: "Select a device model." })); return;
+    }
+    if (!regForm.vendor) {
+      setRegForm((f) => ({ ...f, status: "Select a unit vendor." })); return;
+    }
     if (!regForm.clientUid) {
       setRegForm((f) => ({ ...f, status: "Select a client." })); return;
     }
@@ -786,10 +876,11 @@ export function DeviceManagementSection() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const j = await fleetFetch("POST", ENDPOINTS.FLEET.REGISTER_UNIT, {
         data: {
-          unit_imei:   regForm.imei,
-          asset_model: regForm.model,
-          unit_vendor: regForm.model,
-          client:      regForm.clientUid,
+          unit_imei:        regForm.imei,
+          asset_model:      regForm.model,
+          unit_vendor:      regForm.vendor,
+          client:           regForm.clientUid,
+          service_provider: "engine",
         },
       }) as any;
       if (j?.status === "success") {
@@ -911,7 +1002,8 @@ export function DeviceManagementSection() {
                 <tr><td colSpan={5} className="text-center text-[#667781] py-10 italic">No devices found.</td></tr>
               )}
               {paged.map((d, i) => {
-                const isTelto = d.hardware.toLowerCase().includes("teltonika");
+                const isTelto  = d.hardware.toLowerCase().includes("teltonika") || isTeltonikaModel(d.hardware_model);
+                const isXirgo  = d.hardware.toLowerCase().includes("xirgo") || isXirgoModel(d.hardware_model);
                 const expired = d.subscription_status.toLowerCase() === "expired";
                 const menuOpen = openMenuImei === d.device_imei;
                 return (
@@ -953,7 +1045,7 @@ export function DeviceManagementSection() {
                                 Edit Properties
                               </button>
                             )}
-                            {isInhouse && isTelto && (
+                            {isInhouse && (isTelto || isXirgo) && (
                               <button
                                 onClick={() => { openEditCfg(d); setOpenMenuImei(null); }}
                                 className="w-full text-left px-3 py-2 text-[12px] text-[#1565C0] hover:bg-[#F8F9FA] cursor-pointer bg-transparent border-none">
@@ -1022,7 +1114,7 @@ export function DeviceManagementSection() {
             {canManage && (
               <button
                 onClick={() => {
-                  setRegForm({ imei: "", model: "teltonika", clientUid: "", status: "" });
+                  setRegForm({ imei: "", model: "", vendor: "", clientUid: "", status: "" });
                   setShowRegModal(true);
                 }}
                 className="h-8 px-3 rounded-lg bg-[#128C7E] text-white text-[11px] font-extrabold
@@ -1284,13 +1376,21 @@ export function DeviceManagementSection() {
       )}
 
       {/* Edit Teltonika Configs */}
-      {editCfgDevice && (
+      {editCfgDevice && (() => {
+        const hwStr = (editCfgDevice.hardware + " " + editCfgDevice.hardware_model).toLowerCase();
+        const editIsXirgo = hwStr.includes("xirgo") || isXirgoModel(editCfgDevice.hardware_model);
+        return (
         <Modal title={`Edit Configs — ${editCfgDevice.device_name}`} onClose={() => setEditCfgDevice(null)} wide>
           <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
-            Map parameter source IDs for each config key. Empty values are sent as <code className="font-mono">no-config</code>.
+            Map parameter sources for each config key. Empty values are sent as <code className="font-mono">no-config</code>.
+            {editIsXirgo && <span className="ml-1 font-extrabold text-[#1565C0]">(Xirgo Global)</span>}
           </div>
-          <TeltonikaConfigTable values={ecValues} formulas={ecFormulas}
-            onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
+          {editIsXirgo
+            ? <XirgoConfigTable values={ecValues} formulas={ecFormulas}
+                onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
+            : <TeltonikaConfigTable values={ecValues} formulas={ecFormulas}
+                onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
+          }
           <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
             <CalibrationRows entries={ecCalib} onChange={setEcCalib} />
           </div>
@@ -1299,7 +1399,8 @@ export function DeviceManagementSection() {
             <SaveBtn loading={ecSaving} onClick={saveEditCfg}>Update Configs</SaveBtn>
           </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Renew Payment */}
       {renewDevice && (
@@ -1349,14 +1450,16 @@ export function DeviceManagementSection() {
         <Modal title="Configure Device" onClose={() => setShowAddModal(false)} wide>
           <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
             <div className="text-[11px] text-[#667781]">
-              Supports: <strong>Teltonika</strong> · <strong>Wetrack2 / GT06</strong> · <strong>Other GT06</strong>
+              Supports: <strong>Teltonika</strong> · <strong>Xirgo Global</strong> · <strong>Concox</strong> · <strong>GT06N</strong>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[11px] font-extrabold text-[#667781] uppercase shrink-0">Model</label>
+              <label className="text-[11px] font-extrabold text-[#667781] uppercase shrink-0">Vendor</label>
               <FSelect value={adForm.model} onChange={(v) => setAdForm((f) => ({ ...f, model: v }))}>
+                <option value="">— Select vendor —</option>
                 <option value="teltonika">Teltonika</option>
-                <option value="wetrack2_gto6">Wetrack2 / GT06</option>
-                <option value="other_gt06">Other GT06</option>
+                <option value="xirgo_global">Xirgo Global</option>
+                <option value="wetrack2_gto6">Concox (WeTrack2 / GT06)</option>
+                <option value="other_gt06">Other GT06N</option>
               </FSelect>
             </div>
           </div>
@@ -1421,12 +1524,23 @@ export function DeviceManagementSection() {
           )}
 
           {adTab === "cfg" && (
-            adForm.model === "teltonika" ? (
+            isTeltonikaModel(adForm.model) ? (
               <div>
                 <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
                   Choose parameter source IDs. Empty values will be sent as <code className="font-mono">no-config</code>.
                 </div>
                 <TeltonikaConfigTable values={adValues} formulas={adFormulas}
+                  onChange={(v, f) => { setAdValues(v); setAdFormulas(f); }} />
+                <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
+                  <CalibrationRows entries={adCalib} onChange={setAdCalib} />
+                </div>
+              </div>
+            ) : isXirgoModel(adForm.model) ? (
+              <div>
+                <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
+                  Choose parameter sources for Xirgo Global. Empty values will be sent as <code className="font-mono">no-config</code>.
+                </div>
+                <XirgoConfigTable values={adValues} formulas={adFormulas}
                   onChange={(v, f) => { setAdValues(v); setAdFormulas(f); }} />
                 <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
                   <CalibrationRows entries={adCalib} onChange={setAdCalib} />
@@ -1465,11 +1579,91 @@ export function DeviceManagementSection() {
                 mono
               />
             </Field>
-            <Field label="Hardware Model">
+            <Field label="Device Model *">
               <FSelect value={regForm.model} onChange={(v) => setRegForm((f) => ({ ...f, model: v }))}>
+                <option value="">— Choose device model —</option>
+                <optgroup label="Concox Hardware">
+                  <option value="wetrack2">WeTrack2</option>
+                  <option value="wetrack_lite">WeTrack Lite</option>
+                </optgroup>
+                <optgroup label="Xirgo-Global Hardware">
+                  <option value="fms_500_one">FMS-500 One</option>
+                  <option value="fms_500_stcan">FMS-500 STCAN</option>
+                  <option value="fms_500_light">FMS-500 Light</option>
+                </optgroup>
+                <optgroup label="Teltonika Hardware">
+                  <option value="fmb_130">FMB-130</option>
+                  <option value="fmb_920">FMB-920</option>
+                  <option value="fmc_130">FMC-130</option>
+                  <option value="fmc_234">FMC-234</option>
+                  <option value="ftc_881">FTC-881</option>
+                  <option value="ftc_921">FTC-921</option>
+                  <option value="ftc_961">FTC-961</option>
+                  <option value="tat_141">TAT-141</option>
+                  <option value="tat_240">TAT-240</option>
+                  <option value="fmc_150">FMC-150</option>
+                  <option value="fmc_650">FMC-650</option>
+                  <option value="fmc_920">FMC-920</option>
+                  <option value="all_can_300">ALL CAN-300</option>
+                  <option value="ecan_02">ECAN-02</option>
+                  <option value="fmb_001">FMB-001</option>
+                  <option value="fmb_003">FMB-003</option>
+                  <option value="fmb_010">FMB-010</option>
+                  <option value="fmb_020">FMB-020</option>
+                  <option value="fmb_110">FMB-110</option>
+                  <option value="fmb_120">FMB-120</option>
+                  <option value="fmb_122">FMB-122</option>
+                  <option value="fmb_125">FMB-125</option>
+                  <option value="fmb_140">FMB-140</option>
+                  <option value="fmb_150">FMB-150</option>
+                  <option value="fmb_202">FMB-202</option>
+                  <option value="fmb_204">FMB-204</option>
+                  <option value="fmb_209">FMB-209</option>
+                  <option value="fmb_225">FMB-225</option>
+                  <option value="fmb_230">FMB-230</option>
+                  <option value="fmb_240">FMB-240</option>
+                  <option value="fmb_641">FMB-641</option>
+                  <option value="fmb_900">FMB-900</option>
+                  <option value="fmb_910">FMB-910</option>
+                  <option value="fmb_930">FMB-930</option>
+                  <option value="fmb_965">FMB-965</option>
+                  <option value="fmc_003">FMC-003</option>
+                  <option value="fmc_125">FMC-125</option>
+                  <option value="fmc_13a">FMC-13A</option>
+                  <option value="fmc_225">FMB-225</option>
+                  <option value="fmc_230">FMC-230</option>
+                  <option value="fmc_800">FMC-800</option>
+                  <option value="fmc_880">FMC-880</option>
+                  <option value="fmm_003">FMM-003</option>
+                  <option value="fmm_00a">FMM-00A</option>
+                  <option value="fmm_125">FMM-125</option>
+                  <option value="fmm_130">FMM-130</option>
+                  <option value="fmm_13a">FMM-13A</option>
+                  <option value="fmm_150">FMM-150</option>
+                  <option value="fmm_230">FMB-230</option>
+                  <option value="fmm_650">FMM-650</option>
+                  <option value="fmm_800">FMM-800</option>
+                  <option value="fmm_80a">FMM-80A</option>
+                  <option value="fmm_880">FMM-880</option>
+                  <option value="fmm_920">FMM-920</option>
+                  <option value="fmt_100">FMT-100</option>
+                  <option value="tat_140">TAT-140</option>
+                  <option value="tft_100">TFT-100</option>
+                </optgroup>
+                <optgroup label="Other Devices">
+                  <option value="gt06n-device">GT06N Protocol Device</option>
+                  <option value="et01">ET01</option>
+                </optgroup>
+              </FSelect>
+            </Field>
+            <Field label="Unit Vendor *">
+              <FSelect value={regForm.vendor} onChange={(v) => setRegForm((f) => ({ ...f, vendor: v }))}>
+                <option value="">— Choose vendor —</option>
+                <option value="concox">Concox</option>
                 <option value="teltonika">Teltonika</option>
-                <option value="wetrack2_gto6">WeTrack2 / GT06</option>
-                <option value="other_gt06">Other GT06</option>
+                <option value="other">GT06N Manufacturer</option>
+                <option value="xirgo_global">Xirgo Global</option>
+                <option value="king sword">King Sword</option>
               </FSelect>
             </Field>
             <Field label="Client *">
