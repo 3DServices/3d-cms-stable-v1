@@ -259,3 +259,12 @@ export function patch<T>(path: string, body: unknown, opts?: RequestOptions) {
 export function del<T>(path: string, body?: unknown, opts?: RequestOptions) {
   return request<T>("DELETE", path, body, opts);
 }
+
+// export function patch<T>(path: string, body: unknown, opts?: RequestOptions) {
+//   return request<T>("PATCH", path, body, opts);
+// }
+
+// export function del<T>(path: string, body?: unknown, opts?: RequestOptions) {
+//   return request<T>("DELETE", path, body, opts);
+// }
+

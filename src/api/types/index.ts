@@ -136,6 +136,8 @@ export type {
   AuditFilters,
 } from "./audit.types";
 
+export type { VebaListingAssetSummary } from "./veba.types";
+
 export type {
   BookingRequestStatus,
   BookingRequest,

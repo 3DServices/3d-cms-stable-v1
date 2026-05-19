@@ -1,13 +1,6 @@
 /**
- * ListOnVebaDrawer — Slide-in drawer for creating a VEBA marketplace
- * listing from an asset in the registry.
- *
- * Phase 1 of the Marketplace Listing feature. Opens from the asset detail
- * blade's "VEBA Listing" card and submits to /veba/listings/create through
- * useGuardedMutation (Slice 3 enforcement: requires can_list_asset_on_marketplace).
- *
- * Visual conventions follow AssetTwinBlade (inline styles, COLORS palette,
- * pill-shaped buttons). Sits above the blade at z-index 100 with a backdrop.
+ * ListOnVebaDrawer — Slide-in drawer for creating a VEBA marketplace listing
+ * from an asset in the registry.
  */
 
 import React, { useState } from "react";
@@ -21,10 +14,7 @@ import type {
   CreateVebaListingRequest,
   ListingVisibility,
   PricingBasis,
-  VebaListing,
 } from "../../../api/types";
-
-// ── Styles ──────────────────────────────────────────────────────────────────
 
 const s = {
   backdrop: {
@@ -64,11 +54,7 @@ const s = {
     marginTop: 12,
   },
   field: { display: "flex", flexDirection: "column" as const, gap: 4 },
-  labelText: {
-    fontSize: 11,
-    color: COLORS.muted,
-    fontWeight: 600,
-  },
+  labelText: { fontSize: 11, color: COLORS.muted, fontWeight: 600 },
   input: {
     padding: "8px 10px",
     fontSize: 13,
@@ -103,27 +89,16 @@ const s = {
   },
 };
 
-// ── Props ───────────────────────────────────────────────────────────────────
-
 interface ListOnVebaDrawerProps {
   asset: Asset;
   open: boolean;
   onClose: () => void;
-  /** Called after the listing is successfully created. */
   onListed?: (listing: { listing_uid: string }) => void;
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
-
-export function ListOnVebaDrawer({
-  asset,
-  open,
-  onClose,
-  onListed,
-}: ListOnVebaDrawerProps) {
+export function ListOnVebaDrawer({ asset, open, onClose, onListed }: ListOnVebaDrawerProps) {
   const { state: authState } = useAuth();
 
-  // ── Form state ──────────────────────────────────────────────────────────
   const [dailyRate, setDailyRate] = useState<string>("");
   const [currency, setCurrency] = useState<string>("UGX");
   const [pricingBasis, setPricingBasis] = useState<PricingBasis>("per_day");
@@ -136,13 +111,11 @@ export function ListOnVebaDrawer({
   const [notes, setNotes] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // ── Mutation (Slice 3) ──────────────────────────────────────────────────
   const listMutation = useGuardedMutation(
     "can_list_asset_on_marketplace",
     (payload: CreateVebaListingRequest) => createVebaListing(payload),
   );
 
-  // ── Reset helper ────────────────────────────────────────────────────────
   const resetForm = () => {
     setDailyRate("");
     setCurrency("UGX");
@@ -163,10 +136,8 @@ export function ListOnVebaDrawer({
     onClose();
   };
 
-  // ── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setValidationError(null);
-
     const dailyRateNum = Number(dailyRate);
     if (!dailyRate || !Number.isFinite(dailyRateNum) || dailyRateNum <= 0) {
       setValidationError("Daily rate must be a positive number.");
@@ -177,16 +148,12 @@ export function ListOnVebaDrawer({
       setValidationError("Hourly rate, if provided, must be positive.");
       return;
     }
-    if (
-      availabilityStart &&
-      availabilityEnd &&
-      availabilityEnd < availabilityStart
-    ) {
+    if (availabilityStart && availabilityEnd && availabilityEnd < availabilityStart) {
       setValidationError("Availability end date must not be before the start date.");
       return;
     }
     if (!authState.accountRoot || !authState.accountUid) {
-      setValidationError("Missing account context — please sign in again.");
+      setValidationError("Missing account context.");
       return;
     }
 
@@ -208,55 +175,39 @@ export function ListOnVebaDrawer({
 
     try {
       const res = await listMutation.mutate(payload);
-      // res is the ApiResponse wrapper — pull the data out for the callback.
       onListed?.({ listing_uid: res.data?.listing_uid ?? "" });
       handleClose();
     } catch {
-      // listMutation.error is already set; the footer renders it.
+      // listMutation.error already set; footer renders it
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────
   if (!open) return null;
 
-  const displayError =
-    validationError ?? (listMutation.error ? listMutation.error.message : null);
+  const displayError = validationError ?? (listMutation.error ? listMutation.error.message : null);
 
   return (
     <>
       <div style={s.backdrop} onClick={handleClose} aria-hidden="true" />
-      <aside
-        style={s.drawer}
-        role="dialog"
-        aria-label="List asset on VEBA marketplace"
-      >
-        {/* Header */}
+      <aside style={s.drawer} role="dialog" aria-label="List asset on VEBA marketplace">
         <div style={s.header}>
           <div>
-            <div style={{ fontWeight: 1000, fontSize: 14 }}>
-              List on VEBA Marketplace
-            </div>
+            <div style={{ fontWeight: 1000, fontSize: 14 }}>List on VEBA Marketplace</div>
             <div style={{ fontSize: 12, color: COLORS.muted }}>
-              {asset.id} • {asset.displayName} • {asset.assetClass}
+              {asset.id} - {asset.displayName} - {asset.assetClass}
             </div>
           </div>
-          <button style={btn} onClick={handleClose} type="button">
-            Close
-          </button>
+          <button style={btn} onClick={handleClose} type="button">Close</button>
         </div>
 
-        {/* Body */}
         <div style={s.body}>
-          {/* Pricing card */}
           <div style={s.card}>
             <SectionTitle title="Pricing" subtitle="Required commercial terms" />
             <div style={s.row2}>
               <label style={s.field}>
                 <span style={s.labelText}>Daily rate *</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
+                  type="number" min="0" step="any"
                   value={dailyRate}
                   onChange={(e) => setDailyRate(e.target.value)}
                   placeholder="e.g. 250000"
@@ -281,9 +232,7 @@ export function ListOnVebaDrawer({
                 <span style={s.labelText}>Pricing basis (primary)</span>
                 <select
                   value={pricingBasis}
-                  onChange={(e) =>
-                    setPricingBasis(e.target.value as PricingBasis)
-                  }
+                  onChange={(e) => setPricingBasis(e.target.value as PricingBasis)}
                   style={s.input}
                   disabled={listMutation.isRunning}
                 >
@@ -296,9 +245,7 @@ export function ListOnVebaDrawer({
               <label style={s.field}>
                 <span style={s.labelText}>Hourly rate (optional)</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
+                  type="number" min="0" step="any"
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
                   placeholder="e.g. 35000"
@@ -309,12 +256,8 @@ export function ListOnVebaDrawer({
             </div>
           </div>
 
-          {/* Availability card */}
           <div style={s.card}>
-            <SectionTitle
-              title="Availability"
-              subtitle="When the asset can be booked"
-            />
+            <SectionTitle title="Availability" subtitle="When the asset can be booked" />
             <div style={s.row2}>
               <label style={s.field}>
                 <span style={s.labelText}>From</span>
@@ -342,20 +285,15 @@ export function ListOnVebaDrawer({
               <input
                 value={geographicScope}
                 onChange={(e) => setGeographicScope(e.target.value)}
-                placeholder='e.g. "Uganda", "Kampala only", "EAC region"'
+                placeholder="e.g. Uganda, Kampala only, EAC region"
                 style={s.input}
                 disabled={listMutation.isRunning}
               />
             </label>
             <label
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginTop: 10,
-                fontSize: 13,
-                color: COLORS.text,
-                cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 8,
+                marginTop: 10, fontSize: 13, color: COLORS.text, cursor: "pointer",
               }}
             >
               <input
@@ -368,47 +306,21 @@ export function ListOnVebaDrawer({
             </label>
           </div>
 
-          {/* Visibility + notes card */}
           <div style={s.card}>
-            <SectionTitle
-              title="Visibility & notes"
-              subtitle="Who can see this listing"
-            />
-            <div
-              style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
+            <SectionTitle title="Visibility & notes" subtitle="Who can see this listing" />
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
                 <input
-                  type="radio"
-                  name="visibility"
-                  value="public"
+                  type="radio" name="visibility" value="public"
                   checked={visibility === "public"}
                   onChange={() => setVisibility("public")}
                   disabled={listMutation.isRunning}
                 />
                 Marketplace public
               </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
                 <input
-                  type="radio"
-                  name="visibility"
-                  value="tenant"
+                  type="radio" name="visibility" value="tenant"
                   checked={visibility === "tenant"}
                   onChange={() => setVisibility("tenant")}
                   disabled={listMutation.isRunning}
@@ -421,20 +333,15 @@ export function ListOnVebaDrawer({
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Condition, certifications, what's included…"
+                placeholder="Condition, certifications, what's included..."
                 rows={3}
-                style={{
-                  ...s.input,
-                  resize: "vertical" as const,
-                  fontFamily: "inherit",
-                }}
+                style={{ ...s.input, resize: "vertical" as const, fontFamily: "inherit" }}
                 disabled={listMutation.isRunning}
               />
             </label>
           </div>
         </div>
 
-        {/* Footer */}
         <div style={s.footer}>
           <div style={s.errorText}>{displayError}</div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -457,7 +364,7 @@ export function ListOnVebaDrawer({
                 cursor: listMutation.isRunning ? "wait" : "pointer",
               }}
             >
-              {listMutation.isRunning ? "Listing…" : "Publish listing"}
+              {listMutation.isRunning ? "Listing..." : "Publish listing"}
             </GuardedButton>
           </div>
         </div>
@@ -465,6 +372,3 @@ export function ListOnVebaDrawer({
     </>
   );
 }
-
-// Allow callers to import the VebaListing type from this file too (for callbacks).
-export type { VebaListing };

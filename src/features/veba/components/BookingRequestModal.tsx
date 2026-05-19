@@ -1,10 +1,6 @@
 /**
  * BookingRequestModal — Center modal for submitting a booking request
- * against a marketplace listing. Phase 3 replaces the Phase 2 stub.
- *
- * The actual approval / rejection workflow stays with the listing owner
- * (existing wizard or future Phase). This modal only creates the request;
- * the rate is captured at submission time as a snapshot on the request.
+ * against a marketplace listing.
  */
 
 import React, { useState } from "react";
@@ -14,16 +10,12 @@ import { useGuardedMutation, GuardedButton } from "../../../auth/guards";
 import { createBookingRequest } from "../../../api/services/veba.service";
 
 interface BookingRequestModalProps {
-  listing: VebaListing | null;          // null => closed
+  listing: VebaListing | null;
   onClose: () => void;
   onSubmitted?: (requestUid: string) => void;
 }
 
-export function BookingRequestModal({
-  listing,
-  onClose,
-  onSubmitted,
-}: BookingRequestModalProps) {
+export function BookingRequestModal({ listing, onClose, onSubmitted }: BookingRequestModalProps) {
   const { state: authState } = useAuth();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -61,10 +53,9 @@ export function BookingRequestModal({
       return;
     }
     if (!authState.accountUid || !authState.accountRoot) {
-      setValidationError("Missing account context — please sign in again.");
+      setValidationError("Missing account context.");
       return;
     }
-
     const payload: CreateBookingRequest = {
       listing_uid:    listing.listing_uid,
       requester_uid:  authState.accountUid,
@@ -73,22 +64,17 @@ export function BookingRequestModal({
       end_date:       endDate,
       notes:          notes.trim() || null,
     };
-
     try {
       const res = await requestMutation.mutate(payload);
       onSubmitted?.(res.data?.request_uid ?? "");
       handleClose();
     } catch {
-      // requestMutation.error is set; the form footer renders it.
+      // requestMutation.error renders in the footer
     }
   };
 
-  const displayError =
-    validationError ??
-    (requestMutation.error ? requestMutation.error.message : null);
-
-  const title =
-    listing.asset_summary?.display_name ?? listing.asset_uid;
+  const displayError = validationError ?? (requestMutation.error ? requestMutation.error.message : null);
+  const title = listing.asset_summary?.display_name ?? listing.asset_uid;
   const rateText = `${listing.currency} ${listing.daily_rate.toLocaleString()} / day`;
 
   return (
@@ -102,20 +88,12 @@ export function BookingRequestModal({
         className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="bg-[#F8F9FA] border-b border-[#E9EDEF] px-4 py-3">
-          <div className="text-[11px] text-[#667781] uppercase tracking-wide">
-            Request booking
-          </div>
-          <div className="font-extrabold text-[14px] text-[#111B21] truncate" title={title}>
-            {title}
-          </div>
-          <div className="text-[12px] text-[#128C7E] font-extrabold mt-0.5">
-            {rateText}
-          </div>
+          <div className="text-[11px] text-[#667781] uppercase tracking-wide">Request booking</div>
+          <div className="font-extrabold text-[14px] text-[#111B21] truncate" title={title}>{title}</div>
+          <div className="text-[12px] text-[#128C7E] font-extrabold mt-0.5">{rateText}</div>
         </div>
 
-        {/* Body */}
         <div className="p-4 flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
@@ -145,18 +123,16 @@ export function BookingRequestModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="Pickup details, deployment context, anything the owner should know…"
+              placeholder="Pickup details, deployment context, anything the owner should know."
               disabled={requestMutation.isRunning}
               className="px-2 py-1.5 text-[13px] border border-[#E9EDEF] rounded-md outline-none focus:border-[#128C7E] resize-y"
             />
           </label>
           <p className="text-[11px] text-[#667781]">
-            The rate above is captured on this request. Future rate changes by the owner
-            won't affect it.
+            The rate above is captured on this request. Future rate changes by the owner will not affect it.
           </p>
         </div>
 
-        {/* Footer */}
         <div className="bg-[#F8F9FA] border-t border-[#E9EDEF] px-4 py-3 flex items-center justify-between gap-3">
           <div className="text-[12px] text-[#B00020] min-h-[1em] flex-1">{displayError}</div>
           <div className="flex gap-2">
@@ -174,7 +150,7 @@ export function BookingRequestModal({
               disabled={requestMutation.isRunning}
               className="px-3 py-1.5 text-[12px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {requestMutation.isRunning ? "Sending…" : "Send request"}
+              {requestMutation.isRunning ? "Sending..." : "Send request"}
             </GuardedButton>
           </div>
         </div>

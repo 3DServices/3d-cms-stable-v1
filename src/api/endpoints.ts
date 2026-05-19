@@ -1,11 +1,5 @@
 /**
  * api/endpoints.ts — Central registry of all API URL paths.
- *
- * Every endpoint in the app is defined here. When a URL changes,
- * update it in one place and every service picks it up.
- *
- * Convention:
- *   DOMAIN.ACTION  →  "/path/to/endpoint"
  */
 
 export const ENDPOINTS = {
@@ -27,31 +21,31 @@ export const ENDPOINTS = {
     VEBA_TOKENS_EXPIRED: "/statistics/veba/tokens/expired",
   },
   BILLING: {
-    CHURN_RATE:       "/billing/subscriptions/churn-rate",
-    EXPIRING:         "/billing/subscriptions/expiring",
+    CHURN_RATE: "/billing/subscriptions/churn-rate",
+    EXPIRING:   "/billing/subscriptions/expiring",
   },
   PAYMENTS: {
-    TRANSACTIONS:     "/payments/transactions",
+    TRANSACTIONS: "/payments/transactions",
   },
   METRICS: {
     SERVER:          "/metrics/server",
     API_PERFORMANCE: "/metrics/api/performance",
   },
   GATEWAYS: {
-    MOBILE_MONEY:     "/gateways/mobile-money",
-    MOBILE_MONEY_BY:  "/gateways/mobile-money",
-    UPDATE:           "/gateways/mobile-money/update",
+    MOBILE_MONEY:    "/gateways/mobile-money",
+    MOBILE_MONEY_BY: "/gateways/mobile-money",
+    UPDATE:          "/gateways/mobile-money/update",
   },
   VEBA: {
-    STATISTICS:          "/veba/statistics",
-    LISTINGS:            "/veba/listings",
-    LISTINGS_CREATE:     "/veba/listings/create",
-    LISTINGS_BY_ASSET:   "/veba/listings/asset",
-    LISTINGS_BY_UID:     "/veba/listings",
-    LISTINGS_UPDATE:     "/veba/listings",
-    LISTINGS_PAUSE:      "/veba/listings",
-    LISTINGS_REACTIVATE: "/veba/listings",
-    LISTINGS_ARCHIVE:    "/veba/listings",
+    STATISTICS:              "/veba/statistics",
+    LISTINGS:                "/veba/listings",
+    LISTINGS_CREATE:         "/veba/listings/create",
+    LISTINGS_BY_ASSET:       "/veba/listings/asset",
+    LISTINGS_BY_UID:         "/veba/listings",
+    LISTINGS_UPDATE:         "/veba/listings",
+    LISTINGS_PAUSE:          "/veba/listings",
+    LISTINGS_REACTIVATE:     "/veba/listings",
+    LISTINGS_ARCHIVE:        "/veba/listings",
     BOOKING_REQUESTS:        "/veba/booking-requests",
     BOOKING_REQUESTS_CREATE: "/veba/booking-requests/create",
   },
@@ -121,40 +115,42 @@ export const ENDPOINTS = {
     STATS_PERM_ROLE_COUNTS:  "/rbac/stats/permission-role-counts",
   },
   AUTH: {
-    LOGIN:          "/users/auth",
-    MFA_VERIFY:     "/auth/mfa/verify",
-    MFA_RESEND:     "/auth/mfa/resend",
-    REFRESH:        "/auth/refresh",
-    LOGOUT:         "/auth/logout",
-    FORGOT_PASSWORD:"/auth/forgot-password",
-    RESET_PASSWORD: "/auth/reset-password",
-    USER_DETAILS:   "/users",
+    LOGIN:           "/users/auth",
+    MFA_VERIFY:      "/auth/mfa/verify",
+    MFA_RESEND:      "/auth/mfa/resend",
+    REFRESH:         "/auth/refresh",
+    LOGOUT:          "/auth/logout",
+    FORGOT_PASSWORD: "/auth/forgot-password",
+    RESET_PASSWORD:  "/auth/reset-password",
+    USER_DETAILS:    "/users",
   },
   USERS: {
-    CREATE: "/users/create",
-    ALL: "/users/all",
+    CREATE:      "/users/create",
+    ALL:         "/users/all",
     ASSIGN_ROLE: "/users",
   },
   FLEET: {
-    LIST_UNITS:       "/system32/devices/configured/all",  // POST {data:{data_level,account_uid}}
-    CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
-    CLIENTS_ALL:      "/clients",                          // GET  append /{primary_uid}/all
-    USER_DETAILS:     "/users",                            // GET  append /{account_uid}/details
-    DEVICE_ACTION:    "/devices/action",                   // POST {data:{action,device_imei}}
-    DEVICE_UPDATE:    "/devices/update/properties",        // POST {data:{device_imei,...props}}
-    DEVICE_CFG_NEW:   "/system32/configurations/new",      // POST full config payload
-    DEVICE_CFG_UPDATE:"/configurations/update",            // POST Teltonika update payload
-    ACTIVE_TXNS:      "/system32/payment/transactions/active", // GET append /{userUid}
-    UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
+    LIST_UNITS:        "/system32/devices/configured/all",
+    CHECK_IMEI:        "/system32/payment/check-imei",
+    CLIENTS_ALL:       "/clients",
+    USER_DETAILS:      "/users",
+    DEVICE_ACTION:     "/devices/action",
+    DEVICE_UPDATE:     "/devices/update/properties",
+    DEVICE_CFG_NEW:    "/system32/configurations/new",
+    DEVICE_CFG_UPDATE: "/configurations/update",
+    ACTIVE_TXNS:       "/system32/payment/transactions/active",
+    UPDATE_IMEI:       "/system32/payment/update-imei",
+    CLIENT_INFO:       "/system32/devices/client-info",
+    AUDIT_LOG:         "/system32/audit/logs",
   },
   AUDIT: {
-    EVENTS:         "/audit/events",
-    KPIS:           "/audit/kpis",
-    HASH_CHAIN:     "/audit/hash-chain",
-    APPROVALS:      "/audit/approvals",
-    APPROVE:        "/audit/approvals",
-    REJECT:         "/audit/approvals",
-    COMPLIANCE:     "/audit/compliance",
-    EXPORT:         "/audit/export",
+    EVENTS:     "/audit/events",
+    KPIS:       "/audit/kpis",
+    HASH_CHAIN: "/audit/hash-chain",
+    APPROVALS:  "/audit/approvals",
+    APPROVE:    "/audit/approvals",
+    REJECT:     "/audit/approvals",
+    COMPLIANCE: "/audit/compliance",
+    EXPORT:     "/audit/export",
   },
 } as const;
