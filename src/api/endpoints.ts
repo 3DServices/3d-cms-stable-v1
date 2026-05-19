@@ -142,16 +142,6 @@ export const ENDPOINTS = {
     UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
     LIST_REGISTERED:  "/devices/all",           // POST {data:{data_level,account_uid}}
     REGISTER_UNIT:    "/devices/create",                   // POST {data:{unit_imei,asset_model,unit_vendor,client}}
-    LIST_UNITS:        "/system32/devices/configured/all",
-    CHECK_IMEI:        "/system32/payment/check-imei",
-    CLIENTS_ALL:       "/clients",
-    USER_DETAILS:      "/users",
-    DEVICE_ACTION:     "/devices/action",
-    DEVICE_UPDATE:     "/devices/update/properties",
-    DEVICE_CFG_NEW:    "/system32/configurations/new",
-    DEVICE_CFG_UPDATE: "/configurations/update",
-    ACTIVE_TXNS:       "/system32/payment/transactions/active",
-    UPDATE_IMEI:       "/system32/payment/update-imei",
     CLIENT_INFO:       "/system32/devices/client-info",
     AUDIT_LOG:         "/system32/audit/logs",
   },
