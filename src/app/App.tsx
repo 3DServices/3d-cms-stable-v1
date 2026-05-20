@@ -7,6 +7,14 @@
  *   2. Map its id to a page element in src/app/moduleRoutes.tsx
  * Its route, permission gate, and (optionally) nav entry are then derived
  * automatically — no edits to App.tsx are required.
+ *
+ * Authentication gate:
+ *   The `AuthGate` component checks auth state and renders either:
+ *     - The full app shell (TopBar, NavRail, Sidebar, Routes) when authenticated
+ *     - Just the Aegis landing page (which contains the Airlock login modal)
+ *       when NOT authenticated
+ *   This prevents unauthenticated users from seeing the protected navigation
+ *   or app shell — even briefly.
  */
 import { Routes, Route } from "react-router-dom";
 import { useSessionMonitor } from "../hooks/useSessionMonitor";
@@ -18,7 +26,7 @@ import { NavRail }     from "../components/navigation";
 import { Sidebar }     from "../components/navigation";
 
 // ── Auth context ─────────────────────────────────────────────────────────────
-import { AuthProvider } from "../auth/AuthContext";
+import { AuthProvider, useAuth } from "../auth/AuthContext";
 import { PermissionsProvider } from "../auth/PermissionsContext";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
 
@@ -33,12 +41,23 @@ import { NotFoundPage } from "./NotFoundPage";
 import { RoleCreatorPage } from "../features/rbac";
 
 
-export default function App() {
-  useSessionMonitor();
+// ── Auth gate — renders login or app shell based on auth state ───────────────
 
+function AuthGate() {
+  useSessionMonitor();
+  const { state } = useAuth();
+
+  // Not authenticated → show only the landing page (which has the Airlock login modal)
+  if (state.status !== "authenticated") {
+    return (
+      <div className="h-dvh flex flex-col bg-[#F0F2F5] overflow-hidden w-full">
+        <AegisDashboardPage />
+      </div>
+    );
+  }
+
+  // Authenticated → full app shell
   return (
-    <AuthProvider>
-    <PermissionsProvider>
     <div className="h-dvh flex flex-col bg-[#F0F2F5] overflow-hidden w-full">
       <TopBar />
       <StatusStrip />
@@ -81,6 +100,15 @@ export default function App() {
         Kafka lag 4.8s • Redis p95 3ms • Cassandra p95 27ms • SSE clients 2.1k • Uptime 99.82%
       </footer>
     </div>
+  );
+}
+
+
+export default function App() {
+  return (
+    <AuthProvider>
+    <PermissionsProvider>
+      <AuthGate />
     </PermissionsProvider>
     </AuthProvider>
   );

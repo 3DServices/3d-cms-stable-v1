@@ -4,7 +4,7 @@
  * Synchronized with AuthContext:
  *   - Fetches permissions when auth status becomes "authenticated"
  *   - Clears permissions on logout
- *   - Falls back to reading _nvxs_account_uid cookie for backward compat
+ *   - Uses accountUid from AuthContext only (no cookie fallback)
  *
  * Exposes:
  *   - permissions: string[]        — list of permission names (e.g. "audit.view")
@@ -26,7 +26,6 @@ import React, {
 } from "react";
 import { getUserPermissions } from "../api/services/rbac.service";
 import { useAuth } from "./AuthContext";
-import { getCookie } from "../utils/cookies";
 import { legacyAliasMemo } from "./permissionAliases";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
@@ -55,8 +54,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchPermissions = useCallback(async () => {
-    const accountUid =
-      authState.accountUid || getCookie("_nvxs_account_uid");
+    const accountUid = authState.accountUid;
 
     if (!accountUid) {
       setPermissions([]);
@@ -90,14 +88,6 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [authState.status, fetchPermissions]);
-
-  useEffect(() => {
-    const accountUid = getCookie("_nvxs_account_uid");
-    if (accountUid && authState.status === "logged_out") {
-      fetchPermissions();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Build a Set for O(1) lookup; rebuilt only when the underlying list changes.
   const permissionSet = useMemo(() => new Set(permissions), [permissions]);

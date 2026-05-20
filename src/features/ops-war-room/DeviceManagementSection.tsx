@@ -5,9 +5,9 @@
  * Ported from devices.qt.php — adapts auth + base-URL to project standards.
  */
 import React, { useState, useEffect, useCallback } from "react";
-import { getCookie }          from "../../utils/cookies";
 import { getStoredAuthToken } from "../../api/client";
 import { ENDPOINTS }          from "../../api/endpoints";
+import { useAuth }            from "../../auth/AuthContext";
 
 // ─── Fleet API base ───────────────────────────────────────────────────────────
 const FLEET_API    = (import.meta.env.VITE_FLEET_API_URL as string) ?? "https://api.fort-track.online";
@@ -509,6 +509,8 @@ function PInfo({ label, value, mono }: { label: string; value: string; mono?: bo
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function DeviceManagementSection() {
+  const { state: authState } = useAuth();
+
   // ── Data state ──────────────────────────────────────────────────────────────
   const [devices,       setDevices]       = useState<Device[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -590,7 +592,7 @@ export function DeviceManagementSection() {
 
   // ── API helpers ──────────────────────────────────────────────────────────────
   async function loadClients() {
-    const primary = getCookie("_nvxs_account_root") || getCookie("_nvxs_account_uid") || "";
+    const primary = authState.accountRoot || authState.accountUid || "";
     if (!primary) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -603,7 +605,7 @@ export function DeviceManagementSection() {
   }
 
   async function loadTransactions(): Promise<Transaction[]> {
-    const uid = getCookie("_nvxs_account_root") || getCookie("_nvxs_account_uid") || "";
+    const uid = authState.accountRoot || authState.accountUid || "";
     if (!uid) return [];
     setTxLoading(true);
     try {
@@ -681,10 +683,10 @@ export function DeviceManagementSection() {
   }
 
   async function loadRegisteredDevices() {
-    const type = getCookie("_nvxs_account_type") ?? "client";
+    const type = authState.accountType || "client";
     const uid  = type.toLowerCase() === "client"
-      ? (getCookie("_nvxs_account_root") ?? getCookie("_nvxs_account_uid") ?? "")
-      : (getCookie("_nvxs_account_uid") ?? "");
+      ? (authState.accountRoot || authState.accountUid || "")
+      : (authState.accountUid || "");
     if (!uid) { setRegLoading(false); return; }
     setRegLoading(true); setRegLoadErr(null);
     try {
@@ -710,28 +712,28 @@ export function DeviceManagementSection() {
   }
 
   function reload() {
-    const type = getCookie("_nvxs_account_type") ?? "client";
+    const type = authState.accountType || "client";
     const uid  = type.toLowerCase() === "client"
-      ? (getCookie("_nvxs_account_root") ?? getCookie("_nvxs_account_uid") ?? "")
-      : (getCookie("_nvxs_account_uid") ?? "");
+      ? (authState.accountRoot || authState.accountUid || "")
+      : (authState.accountUid || "");
     loadDevices(type, uid);
   }
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const type = getCookie("_nvxs_account_type") ?? "client";
-    const role = (getCookie("_nvxs_account_role") ?? "").toLowerCase();
+    const type = authState.accountType || "client";
+    const role = (authState.role || "").toLowerCase();
     const inhouse   = type.toLowerCase() === "inhouse";
     const clientAdm = type.toLowerCase() === "client" && role === "admin";
     setIsInhouse(inhouse);
     setIsClientAdmin(clientAdm);
     setCanManage(inhouse || clientAdm);
     const uid = type.toLowerCase() === "client"
-      ? (getCookie("_nvxs_account_root") ?? getCookie("_nvxs_account_uid") ?? "")
-      : (getCookie("_nvxs_account_uid") ?? "");
+      ? (authState.accountRoot || authState.accountUid || "")
+      : (authState.accountUid || "");
     if (!uid) { setLoadErr("Missing session — please log in."); setLoading(false); return; }
     Promise.all([loadClients(), loadDevices(type, uid), loadRegisteredDevices()]);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authState.accountUid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Configured devices — filtered + paginated ────────────────────────────────
   const q          = search.trim().toLowerCase();
@@ -835,7 +837,7 @@ export function DeviceManagementSection() {
     if (!adForm.name)                             { setAdForm((f) => ({ ...f, status: "Device name is required." })); return; }
     if (!adForm.paymentUid)                       { setAdForm((f) => ({ ...f, status: "Select a transaction payment." })); return; }
     setAdSaving(true);
-    const cfgUsr = getCookie("_nvxs_account_uid") ?? "";
+    const cfgUsr = authState.accountUid || "";
     const mvs = adCalib.map((e) => e.mv || "");
     const vls = adCalib.map((e) => e.vl || "");
     const payload = buildNewConfigPayload(
