@@ -12,9 +12,12 @@ import React, { useState } from "react";
 import { MarketplaceBrowse } from "./components/MarketplaceBrowse";
 import { MyListings } from "./components/MyListings";
 import { BookingRequestModal } from "./components/BookingRequestModal";
+import { IncomingBookingRequests } from "./components/IncomingBookingRequests";
+import { MyBookings } from "./components/MyBookings";
 import type { VebaListing } from "../../api/types";
+import { usePermissions } from "../../auth/PermissionsContext";
 
-type VebaTab = "marketplace" | "my-listings" | "ops";
+type VebaTab = "marketplace" | "my-listings" | "booking-requests" | "my-bookings" | "ops";
 
 // ─── Status dots ─────────────────────────────────────────────────────────────
 const sDot: Record<string, string> = {
@@ -86,6 +89,12 @@ const BLADE_TABS = ["Overview","Payments","Telemetry Proof","Audit"];
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function VebaPage() {
+  const { hasPermission } = usePermissions();
+  const canBrowse        = hasPermission("can_browse_asset_listings");
+  const canManageEscrow  = hasPermission("can_manage_escrow_payment");
+  const canApproveBooking = hasPermission("can_approve_booking");
+  const canReleaseEscrow = hasPermission("can_release_escrow_funds");
+
   const [bladeOpen, setBladeOpen] = useState(false);
   const [bladeTab, setBladeTab] = useState("Overview");
   const [modalOpen, setModalOpen] = useState(false);
@@ -145,6 +154,30 @@ export function VebaPage() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab("booking-requests")}
+              className={[
+                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
+                activeTab === "booking-requests"
+                  ? "bg-[#128C7E] text-white"
+                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
+              ].join(" ")}
+            >
+              Booking Requests
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("my-bookings")}
+              className={[
+                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
+                activeTab === "my-bookings"
+                  ? "bg-[#128C7E] text-white"
+                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
+              ].join(" ")}
+            >
+              My Bookings
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab("ops")}
               className={[
                 "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
@@ -164,6 +197,12 @@ export function VebaPage() {
 
           {/* ── My Listings tab ─────────────────────────────────────────── */}
           {activeTab === "my-listings" && <MyListings />}
+
+          {/* ── Booking Requests tab (owner incoming) ──────────────────── */}
+          {activeTab === "booking-requests" && <IncomingBookingRequests />}
+
+          {/* ── My Bookings tab (requester outgoing) ───────────────────── */}
+          {activeTab === "my-bookings" && <MyBookings />}
 
           {/* ── Phase 3 booking-request modal (renders only when set) ──── */}
           <BookingRequestModal
@@ -296,8 +335,8 @@ export function VebaPage() {
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1.5 justify-center whitespace-nowrap">
                         <button onClick={() => { setBladeOpen(true); setBladeTab("Overview"); }} className="h-6 px-2.5 rounded-md bg-[#128C7E] text-white text-[10px] font-black border-none cursor-pointer">Review</button>
-                        <button className="h-6 px-2.5 rounded-md bg-white border border-[#E9EDEF] text-[#111B21] text-[10px] font-black cursor-pointer">Hold</button>
-                        <button onClick={() => setModalOpen(true)} className="h-6 px-2.5 rounded-md bg-white border border-[#EF4444] text-[#EF4444] text-[10px] font-black cursor-pointer">Refund</button>
+                        {canManageEscrow && <button className="h-6 px-2.5 rounded-md bg-white border border-[#E9EDEF] text-[#111B21] text-[10px] font-black cursor-pointer">Hold</button>}
+                        {canManageEscrow && <button onClick={() => setModalOpen(true)} className="h-6 px-2.5 rounded-md bg-white border border-[#EF4444] text-[#EF4444] text-[10px] font-black cursor-pointer">Refund</button>}
                       </div>
                     </td>
                   </tr>
@@ -441,18 +480,27 @@ export function VebaPage() {
 
                 <BSection title="Actions (HITL/HIC)">
                   <div className="p-4 flex flex-col gap-2.5">
-                    <div className="flex items-center gap-3">
-                      <button className="h-9 px-4 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer flex-1">Approve Payout</button>
-                      <span className="text-[11px] text-[#667781]">☐ HITL</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button className="h-9 px-4 rounded-lg bg-white border border-[#E9EDEF] text-[#111B21] text-[12px] font-black cursor-pointer flex-1">Hold + Open Case</button>
-                      <span className="text-[11px] text-[#667781]">Logs audit</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setModalOpen(true)} className="h-9 px-4 rounded-lg bg-[#EF4444] text-white text-[12px] font-black border-none cursor-pointer flex-1">Refund</button>
-                      <span className="text-[11px] text-[#667781]">☐ HITL + 2FA</span>
-                    </div>
+                    {canReleaseEscrow && (
+                      <div className="flex items-center gap-3">
+                        <button className="h-9 px-4 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer flex-1">Approve Payout</button>
+                        <span className="text-[11px] text-[#667781]">☐ HITL</span>
+                      </div>
+                    )}
+                    {canManageEscrow && (
+                      <div className="flex items-center gap-3">
+                        <button className="h-9 px-4 rounded-lg bg-white border border-[#E9EDEF] text-[#111B21] text-[12px] font-black cursor-pointer flex-1">Hold + Open Case</button>
+                        <span className="text-[11px] text-[#667781]">Logs audit</span>
+                      </div>
+                    )}
+                    {canManageEscrow && (
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => setModalOpen(true)} className="h-9 px-4 rounded-lg bg-[#EF4444] text-white text-[12px] font-black border-none cursor-pointer flex-1">Refund</button>
+                        <span className="text-[11px] text-[#667781]">☐ HITL + 2FA</span>
+                      </div>
+                    )}
+                    {!canReleaseEscrow && !canManageEscrow && (
+                      <div className="text-[12px] text-[#667781]">No actions available for your role.</div>
+                    )}
                   </div>
                 </BSection>
 

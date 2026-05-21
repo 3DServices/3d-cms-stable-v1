@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../../auth/AuthContext";
 import { useGuardedMutation, GuardedButton } from "../../../auth/guards";
 import type { VebaListing, ListingStatus } from "../../../api/types";
+import { EditListingDrawer } from "./EditListingDrawer";
 
 const STATUS_STYLES: Record<ListingStatus, { bg: string; fg: string; label: string }> = {
   active:   { bg: "#E9F7F4", fg: "#075E54", label: "Active" },
@@ -46,6 +47,7 @@ export function MyListings() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [pendingUid, setPendingUid] = useState<string | null>(null);
+  const [editingListing, setEditingListing] = useState<VebaListing | null>(null);
 
   const fetchListings = useCallback(async () => {
     if (!authState.accountRoot) {
@@ -173,6 +175,16 @@ export function MyListings() {
                   <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1.5 justify-end">
+                      {l.status !== "archived" && (
+                        <GuardedButton
+                          permission="can_edit_asset_listing"
+                          onClick={() => setEditingListing(l)}
+                          disabled={isPending}
+                          className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#E9EDEF] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Edit
+                        </GuardedButton>
+                      )}
                       {l.status === "active" && (
                         <GuardedButton
                           permission="can_edit_asset_listing"
@@ -211,6 +223,15 @@ export function MyListings() {
           </tbody>
         </table>
       </div>
+
+      {editingListing && (
+        <EditListingDrawer
+          listing={editingListing}
+          open={!!editingListing}
+          onClose={() => setEditingListing(null)}
+          onUpdated={fetchListings}
+        />
+      )}
     </div>
   );
 }

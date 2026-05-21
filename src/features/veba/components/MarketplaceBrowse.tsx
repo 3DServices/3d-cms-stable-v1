@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getVebaListings } from "../../../api/services/veba.service";
 import { useAuth } from "../../../auth/AuthContext";
+import { usePermissions } from "../../../auth/PermissionsContext";
 import type { VebaListing } from "../../../api/types";
 import { ListingCard } from "./ListingCard";
 
@@ -57,6 +58,9 @@ interface MarketplaceBrowseProps {
 
 export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps = {}) {
   const { state: authState } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canBrowse = hasPermission("can_browse_asset_listings");
+
   const [listings, setListings] = useState<VebaListing[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -64,7 +68,7 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
   const [stubFor, setStubFor]   = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authState.accountRoot) {
+    if (!authState.accountRoot || !canBrowse) {
       setListings([]);
       setLoading(false);
       return;
@@ -81,7 +85,16 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [authState.accountRoot]);
+  }, [authState.accountRoot, canBrowse]);
+
+  if (!canBrowse) {
+    return (
+      <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
+        <div className="text-[14px] font-extrabold text-[#111B21] mb-1">Access restricted</div>
+        <p className="text-[12px] text-[#667781]">You do not have permission to browse marketplace listings. Contact your administrator to request access.</p>
+      </div>
+    );
+  }
 
   const visible = useMemo(() => applyFilters(listings, filters), [listings, filters]);
   const assetClasses = useMemo(() => collectAssetClasses(listings), [listings]);

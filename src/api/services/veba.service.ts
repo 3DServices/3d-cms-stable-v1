@@ -68,6 +68,62 @@ export function archiveVebaListing(
   return put<string>(`${ENDPOINTS.VEBA.LISTINGS_ARCHIVE}/${listingUid}/archive`, { data: { updated_by: updatedBy } }, opts);
 }
 
+export function updateVebaListing(
+  listingUid: string,
+  fields: Record<string, unknown>,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ listing_uid: string }>> {
+  return put<{ listing_uid: string }>(
+    `${ENDPOINTS.VEBA.LISTINGS_UPDATE}/${listingUid}/update`,
+    { data: fields },
+    opts,
+  );
+}
+
+export function approveBookingRequest(
+  requestUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ request_uid: string; status: string }>> {
+  return put<{ request_uid: string; status: string }>(
+    `${ENDPOINTS.VEBA.BOOKING_REQUESTS}/${requestUid}/approve`,
+    { data: {} },
+    opts,
+  );
+}
+
+export function rejectBookingRequest(
+  requestUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ request_uid: string; status: string }>> {
+  return put<{ request_uid: string; status: string }>(
+    `${ENDPOINTS.VEBA.BOOKING_REQUESTS}/${requestUid}/reject`,
+    { data: {} },
+    opts,
+  );
+}
+
+export function cancelBookingRequest(
+  requestUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ request_uid: string; status: string }>> {
+  return put<{ request_uid: string; status: string }>(
+    `${ENDPOINTS.VEBA.BOOKING_REQUESTS}/${requestUid}/cancel`,
+    { data: {} },
+    opts,
+  );
+}
+
+export function fulfillBookingRequest(
+  requestUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ request_uid: string; status: string }>> {
+  return put<{ request_uid: string; status: string }>(
+    `${ENDPOINTS.VEBA.BOOKING_REQUESTS}/${requestUid}/fulfill`,
+    { data: {} },
+    opts,
+  );
+}
+
 export function createBookingRequest(
   payload: CreateBookingRequest, opts?: RequestOptions,
 ): Promise<ApiResponse<CreateBookingRequestResponse>> {
