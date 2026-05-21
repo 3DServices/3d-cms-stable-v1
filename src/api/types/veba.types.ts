@@ -60,6 +60,7 @@ export interface CreateVebaListingRequest {
   operator_included:   boolean;
   notes?:              string | null;
   visibility:          ListingVisibility;
+  asset_summary?:      Partial<VebaListingAssetSummary>;
 }
 
 export interface CreateVebaListingResponse {

@@ -17,6 +17,7 @@ import { useAuth } from "../../../auth/AuthContext";
 import { useGuardedMutation, GuardedButton } from "../../../auth/guards";
 import type { VebaListing, ListingStatus } from "../../../api/types";
 import { EditListingDrawer } from "./EditListingDrawer";
+import { CreateListingDrawer } from "./CreateListingDrawer";
 
 const STATUS_STYLES: Record<ListingStatus, { bg: string; fg: string; label: string }> = {
   active:   { bg: "#E9F7F4", fg: "#075E54", label: "Active" },
@@ -48,6 +49,7 @@ export function MyListings() {
   const [error, setError]       = useState<string | null>(null);
   const [pendingUid, setPendingUid] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<VebaListing | null>(null);
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
 
   const fetchListings = useCallback(async () => {
     if (!authState.accountRoot) {
@@ -115,10 +117,24 @@ export function MyListings() {
 
   if (listings.length === 0) {
     return (
-      <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
-        <div className="text-[16px] font-extrabold text-[#111B21] mb-1">You have not listed anything yet</div>
-        <p className="text-[12px] text-[#667781]">Open the Asset Digital Twin and click "List on VEBA" on any idle asset.</p>
-      </div>
+      <>
+        <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
+          <div className="text-[16px] font-extrabold text-[#111B21] mb-1">You have not listed anything yet</div>
+          <p className="text-[12px] text-[#667781] mb-3">List an idle vehicle or equipment on the VEBA marketplace to start earning.</p>
+          <GuardedButton
+            permission="can_list_asset_on_marketplace"
+            onClick={() => setCreateDrawerOpen(true)}
+            className="px-3 py-1.5 text-[11px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] border-0 cursor-pointer"
+          >
+            + New Listing
+          </GuardedButton>
+        </div>
+        <CreateListingDrawer
+          open={createDrawerOpen}
+          onClose={() => setCreateDrawerOpen(false)}
+          onCreated={fetchListings}
+        />
+      </>
     );
   }
 
@@ -131,13 +147,22 @@ export function MyListings() {
             {listings.length} listing{listings.length === 1 ? "" : "s"} for this tenant
           </p>
         </div>
-        <button
-          type="button"
-          onClick={fetchListings}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-[#E9EDEF] bg-white text-[#111B21] hover:bg-[#F0F2F5] cursor-pointer"
-        >
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={fetchListings}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-[#E9EDEF] bg-white text-[#111B21] hover:bg-[#F0F2F5] cursor-pointer"
+          >
+            Refresh
+          </button>
+          <GuardedButton
+            permission="can_list_asset_on_marketplace"
+            onClick={() => setCreateDrawerOpen(true)}
+            className="px-3 py-1 text-[11px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] border-0 cursor-pointer"
+          >
+            + New Listing
+          </GuardedButton>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -232,6 +257,12 @@ export function MyListings() {
           onUpdated={fetchListings}
         />
       )}
+
+      <CreateListingDrawer
+        open={createDrawerOpen}
+        onClose={() => setCreateDrawerOpen(false)}
+        onCreated={fetchListings}
+      />
     </div>
   );
 }
