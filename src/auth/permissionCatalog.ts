@@ -298,6 +298,23 @@ export const PERMISSION_CATALOG = {
     "can_configure_eshop_integration", "can_manage_eshop_returns", "can_view_eshop_recommendations",
     "can_create_solution_bundle",
   ],
+  "NOC & Network Operations": [
+    "can_view_noc_dashboard", "can_view_system_kpis", "can_view_server_metrics",
+    "can_view_gateway_status", "can_view_gateway_history", "can_retry_gateway_webhooks",
+    "can_view_veba_statistics", "can_view_task_manager", "can_end_server_task",
+    "can_view_hitl_queue", "can_approve_hitl_action", "can_reject_hitl_action",
+    "can_simulate_hitl_action", "can_trigger_hic_override", "can_view_hitl_runbook",
+    "can_mute_ai_alerts", "can_chat_with_waswa", "can_export_noc_report",
+  ],
+  "Ops War Room & Device Management": [
+    "can_view_ops_dashboard", "can_view_device_table", "can_add_device",
+    "can_edit_device_properties", "can_edit_device_configs", "can_delete_device",
+    "can_register_unit", "can_renew_device_payment", "can_assign_device_client",
+    "can_view_device_details", "can_view_ops_alarms", "can_acknowledge_ops_alarm",
+    "can_view_ops_gateways", "can_rerun_ops_webhooks", "can_view_token_burn_chart",
+    "can_set_token_cap", "can_view_ops_brief", "can_approve_ops_recommendation",
+    "can_reject_ops_recommendation", "can_export_ops_brief", "can_send_ops_brief_whatsapp",
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 // ── Derived types ────────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ import React, {
 } from "react";
 import { getUserPermissions } from "../api/services/rbac.service";
 import { useAuth } from "./AuthContext";
-import { legacyAliasMemo } from "./permissionAliases";
+import { legacyAliasMemo, catalogAliasesMemo } from "./permissionAliases";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
 
@@ -93,16 +93,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const permissionSet = useMemo(() => new Set(permissions), [permissions]);
 
   /**
-   * Returns true if the user is granted `permission`, checking both the
-   * literal key and its legacy `module.action` alias (Slice 3). A user with
-   * `rbac.create` therefore also satisfies `can_create_user`, and vice-versa.
+   * Returns true if the user is granted `permission`, checking:
+   *   1. Literal key match
+   *   2. Forward alias: can_* → module.action (legacy backend)
+   *   3. Reverse alias: module.action → can_* (future backend with catalog keys)
+   *
+   * A user with `rbac.create` satisfies `can_create_user`, and vice-versa.
    */
   const hasPermission = useCallback(
     (permission: string): boolean => {
       if (BYPASS_ROLES.includes(role)) return true;
+      // 1. Literal match
       if (permissionSet.has(permission)) return true;
+      // 2. Forward: can_* → module.action
       const alias = legacyAliasMemo(permission);
       if (alias && permissionSet.has(alias)) return true;
+      // 3. Reverse: module.action → can_* (any match suffices)
+      const reverseAliases = catalogAliasesMemo(permission);
+      for (const ra of reverseAliases) {
+        if (permissionSet.has(ra)) return true;
+      }
       return false;
     },
     [permissionSet, role],
@@ -115,6 +125,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         if (permissionSet.has(p)) return true;
         const alias = legacyAliasMemo(p);
         if (alias && permissionSet.has(alias)) return true;
+        const reverseAliases = catalogAliasesMemo(p);
+        for (const ra of reverseAliases) {
+          if (permissionSet.has(ra)) return true;
+        }
       }
       return false;
     },

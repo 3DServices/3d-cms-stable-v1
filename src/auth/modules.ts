@@ -95,6 +95,7 @@ const BUILT_MODULES: ModuleDef[] = [
     group: "core",
     showInNavRail: true,
     showInSidebar: true,
+    catalogModuleName: "NOC & Network Operations",
   },
   {
     id: "ops",
@@ -106,6 +107,7 @@ const BUILT_MODULES: ModuleDef[] = [
     group: "core",
     showInNavRail: true,
     showInSidebar: true,
+    catalogModuleName: "Ops War Room & Device Management",
   },
   {
     id: "gatehouse",
