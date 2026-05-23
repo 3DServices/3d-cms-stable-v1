@@ -318,10 +318,27 @@ export function RoleCreatorPage() {
       </div>
 
       {/* ── Sticky footer ─────────────────────────────────────────────── */}
-      <footer className="bg-white border-t border-[#E9EDEF] px-4 py-3 flex items-center justify-between gap-3 shrink-0">
-        <div className="text-[12px] text-[#B00020] min-h-[1em]">
-          {error}
-        </div>
+      <footer className="bg-white border-t border-[#E9EDEF] px-4 py-3 flex items-end justify-between gap-3 shrink-0">
+        {/* Error region: empty when no error; styled banner when present.
+            Handles both single-line validation messages and multi-line
+            backend error details (e.g. unknown-permissions lists). */}
+        {error ? (
+          <div className="flex-1 min-w-0 max-w-[60ch] flex items-start gap-2 px-3 py-2 rounded-md bg-[#FFF5F5] border border-[#FFD6D6]">
+            <span className="text-[12px] font-extrabold text-[#B00020] shrink-0">!</span>
+            <div className="text-[12px] text-[#B00020] leading-snug whitespace-pre-wrap break-words">
+              {error}
+              {error.toLowerCase().startsWith("unknown permissions") && (
+                <div className="text-[11px] text-[#7A1320] mt-1 font-medium">
+                  The backend doesn't recognise these permission keys. The catalog
+                  seed migration may not have run yet — see
+                  <code className="mx-1 px-1 bg-white rounded">scripts/run_migrations.py</code>.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-[1em]" />
+        )}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -348,4 +365,3 @@ export function RoleCreatorPage() {
     </main>
   );
 }
-       

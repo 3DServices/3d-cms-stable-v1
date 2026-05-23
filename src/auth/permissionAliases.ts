@@ -15,8 +15,13 @@
  * coverage; only new action verbs need to be added to ACTION_VERB_MAP.
  */
 
-import { PERMISSION_TO_MODULE, type CatalogModuleName } from "./permissionCatalog";
+import {
+  PERMISSION_TO_MODULE,
+  PERMISSION_CATALOG,
+  type CatalogModuleName,
+} from "./permissionCatalog";
 import { MODULES } from "./modules";
+
 
 // ── Catalog module name → app module id ──────────────────────────────────────
 //
@@ -148,5 +153,52 @@ export function legacyAliasMemo(permissionKey: string): string | null {
   if (aliasCache.has(permissionKey)) return aliasCache.get(permissionKey)!;
   const v = legacyAlias(permissionKey);
   aliasCache.set(permissionKey, v);
+  return v;
+}
+
+// ── Reverse resolution: legacy → can_* ──────────────────────────────────────
+//
+// Build a reverse map from legacy `module.action` → array of `can_*` keys.
+// When a caller checks `hasPermission("rbac.create")` but the user's backend
+// set contains `can_create_user`, this reverse lookup bridges the gap.
+
+const LEGACY_TO_CATALOG: ReadonlyMap<string, readonly string[]> = (() => {
+  const m = new Map<string, string[]>();
+  for (const [catalogModule, perms] of
+    Object.entries(PERMISSION_CATALOG) as [CatalogModuleName, readonly string[]][]) {
+    const appModuleId = CATALOG_TO_APP_MODULE.get(catalogModule);
+    if (!appModuleId) continue;
+
+    for (const perm of perms) {
+      const rest = perm.slice(4); // strip "can_"
+      const firstWord = rest.split("_")[0];
+      const action = ACTION_VERB_MAP[firstWord];
+      if (!action) continue;
+
+      const legacyKey = `${appModuleId}.${action}`;
+      if (!m.has(legacyKey)) m.set(legacyKey, []);
+      m.get(legacyKey)!.push(perm);
+    }
+  }
+  return m;
+})();
+
+/**
+ * Given a legacy `<moduleId>.<action>` permission key, return the matching
+ * `can_*` catalog keys, or an empty array if none resolve.
+ *
+ * Examples:
+ *   catalogAliases("rbac.create")   // → ["can_create_user", "can_invite_user", ...]
+ *   catalogAliases("can_create_user") // → []  (not a legacy key)
+ */
+export function catalogAliases(legacyKey: string): readonly string[] {
+  return LEGACY_TO_CATALOG.get(legacyKey) ?? [];
+}
+
+const reverseCacheMap = new Map<string, readonly string[]>();
+export function catalogAliasesMemo(legacyKey: string): readonly string[] {
+  if (reverseCacheMap.has(legacyKey)) return reverseCacheMap.get(legacyKey)!;
+  const v = catalogAliases(legacyKey);
+  reverseCacheMap.set(legacyKey, v);
   return v;
 }
