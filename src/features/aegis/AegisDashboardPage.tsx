@@ -558,31 +558,19 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
         {/* Card header */}
         <div className="px-6 pt-5 pb-4">
           <div className="font-black text-[18px] text-[#111B21]">
-            Airlock: Login &amp; Authentication
+            3D SERVICES: Login &amp; Authentication
           </div>
           <div className="text-[12px] text-[#667781] mt-1">
-            System Admin access • MFA enforced • Irrefutable audit trail
+            Please Enter Your Credentials to Access the System
           </div>
         </div>
 
         <div className="px-6 pb-6 flex flex-col gap-4">
-          {/* Tenant context row */}
-          <div className="bg-[#F8F9FA] border border-[#E9EDEF] rounded-xl px-4 py-3 flex items-center justify-between">
-            <div>
-              <div className="text-[11px] text-[#667781]">Tenant context</div>
-              <div className="font-extrabold text-[13px] text-[#111B21] mt-0.5">
-                {state.tenant} ▾
-              </div>
-            </div>
-            <span className="text-[11px] font-extrabold bg-[#128C7E] text-white px-3 py-1 rounded-full">
-              RBAC: {state.role}
-            </span>
-          </div>
 
           {/* Step 1: credentials */}
           {state.status === "logged_out" && (
             <>
-              <AirlockField label="Email / Username">
+              <AirlockField label="Enter Username">
                 <AirlockInput
                   type="email"
                   value={email}
@@ -592,7 +580,7 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
                 />
               </AirlockField>
 
-              <AirlockField label="Password">
+              <AirlockField label="Enter Password">
                 <AirlockInput
                   type="password"
                   value={password}

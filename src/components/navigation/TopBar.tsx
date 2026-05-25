@@ -23,7 +23,7 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  brandName         = "OLIWA",
+  brandName         = "3D SERVICES",
   pageTitle         = "TRACKING CONSOLE",
   searchPlaceholder = "Search tenants, units, tokens, incidents…",
 }: TopBarProps) {
