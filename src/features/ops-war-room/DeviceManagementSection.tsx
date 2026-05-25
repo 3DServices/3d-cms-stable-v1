@@ -5,15 +5,13 @@
  * Ported from devices.qt.php — adapts auth + base-URL to project standards.
  */
 import React, { useState, useEffect, useCallback } from "react";
+import { getCookie }          from "../../utils/cookies";
 import { getStoredAuthToken } from "../../api/client";
 import { ENDPOINTS }          from "../../api/endpoints";
-import { useAuth }            from "../../auth/AuthContext";
-import { usePermissions }     from "../../auth/PermissionsContext";
 
 // ─── Fleet API base ───────────────────────────────────────────────────────────
-const FLEET_API    = (import.meta.env.VITE_FLEET_API_URL as string) ?? "https://api.fort-track.online";
-const PAGE_SIZE    = 25;
-const REG_PAGE_SIZE = 10;
+const FLEET_API = (import.meta.env.VITE_FLEET_API_URL as string) ?? "https://api.fort-track.online";
+const PAGE_SIZE  = 25;
 
 const CAR_TYPES = [
   "Car","Truck","Person","Motorcycle","CyberTruck","Animal","Gas_Station_Dispensor",
@@ -78,39 +76,6 @@ const FORMULA_KEYS: Partial<Record<TeltoKey, string>> = {
   custom_input4:       "custom_input4_formular",
 };
 
-// ─── Xirgo Global parameter list ─────────────────────────────────────────────
-const XIRGO_PARAMS = [
-  "regtime","sats","speed","course","altitude","lon","lat",
-  "avl_driver","adc2","adc6","adc12","adc16","cell_id","engine_hours",
-  "f0","f100","f102","f103",
-  "lls_lvl_add1","lls_lvl_add2","lls_lvl_add3","lls_lvl_add4",
-  "lls_temp_add1","lls_temp_add2","lls_temp_add3","lls_temp_add4",
-  "can_taho","dallas_id_end","dallas_id_end_hex","dallas_id_end_hex_raw",
-  "engine_temp","mcc","mnc","odo","ta",
-];
-
-// ─── Model-type detection helpers ────────────────────────────────────────────
-function isXirgoModel(model: string) {
-  return model === "xirgo_global" || model.startsWith("fms_500");
-}
-
-function toVendorCategory(hardwareModel: string): string {
-  if (isXirgoModel(hardwareModel))    return "xirgo_global";
-  if (isTeltonikaModel(hardwareModel)) return "teltonika";
-  if (hardwareModel === "wetrack2" || hardwareModel === "wetrack_lite") return "wetrack2_gto6";
-  if (hardwareModel === "gt06n-device" || hardwareModel === "et01")     return "other_gt06";
-  return hardwareModel;
-}
-function isTeltonikaModel(model: string) {
-  const m = model.toLowerCase();
-  return (
-    m === "teltonika" ||
-    m.startsWith("fmb") || m.startsWith("fmc") || m.startsWith("fmm") ||
-    m.startsWith("ftc") || m.startsWith("tat") || m.startsWith("tft") ||
-    m.startsWith("all_can") || m.startsWith("ecan")
-  );
-}
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Device {
   device_imei:           string;
@@ -131,16 +96,6 @@ interface Device {
   subscription_end_date: string;
   payment_uid:           string;
 }
-
-interface RegisteredDevice {
-  device_imei:    string;
-  hardware_model: string;
-  unit_vendor:    string;
-  client_name:    string;
-  client_uid:     string;
-  device_status:  string;
-}
-
 interface ClientItem  { uid: string; label: string; }
 interface Transaction { payment_uid: string; payment_validity: string; valid_end_date: string; }
 type ToastV = "success" | "error" | "warn" | "info";
@@ -343,57 +298,6 @@ function TeltonikaConfigTable({ values, formulas, onChange }: {
   );
 }
 
-// ─── Xirgo config table ───────────────────────────────────────────────────────
-function XirgoConfigTable({ values, formulas, onChange }: {
-  values: TeltoValues; formulas: TeltoFormulas;
-  onChange: (v: TeltoValues, f: TeltoFormulas) => void;
-}) {
-  const setVal = (k: string, v: string) => onChange({ ...values, [k]: v }, formulas);
-  const setFml = (fk: string, v: string) => onChange(values, { ...formulas, [fk]: v });
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[12px]">
-        <thead>
-          <tr className="bg-[#F8F9FA] text-[#667781]">
-            <th className="text-left px-3 py-2 font-extrabold w-[190px]">Config Key</th>
-            <th className="text-left px-3 py-2 font-extrabold w-[220px]">Source (Xirgo Parameter)</th>
-            <th className="text-left px-3 py-2 font-extrabold">Formula (optional)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {TELTO_KEYS.map((k) => {
-            const fk = FORMULA_KEYS[k];
-            return (
-              <tr key={k} className="border-t border-[#F0F2F5]">
-                <td className="px-3 py-2 font-semibold text-[#111B21] capitalize">{humanKey(k)}</td>
-                <td className="px-3 py-2">
-                  <select value={values[k] || ""} onChange={(e) => setVal(k, e.target.value)}
-                    className="w-full h-8 rounded border border-[#E9EDEF] px-2 text-[11px] bg-white outline-none focus:border-[#128C7E]">
-                    <option value="">Select Source</option>
-                    {XIRGO_PARAMS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </td>
-                <td className="px-3 py-2">
-                  {fk ? (
-                    <input
-                      value={formulas[fk] && formulas[fk] !== "no-config" ? formulas[fk] : ""}
-                      onChange={(e) => setFml(fk, e.target.value || "no-config")}
-                      placeholder="no-config"
-                      className="w-full h-8 rounded border border-[#E9EDEF] px-2 text-[11px] font-mono outline-none focus:border-[#128C7E]"
-                    />
-                  ) : (
-                    <span className="text-[#A0AAB4] text-[11px]">N/A</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ─── Calibration rows ─────────────────────────────────────────────────────────
 function CalibrationRows({ entries, onChange }: {
   entries: CalibEntry[]; onChange: (e: CalibEntry[]) => void;
@@ -487,7 +391,7 @@ function SubBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Side-panel form primitives ───────────────────────────────────────────────
+// ─── Side-panel form primitives (matches New Token blade visual style) ────────
 const pInputCls = "w-full h-10 rounded-lg border border-[#E9EDEF] px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E] transition-colors bg-white disabled:opacity-50";
 
 function PField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -510,18 +414,6 @@ function PInfo({ label, value, mono }: { label: string; value: string; mono?: bo
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function DeviceManagementSection() {
-  const { state: authState } = useAuth();
-  const { hasPermission } = usePermissions();
-
-  // ── RBAC permission checks (catalog `can_*` keys) ──────────────────────────
-  const canAddDevice       = hasPermission("can_add_device");
-  const canEditProps       = hasPermission("can_edit_device_properties");
-  const canEditCfg         = hasPermission("can_edit_device_configs");
-  const canDeleteDevice    = hasPermission("can_delete_device");
-  const canRegisterUnit    = hasPermission("can_register_unit");
-  const canRenewPayment    = hasPermission("can_renew_device_payment");
-  const canAssignClient    = hasPermission("can_assign_device_client");
-
   // ── Data state ──────────────────────────────────────────────────────────────
   const [devices,       setDevices]       = useState<Device[]>([]);
   const [loading,       setLoading]       = useState(true);
@@ -534,22 +426,9 @@ export function DeviceManagementSection() {
   const [isClientAdmin, setIsClientAdmin] = useState(false);
   const [isInhouse,     setIsInhouse]     = useState(false);
 
-  // ── Registered devices state ─────────────────────────────────────────────────
-  const [regDevices,   setRegDevices]   = useState<RegisteredDevice[]>([]);
-  const [regLoading,   setRegLoading]   = useState(true);
-  const [regLoadErr,   setRegLoadErr]   = useState<string | null>(null);
-  const [showRegModal, setShowRegModal] = useState(false);
-  const [regForm,      setRegForm]      = useState({ imei: "", model: "", vendor: "", clientUid: "", status: "" });
-  const [regSaving,    setRegSaving]    = useState(false);
-  const [regSearch,    setRegSearch]    = useState("");
-  const [regPage,      setRegPage]      = useState(1);
-
-  // ── Configured devices pagination + search ───────────────────────────────────
+  // ── Pagination ──────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [page,   setPage]   = useState(1);
-
-  // ── Actions dropdown ─────────────────────────────────────────────────────────
-  const [openMenuImei, setOpenMenuImei] = useState<string | null>(null);
 
   // ── Panel / modal state ─────────────────────────────────────────────────────
   const [detailsDevice,   setDetailsDevice]   = useState<Device | null>(null);
@@ -561,7 +440,7 @@ export function DeviceManagementSection() {
   const [showClientModal, setShowClientModal] = useState(false);
 
   // ── Edit props form ──────────────────────────────────────────────────────────
-  const [epForm,   setEpForm]   = useState({ name: "", sim: "", carMake: "", carModel: "", clientUid: "", vin: "", carType: "" });
+  const [epForm, setEpForm]   = useState({ name: "", sim: "", carMake: "", carModel: "", clientUid: "", vin: "", carType: "" });
   const [epSaving, setEpSaving] = useState(false);
 
   // ── Edit configs form ────────────────────────────────────────────────────────
@@ -570,8 +449,8 @@ export function DeviceManagementSection() {
   const [ecCalib,    setEcCalib]    = useState<CalibEntry[]>([]);
   const [ecSaving,   setEcSaving]   = useState(false);
 
-  // ── Add / configure device form ──────────────────────────────────────────────
-  const [adForm,     setAdForm]     = useState({ imei: "", name: "", sim: "", carMake: "", carModel: "", clientUid: "", vin: "", carType: "", model: "teltonika", paymentUid: "", status: "" });
+  // ── Add device form ──────────────────────────────────────────────────────────
+  const [adForm, setAdForm]     = useState({ imei: "", name: "", sim: "", carMake: "", carModel: "", clientUid: "", vin: "", carType: "", model: "teltonika", paymentUid: "", status: "" });
   const [adValues,   setAdValues]   = useState<TeltoValues>(emptyTeltoValues());
   const [adFormulas, setAdFormulas] = useState<TeltoFormulas>(emptyTeltoFormulas());
   const [adCalib,    setAdCalib]    = useState<CalibEntry[]>([]);
@@ -603,7 +482,7 @@ export function DeviceManagementSection() {
 
   // ── API helpers ──────────────────────────────────────────────────────────────
   async function loadClients() {
-    const primary = authState.accountRoot || authState.accountUid || "";
+    const primary = getCookie("_nvxs_account_root") || getCookie("_nvxs_account_uid") || "";
     if (!primary) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -616,7 +495,7 @@ export function DeviceManagementSection() {
   }
 
   async function loadTransactions(): Promise<Transaction[]> {
-    const uid = authState.accountRoot || authState.accountUid || "";
+    const uid = getCookie("_nvxs_account_root") || getCookie("_nvxs_account_uid") || "";
     if (!uid) return [];
     setTxLoading(true);
     try {
@@ -693,60 +572,31 @@ export function DeviceManagementSection() {
     } catch { setLoadErr("API error loading devices."); setLoading(false); }
   }
 
-  async function loadRegisteredDevices() {
-    const type = authState.accountType || "client";
-    const uid  = type.toLowerCase() === "client"
-      ? (authState.accountRoot || authState.accountUid || "")
-      : (authState.accountUid || "");
-    if (!uid) { setRegLoading(false); return; }
-    setRegLoading(true); setRegLoadErr(null);
-    try {
-      // fleetFetch sets Authorization: Bearer <token> — same header as loadDevices (configured devices)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const j = await fleetFetch("POST", ENDPOINTS.FLEET.LIST_REGISTERED, {
-        data: { data_level: type, account_uid: uid },
-      }) as any;
-      if (j?.status === "success" && Array.isArray(j?.data)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setRegDevices(j.data.map((d: any) => ({
-          device_imei:    d.device_imei    ?? d.unit_imei    ?? "",
-          hardware_model: d.hardware_model ?? d.asset_model  ?? "",
-          unit_vendor:    d.unit_vendor    ?? d.hardware     ?? "",
-          client_name:    d.client_name    ?? "",
-          client_uid:     d.client_uid     ?? d.client       ?? "",
-          device_status:  d.device_status  ?? "",
-        })));
-      } else {
-        setRegLoadErr("Failed to load registered devices.");
-      }
-    } catch { setRegLoadErr("API error."); } finally { setRegLoading(false); }
-  }
-
   function reload() {
-    const type = authState.accountType || "client";
+    const type = getCookie("_nvxs_account_type") ?? "client";
     const uid  = type.toLowerCase() === "client"
-      ? (authState.accountRoot || authState.accountUid || "")
-      : (authState.accountUid || "");
+      ? (getCookie("_nvxs_account_root") ?? getCookie("_nvxs_account_uid") ?? "")
+      : (getCookie("_nvxs_account_uid") ?? "");
     loadDevices(type, uid);
   }
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const type = authState.accountType || "client";
-    const role = (authState.role || "").toLowerCase();
-    const inhouse   = type.toLowerCase() === "inhouse";
+    const type = getCookie("_nvxs_account_type") ?? "client";
+    const role = (getCookie("_nvxs_account_role") ?? "").toLowerCase();
+    const inhouse  = type.toLowerCase() === "inhouse";
     const clientAdm = type.toLowerCase() === "client" && role === "admin";
     setIsInhouse(inhouse);
     setIsClientAdmin(clientAdm);
     setCanManage(inhouse || clientAdm);
     const uid = type.toLowerCase() === "client"
-      ? (authState.accountRoot || authState.accountUid || "")
-      : (authState.accountUid || "");
+      ? (getCookie("_nvxs_account_root") ?? getCookie("_nvxs_account_uid") ?? "")
+      : (getCookie("_nvxs_account_uid") ?? "");
     if (!uid) { setLoadErr("Missing session — please log in."); setLoading(false); return; }
-    Promise.all([loadClients(), loadDevices(type, uid), loadRegisteredDevices()]);
-  }, [authState.accountUid]); // eslint-disable-line react-hooks/exhaustive-deps
+    Promise.all([loadClients(), loadDevices(type, uid)]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Configured devices — filtered + paginated ────────────────────────────────
+  // ── Filtered + paginated ─────────────────────────────────────────────────────
   const q          = search.trim().toLowerCase();
   const filtered   = devices.filter((d) =>
     !q || d.device_name.toLowerCase().includes(q) ||
@@ -756,18 +606,6 @@ export function DeviceManagementSection() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
   const paged      = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  // ── Registered devices — filtered + paginated ────────────────────────────────
-  const regQ          = regSearch.trim().toLowerCase();
-  const regFiltered   = regDevices.filter((d) =>
-    !regQ || d.device_imei.toLowerCase().includes(regQ) ||
-             d.hardware_model.toLowerCase().includes(regQ) ||
-             d.unit_vendor.toLowerCase().includes(regQ) ||
-             d.client_name.toLowerCase().includes(regQ)
-  );
-  const regTotalPages = Math.max(1, Math.ceil(regFiltered.length / REG_PAGE_SIZE));
-  const regSafePage   = Math.min(regPage, regTotalPages);
-  const regPaged      = regFiltered.slice((regSafePage - 1) * REG_PAGE_SIZE, regSafePage * REG_PAGE_SIZE);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function openEditProps(d: Device) {
@@ -831,12 +669,8 @@ export function DeviceManagementSection() {
     finally { setEcSaving(false); }
   }
 
-  async function openConfigureRegistered(d: RegisteredDevice) {
-    setAdForm({
-      imei: d.device_imei, name: "", sim: "", carMake: "", carModel: "",
-      clientUid: d.client_uid, vin: "", carType: "",
-      model: toVendorCategory(d.hardware_model || "teltonika"), paymentUid: "", status: "",
-    });
+  async function openAddDevice() {
+    setAdForm({ imei: "", name: "", sim: "", carMake: "", carModel: "", clientUid: "", vin: "", carType: "", model: "teltonika", paymentUid: "", status: "" });
     setAdValues(emptyTeltoValues()); setAdFormulas(emptyTeltoFormulas()); setAdCalib([]);
     setAdTab("props");
     await loadTransactions();
@@ -848,14 +682,14 @@ export function DeviceManagementSection() {
     if (!adForm.name)                             { setAdForm((f) => ({ ...f, status: "Device name is required." })); return; }
     if (!adForm.paymentUid)                       { setAdForm((f) => ({ ...f, status: "Select a transaction payment." })); return; }
     setAdSaving(true);
-    const cfgUsr = authState.accountUid || "";
+    const cfgUsr = getCookie("_nvxs_account_uid") ?? "";
     const mvs = adCalib.map((e) => e.mv || "");
     const vls = adCalib.map((e) => e.vl || "");
     const payload = buildNewConfigPayload(
       adForm.imei, adForm.model,
       { device_name: adForm.name, sim_uid: adForm.sim, car_make: adForm.carMake, car_model: adForm.carModel, client_uid: adForm.clientUid, vin_number: adForm.vin, car_type: adForm.carType },
-      (isTeltonikaModel(adForm.model) || isXirgoModel(adForm.model)) ? adValues   : null,
-      (isTeltonikaModel(adForm.model) || isXirgoModel(adForm.model)) ? adFormulas : null,
+      adForm.model === "teltonika" ? adValues  : null,
+      adForm.model === "teltonika" ? adFormulas : null,
       adForm.paymentUid, cfgUsr,
       mvs.length ? mvs : [""], vls.length ? vls : [""],
     );
@@ -863,50 +697,12 @@ export function DeviceManagementSection() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const j = await fleetFetch("POST", ENDPOINTS.FLEET.DEVICE_CFG_NEW, payload) as any;
       if (j?.status === "success") {
-        showToast("success", "Device configured", `${adForm.name} onboarded successfully.`);
-        setShowAddModal(false); reload(); loadRegisteredDevices();
+        showToast("success", "Device added", `${adForm.name} onboarded successfully.`);
+        setShowAddModal(false); reload();
       } else { setAdForm((f) => ({ ...f, status: j?.message ?? "Unexpected response" })); }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) { setAdForm((f) => ({ ...f, status: e?.message ?? "Request failed" })); }
     finally { setAdSaving(false); }
-  }
-
-  async function submitRegisterUnit() {
-    if (!regForm.imei || regForm.imei.length < 10) {
-      setRegForm((f) => ({ ...f, status: "IMEI is required (min 10 digits)." })); return;
-    }
-    if (!regForm.model) {
-      setRegForm((f) => ({ ...f, status: "Select a device model." })); return;
-    }
-    if (!regForm.vendor) {
-      setRegForm((f) => ({ ...f, status: "Select a unit vendor." })); return;
-    }
-    if (!regForm.clientUid) {
-      setRegForm((f) => ({ ...f, status: "Select a client." })); return;
-    }
-    setRegSaving(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const j = await fleetFetch("POST", ENDPOINTS.FLEET.REGISTER_UNIT, {
-        data: {
-          unit_imei:        regForm.imei,
-          asset_model:      regForm.model,
-          unit_vendor:      regForm.vendor,
-          client:           regForm.clientUid,
-          service_provider: "engine",
-        },
-      }) as any;
-      if (j?.status === "success") {
-        showToast("success", "Unit registered", `IMEI ${regForm.imei} registered.`);
-        setShowRegModal(false);
-        loadRegisteredDevices();
-      } else {
-        setRegForm((f) => ({ ...f, status: j?.message ?? "Unexpected response" }));
-      }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setRegForm((f) => ({ ...f, status: e?.message ?? "Request failed" }));
-    } finally { setRegSaving(false); }
   }
 
   async function openRenew(d: Device) {
@@ -956,274 +752,154 @@ export function DeviceManagementSection() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="flex gap-4">
+    <div className="flex flex-col bg-white border border-[#E9EDEF] rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
 
-      {/* ══ Left card: Configured Devices ══════════════════════════════════════ */}
-      <div className="flex-1 min-w-0 flex flex-col bg-white border border-[#E9EDEF] rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-
-        {/* ── Header ── */}
-        <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-3 border-b border-[#E9EDEF] flex-wrap">
-          <div>
-            <div className="font-black text-[15px] text-[#111B21]">Configured Devices</div>
-            <div className="text-[12px] text-[#667781] mt-0.5">
-              {filtered.length} device{filtered.length !== 1 ? "s" : ""}{q ? " (filtered)" : ""}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="search" value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search name, IMEI, client…"
-              className="h-8 w-[200px] rounded-lg border border-[#E9EDEF] px-3 text-[12px] placeholder:text-[#A0AAB4]
-                bg-[#F8F9FA] outline-none focus:border-[#128C7E] transition-colors text-[#111B21]"
-            />
-            <button onClick={() => { setSearch(""); reload(); }}
-              className="h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781]
-                hover:bg-[#F0F2F5] transition-colors cursor-pointer bg-white">
-              Refresh
-            </button>
-            {canAssignClient && (
-              <button onClick={() => { setSelClient(""); setShowClientModal(true); }}
-                className="h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781]
-                  hover:bg-[#F0F2F5] transition-colors cursor-pointer bg-white">
-                Load Client
-              </button>
-            )}
+      {/* ── Header ── */}
+      <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-3 border-b border-[#E9EDEF] flex-wrap">
+        <div>
+          <div className="font-black text-[15px] text-[#111B21]">Device Management</div>
+          <div className="text-[12px] text-[#667781] mt-0.5">
+            {filtered.length} device{filtered.length !== 1 ? "s" : ""}{q ? " (filtered)" : ""}
           </div>
         </div>
-
-        {/* ── Table ── */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="bg-[#F8F9FA] text-[#667781] border-b border-[#E9EDEF]">
-                <th className="text-left px-4 py-2.5 font-extrabold">Device</th>
-                <th className="text-left px-4 py-2.5 font-extrabold">IMEI</th>
-                <th className="text-left px-4 py-2.5 font-extrabold">Client</th>
-                <th className="text-left px-4 py-2.5 font-extrabold">Subscription</th>
-                <th className="text-right px-4 py-2.5 font-extrabold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={5} className="text-center text-[#667781] py-10 italic">Loading devices…</td></tr>
-              )}
-              {!loading && loadErr && (
-                <tr><td colSpan={5} className="text-center text-[#D93025] py-10">{loadErr}</td></tr>
-              )}
-              {!loading && !loadErr && paged.length === 0 && (
-                <tr><td colSpan={5} className="text-center text-[#667781] py-10 italic">No devices found.</td></tr>
-              )}
-              {paged.map((d, i) => {
-                const isTelto  = d.hardware.toLowerCase().includes("teltonika") || isTeltonikaModel(d.hardware_model);
-                const isXirgo  = d.hardware.toLowerCase().includes("xirgo") || isXirgoModel(d.hardware_model);
-                const expired = d.subscription_status.toLowerCase() === "expired";
-                const menuOpen = openMenuImei === d.device_imei;
-                return (
-                  <tr key={d.device_imei} className={`border-b border-[#F0F2F5] ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}>
-                    <td className="px-4 py-2.5">
-                      <div className="font-semibold text-[#111B21] truncate max-w-[160px]">{d.device_name || d.device_imei}</div>
-                      {d.car_make && <div className="text-[11px] text-[#667781]">{d.car_make} {d.car_model}</div>}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-[#667781]">{d.device_imei}</td>
-                    <td className="px-4 py-2.5 max-w-[140px]">
-                      <span className="truncate block">{d.client_name || "—"}</span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <SubBadge status={d.subscription_status || "—"} />
-                      {d.subscription_end_date && (
-                        <div className="text-[10px] text-[#A0AAB4] mt-0.5">until {d.subscription_end_date}</div>
-                      )}
-                    </td>
-                    {/* ── Actions dropdown ── */}
-                    <td className="px-4 py-2.5 text-right">
-                      <div className="relative inline-block">
-                        <button
-                          onClick={() => setOpenMenuImei(menuOpen ? null : d.device_imei)}
-                          className="h-7 px-3 rounded border border-[#E9EDEF] text-[11px] text-[#111B21]
-                            hover:bg-[#F0F2F5] cursor-pointer bg-white transition-colors flex items-center gap-1.5">
-                          Actions <span className="text-[9px] leading-none">▾</span>
-                        </button>
-                        {menuOpen && (
-                          <div className="absolute right-0 top-8 z-[30] w-[160px] bg-white border border-[#E9EDEF] rounded-lg shadow-xl overflow-hidden">
-                            <button
-                              onClick={() => { setDetailsTab("info"); setDetailsDevice(d); setOpenMenuImei(null); }}
-                              className="w-full text-left px-3 py-2 text-[12px] text-[#111B21] hover:bg-[#F8F9FA] cursor-pointer bg-transparent border-none">
-                              View Details
-                            </button>
-                            {canEditProps && (
-                              <button
-                                onClick={() => { openEditProps(d); setOpenMenuImei(null); }}
-                                className="w-full text-left px-3 py-2 text-[12px] text-[#128C7E] hover:bg-[#F8F9FA] cursor-pointer bg-transparent border-none">
-                                Edit Properties
-                              </button>
-                            )}
-                            {canEditCfg && (isTelto || isXirgo) && (
-                              <button
-                                onClick={() => { openEditCfg(d); setOpenMenuImei(null); }}
-                                className="w-full text-left px-3 py-2 text-[12px] text-[#1565C0] hover:bg-[#F8F9FA] cursor-pointer bg-transparent border-none">
-                                Edit Configs
-                              </button>
-                            )}
-                            {canRenewPayment && expired && (
-                              <button
-                                onClick={() => { openRenew(d); setOpenMenuImei(null); }}
-                                className="w-full text-left px-3 py-2 text-[12px] text-[#F57F17] hover:bg-[#FFF8E1] cursor-pointer bg-transparent border-none">
-                                Renew Payment
-                              </button>
-                            )}
-                            {canDeleteDevice && (
-                              <>
-                                <div className="border-t border-[#F0F2F5] my-0.5" />
-                                <button
-                                  onClick={() => { deleteDevice(d); setOpenMenuImei(null); }}
-                                  className="w-full text-left px-3 py-2 text-[12px] text-[#C62828] hover:bg-[#FFEBEE] cursor-pointer bg-transparent border-none">
-                                  Delete Device
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ── Pagination ── */}
-        <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-[#E9EDEF] mt-auto">
-          <span className="text-[11px] text-[#667781]">
-            {filtered.length === 0 ? "0 devices"
-              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-              className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">‹</button>
-            <span className="text-[11px] font-extrabold text-[#111B21] min-w-[52px] text-center">{safePage} / {totalPages}</span>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-              className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">›</button>
-          </div>
-        </div>
-
-      </div>{/* end left card */}
-
-      {/* ══ Right card: Registered Devices ═════════════════════════════════════ */}
-      <div className="flex-1 min-w-0 flex flex-col bg-white border border-[#E9EDEF] rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] self-start max-h-[calc(100vh-160px)]">
-
-        {/* Header */}
-        <div className="shrink-0 flex flex-col gap-2 px-4 py-3 border-b border-[#E9EDEF]">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <div className="font-black text-[14px] text-[#111B21]">Registered Devices</div>
-              <div className="text-[11px] text-[#667781] mt-0.5">
-                {regFiltered.length} unit{regFiltered.length !== 1 ? "s" : ""}{regQ ? " (filtered)" : ""}
-              </div>
-            </div>
-            {canRegisterUnit && (
-              <button
-                onClick={() => {
-                  setRegForm({ imei: "", model: "", vendor: "", clientUid: "", status: "" });
-                  setShowRegModal(true);
-                }}
-                className="h-8 px-3 rounded-lg bg-[#128C7E] text-white text-[11px] font-extrabold
-                  hover:brightness-105 transition-all border-none cursor-pointer shrink-0">
-                + Register New Unit
-              </button>
-            )}
-          </div>
-          {/* Search */}
+        <div className="flex items-center gap-2 flex-wrap">
           <input
-            type="search" value={regSearch}
-            onChange={(e) => { setRegSearch(e.target.value); setRegPage(1); }}
-            placeholder="Search IMEI, model, client…"
-            className="h-8 w-full rounded-lg border border-[#E9EDEF] px-3 text-[12px] placeholder:text-[#A0AAB4]
+            type="search" value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search name, IMEI, client…"
+            className="h-8 w-[220px] rounded-lg border border-[#E9EDEF] px-3 text-[12px] placeholder:text-[#A0AAB4]
               bg-[#F8F9FA] outline-none focus:border-[#128C7E] transition-colors text-[#111B21]"
           />
+          <button onClick={() => { setSearch(""); reload(); }}
+            className="h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781]
+              hover:bg-[#F0F2F5] transition-colors cursor-pointer bg-white">
+            Refresh
+          </button>
+          {isClientAdmin && (
+            <button onClick={() => { setSelClient(""); setShowClientModal(true); }}
+              className="h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781]
+                hover:bg-[#F0F2F5] transition-colors cursor-pointer bg-white">
+              Load Client
+            </button>
+          )}
+          {canManage && (
+            <button onClick={openAddDevice}
+              className="h-8 px-3.5 rounded-lg bg-[#128C7E] text-white text-[12px] font-extrabold
+                hover:brightness-105 transition-all border-none cursor-pointer">
+              + Add Device
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* List */}
-        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#F0F2F5]">
-          {regLoading && (
-            <div className="text-center text-[#667781] py-8 text-[12px] italic">Loading…</div>
-          )}
-          {!regLoading && regLoadErr && (
-            <div className="text-center text-[#D93025] py-8 text-[12px] px-3">{regLoadErr}</div>
-          )}
-          {!regLoading && !regLoadErr && regPaged.length === 0 && (
-            <div className="text-center text-[#667781] py-8 text-[12px] italic px-3">
-              {regQ ? "No devices match your search." : "No registered devices."}
-            </div>
-          )}
-          {regPaged.map((d) => {
-            const isUsed  = d.device_status?.toLowerCase() === "used";
-            const model   = d.hardware_model || d.unit_vendor || "";
-            return (
-              <div key={d.device_imei} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {/* IMEI + model badge on same row */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono text-[11px] font-semibold text-[#111B21] truncate">{d.device_imei}</span>
-                    {model && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#F0F2F5] text-[#455A64] shrink-0">
-                        {model}
-                      </span>
+      {/* ── Table ── */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-[#F8F9FA] text-[#667781] border-b border-[#E9EDEF]">
+              <th className="text-left px-4 py-2.5 font-extrabold">Device</th>
+              <th className="text-left px-4 py-2.5 font-extrabold">IMEI</th>
+              <th className="text-left px-4 py-2.5 font-extrabold">Client</th>
+              <th className="text-left px-4 py-2.5 font-extrabold">Hardware</th>
+              <th className="text-left px-4 py-2.5 font-extrabold">SIM Card</th>
+              <th className="text-left px-4 py-2.5 font-extrabold">Subscription</th>
+              <th className="text-right px-4 py-2.5 font-extrabold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td colSpan={7} className="text-center text-[#667781] py-10 italic">Loading devices…</td></tr>
+            )}
+            {!loading && loadErr && (
+              <tr><td colSpan={7} className="text-center text-[#D93025] py-10">{loadErr}</td></tr>
+            )}
+            {!loading && !loadErr && paged.length === 0 && (
+              <tr><td colSpan={7} className="text-center text-[#667781] py-10 italic">No devices found.</td></tr>
+            )}
+            {paged.map((d, i) => {
+              const isTelto  = d.hardware.toLowerCase().includes("teltonika");
+              const expired  = d.subscription_status.toLowerCase() === "expired";
+              return (
+                <tr key={d.device_imei} className={`border-b border-[#F0F2F5] ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}>
+                  <td className="px-4 py-2.5">
+                    <div className="font-semibold text-[#111B21] truncate max-w-[160px]">{d.device_name || d.device_imei}</div>
+                    {d.car_make && <div className="text-[11px] text-[#667781]">{d.car_make} {d.car_model}</div>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-[11px] text-[#667781]">{d.device_imei}</td>
+                  <td className="px-4 py-2.5 max-w-[140px]">
+                    <span className="truncate block">{d.client_name || "—"}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#F0F2F5] text-[#455A64]">{d.hardware || "—"}</span>
+                    {d.hardware_model && <div className="text-[10px] text-[#A0AAB4] mt-0.5">{d.hardware_model}</div>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-[11px] text-[#667781]">{d.simcard || "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <SubBadge status={d.subscription_status || "—"} />
+                    {d.subscription_end_date && (
+                      <div className="text-[10px] text-[#A0AAB4] mt-0.5">until {d.subscription_end_date}</div>
                     )}
-                  </div>
-                  {d.client_name && (
-                    <div className="text-[10px] text-[#A0AAB4] mt-0.5 truncate">{d.client_name}</div>
-                  )}
-                </div>
-                {canAddDevice && (
-                  isUsed ? (
-                    <button
-                      onClick={() => showToast("warn", "Already Configured",
-                        `IMEI ${d.device_imei} has already been fully configured and is active. It cannot be re-configured here.`)}
-                      className="h-7 px-2.5 rounded border border-[#E9EDEF] text-[11px] text-[#A0AAB4]
-                        bg-[#F8F9FA] opacity-60 cursor-not-allowed transition-colors shrink-0">
-                      Configure
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => openConfigureRegistered(d)}
-                      className="h-7 px-2.5 rounded border border-[#E9EDEF] text-[11px] text-[#128C7E]
-                        hover:bg-[#E8F5F2] cursor-pointer bg-white transition-colors shrink-0">
-                      Configure
-                    </button>
-                  )
-                )}
-              </div>
-            );
-          })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                      <button onClick={() => { setDetailsTab("info"); setDetailsDevice(d); }}
+                        className="h-7 px-2.5 rounded border border-[#E9EDEF] text-[11px] text-[#667781]
+                          hover:bg-[#F0F2F5] cursor-pointer bg-white transition-colors">
+                        Details
+                      </button>
+                      {canManage && (
+                        <button onClick={() => openEditProps(d)}
+                          className="h-7 px-2.5 rounded border border-[#E9EDEF] text-[11px] text-[#128C7E]
+                            hover:bg-[#E8F5F2] cursor-pointer bg-white transition-colors">
+                          Edit
+                        </button>
+                      )}
+                      {isInhouse && isTelto && (
+                        <button onClick={() => openEditCfg(d)}
+                          className="h-7 px-2.5 rounded border border-[#E9EDEF] text-[11px] text-[#1565C0]
+                            hover:bg-[#E3F2FD] cursor-pointer bg-white transition-colors">
+                          Configs
+                        </button>
+                      )}
+                      {expired && (
+                        <button onClick={() => openRenew(d)}
+                          className="h-7 px-2.5 rounded border border-[#FFF8E1] text-[11px] text-[#F57F17]
+                            hover:bg-[#FFF8E1] cursor-pointer bg-white transition-colors">
+                          Renew
+                        </button>
+                      )}
+                      {canManage && (
+                        <button onClick={() => deleteDevice(d)}
+                          className="h-7 px-2.5 rounded border border-[#FFEBEE] text-[11px] text-[#C62828]
+                            hover:bg-[#FFEBEE] cursor-pointer bg-white transition-colors">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Pagination ── */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-[#E9EDEF]">
+        <span className="text-[11px] text-[#667781]">
+          {filtered.length === 0 ? "0 devices"
+            : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+            className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
+              text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">‹</button>
+          <span className="text-[11px] font-extrabold text-[#111B21] min-w-[52px] text-center">{safePage} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+            className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
+              text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">›</button>
         </div>
-
-        {/* Pagination */}
-        <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-[#E9EDEF]">
-          <span className="text-[11px] text-[#667781]">
-            {regFiltered.length === 0 ? "0 units"
-              : `${(regSafePage - 1) * REG_PAGE_SIZE + 1}–${Math.min(regSafePage * REG_PAGE_SIZE, regFiltered.length)} of ${regFiltered.length}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setRegPage((p) => Math.max(1, p - 1))} disabled={regSafePage <= 1}
-              className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">‹</button>
-            <span className="text-[11px] font-extrabold text-[#111B21] min-w-[52px] text-center">{regSafePage} / {regTotalPages}</span>
-            <button onClick={() => setRegPage((p) => Math.min(regTotalPages, p + 1))} disabled={regSafePage >= regTotalPages}
-              className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] border-none bg-transparent cursor-pointer">›</button>
-          </div>
-        </div>
-
-      </div>{/* end right card */}
-
-      {/* ── Invisible backdrop to close the Actions dropdown ─────────────────── */}
-      {openMenuImei && (
-        <div className="fixed inset-0 z-[20]" onClick={() => setOpenMenuImei(null)} />
-      )}
+      </div>
 
       {/* ════════ Modals ════════════════════════════════════════════════════════ */}
 
@@ -1389,21 +1065,13 @@ export function DeviceManagementSection() {
       )}
 
       {/* Edit Teltonika Configs */}
-      {editCfgDevice && (() => {
-        const hwStr = (editCfgDevice.hardware + " " + editCfgDevice.hardware_model).toLowerCase();
-        const editIsXirgo = hwStr.includes("xirgo") || isXirgoModel(editCfgDevice.hardware_model);
-        return (
+      {editCfgDevice && (
         <Modal title={`Edit Configs — ${editCfgDevice.device_name}`} onClose={() => setEditCfgDevice(null)} wide>
           <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
-            Map parameter sources for each config key. Empty values are sent as <code className="font-mono">no-config</code>.
-            {editIsXirgo && <span className="ml-1 font-extrabold text-[#1565C0]">(Xirgo Global)</span>}
+            Map parameter source IDs for each config key. Empty values are sent as <code className="font-mono">no-config</code>.
           </div>
-          {editIsXirgo
-            ? <XirgoConfigTable values={ecValues} formulas={ecFormulas}
-                onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
-            : <TeltonikaConfigTable values={ecValues} formulas={ecFormulas}
-                onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
-          }
+          <TeltonikaConfigTable values={ecValues} formulas={ecFormulas}
+            onChange={(v, f) => { setEcValues(v); setEcFormulas(f); }} />
           <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
             <CalibrationRows entries={ecCalib} onChange={setEcCalib} />
           </div>
@@ -1412,8 +1080,7 @@ export function DeviceManagementSection() {
             <SaveBtn loading={ecSaving} onClick={saveEditCfg}>Update Configs</SaveBtn>
           </div>
         </Modal>
-        );
-      })()}
+      )}
 
       {/* Renew Payment */}
       {renewDevice && (
@@ -1458,25 +1125,25 @@ export function DeviceManagementSection() {
         </Modal>
       )}
 
-      {/* Configure Device (full onboarding) */}
+      {/* Add Device */}
       {showAddModal && (
-        <Modal title="Configure Device" onClose={() => setShowAddModal(false)} wide>
+        <Modal title="Add Device" onClose={() => setShowAddModal(false)} wide>
+          {/* Model selector */}
           <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
             <div className="text-[11px] text-[#667781]">
-              Supports: <strong>Teltonika</strong> · <strong>Xirgo Global</strong> · <strong>Concox</strong> · <strong>GT06N</strong>
+              Supports: <strong>Teltonika</strong> · <strong>Wetrack2 / GT06</strong> · <strong>Other GT06</strong>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[11px] font-extrabold text-[#667781] uppercase shrink-0">Vendor</label>
+              <label className="text-[11px] font-extrabold text-[#667781] uppercase shrink-0">Model</label>
               <FSelect value={adForm.model} onChange={(v) => setAdForm((f) => ({ ...f, model: v }))}>
-                <option value="">— Select vendor —</option>
                 <option value="teltonika">Teltonika</option>
-                <option value="xirgo_global">Xirgo Global</option>
-                <option value="wetrack2_gto6">Concox (WeTrack2 / GT06)</option>
-                <option value="other_gt06">Other GT06N</option>
+                <option value="wetrack2_gto6">Wetrack2 / GT06</option>
+                <option value="other_gt06">Other GT06</option>
               </FSelect>
             </div>
           </div>
 
+          {/* Tabs */}
           <div className="flex border-b border-[#E9EDEF] mb-5 gap-1">
             {(["props", "cfg"] as const).map((tab) => (
               <button key={tab} onClick={() => setAdTab(tab)}
@@ -1491,6 +1158,7 @@ export function DeviceManagementSection() {
             ))}
           </div>
 
+          {/* Properties tab */}
           {adTab === "props" && (
             <div className="grid grid-cols-2 gap-4">
               <Field label="IMEI *">
@@ -1536,24 +1204,14 @@ export function DeviceManagementSection() {
             </div>
           )}
 
+          {/* Config tab */}
           {adTab === "cfg" && (
-            isTeltonikaModel(adForm.model) ? (
+            adForm.model === "teltonika" ? (
               <div>
                 <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
                   Choose parameter source IDs. Empty values will be sent as <code className="font-mono">no-config</code>.
                 </div>
                 <TeltonikaConfigTable values={adValues} formulas={adFormulas}
-                  onChange={(v, f) => { setAdValues(v); setAdFormulas(f); }} />
-                <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
-                  <CalibrationRows entries={adCalib} onChange={setAdCalib} />
-                </div>
-              </div>
-            ) : isXirgoModel(adForm.model) ? (
-              <div>
-                <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
-                  Choose parameter sources for Xirgo Global. Empty values will be sent as <code className="font-mono">no-config</code>.
-                </div>
-                <XirgoConfigTable values={adValues} formulas={adFormulas}
                   onChange={(v, f) => { setAdValues(v); setAdFormulas(f); }} />
                 <div className="mt-5 pt-4 border-t border-[#F0F2F5]">
                   <CalibrationRows entries={adCalib} onChange={setAdCalib} />
@@ -1572,126 +1230,7 @@ export function DeviceManagementSection() {
           )}
           <div className="flex justify-end gap-2 mt-5">
             <CancelBtn onClick={() => setShowAddModal(false)} />
-            <SaveBtn loading={adSaving} onClick={submitAddDevice}>Save Configuration</SaveBtn>
-          </div>
-        </Modal>
-      )}
-
-      {/* Register New Unit */}
-      {showRegModal && (
-        <Modal title="Register New Unit" onClose={() => setShowRegModal(false)}>
-          <div className="text-[11px] text-[#667781] bg-[#F8F9FA] border border-[#E9EDEF] rounded-lg px-3 py-2.5 mb-4">
-            Register a device by IMEI and hardware type. Full parameter configuration can be done afterwards from the Registered Devices list.
-          </div>
-          <div className="flex flex-col gap-4">
-            <Field label="IMEI *">
-              <FInput
-                value={regForm.imei}
-                onChange={(v) => setRegForm((f) => ({ ...f, imei: v }))}
-                placeholder="IMEI number"
-                mono
-              />
-            </Field>
-            <Field label="Device Model *">
-              <FSelect value={regForm.model} onChange={(v) => setRegForm((f) => ({ ...f, model: v }))}>
-                <option value="">— Choose device model —</option>
-                <optgroup label="Concox Hardware">
-                  <option value="wetrack2">WeTrack2</option>
-                  <option value="wetrack_lite">WeTrack Lite</option>
-                </optgroup>
-                <optgroup label="Xirgo-Global Hardware">
-                  <option value="fms_500_one">FMS-500 One</option>
-                  <option value="fms_500_stcan">FMS-500 STCAN</option>
-                  <option value="fms_500_light">FMS-500 Light</option>
-                </optgroup>
-                <optgroup label="Teltonika Hardware">
-                  <option value="fmb_130">FMB-130</option>
-                  <option value="fmb_920">FMB-920</option>
-                  <option value="fmc_130">FMC-130</option>
-                  <option value="fmc_234">FMC-234</option>
-                  <option value="ftc_881">FTC-881</option>
-                  <option value="ftc_921">FTC-921</option>
-                  <option value="ftc_961">FTC-961</option>
-                  <option value="tat_141">TAT-141</option>
-                  <option value="tat_240">TAT-240</option>
-                  <option value="fmc_150">FMC-150</option>
-                  <option value="fmc_650">FMC-650</option>
-                  <option value="fmc_920">FMC-920</option>
-                  <option value="all_can_300">ALL CAN-300</option>
-                  <option value="ecan_02">ECAN-02</option>
-                  <option value="fmb_001">FMB-001</option>
-                  <option value="fmb_003">FMB-003</option>
-                  <option value="fmb_010">FMB-010</option>
-                  <option value="fmb_020">FMB-020</option>
-                  <option value="fmb_110">FMB-110</option>
-                  <option value="fmb_120">FMB-120</option>
-                  <option value="fmb_122">FMB-122</option>
-                  <option value="fmb_125">FMB-125</option>
-                  <option value="fmb_140">FMB-140</option>
-                  <option value="fmb_150">FMB-150</option>
-                  <option value="fmb_202">FMB-202</option>
-                  <option value="fmb_204">FMB-204</option>
-                  <option value="fmb_209">FMB-209</option>
-                  <option value="fmb_225">FMB-225</option>
-                  <option value="fmb_230">FMB-230</option>
-                  <option value="fmb_240">FMB-240</option>
-                  <option value="fmb_641">FMB-641</option>
-                  <option value="fmb_900">FMB-900</option>
-                  <option value="fmb_910">FMB-910</option>
-                  <option value="fmb_930">FMB-930</option>
-                  <option value="fmb_965">FMB-965</option>
-                  <option value="fmc_003">FMC-003</option>
-                  <option value="fmc_125">FMC-125</option>
-                  <option value="fmc_13a">FMC-13A</option>
-                  <option value="fmc_225">FMB-225</option>
-                  <option value="fmc_230">FMC-230</option>
-                  <option value="fmc_800">FMC-800</option>
-                  <option value="fmc_880">FMC-880</option>
-                  <option value="fmm_003">FMM-003</option>
-                  <option value="fmm_00a">FMM-00A</option>
-                  <option value="fmm_125">FMM-125</option>
-                  <option value="fmm_130">FMM-130</option>
-                  <option value="fmm_13a">FMM-13A</option>
-                  <option value="fmm_150">FMM-150</option>
-                  <option value="fmm_230">FMB-230</option>
-                  <option value="fmm_650">FMM-650</option>
-                  <option value="fmm_800">FMM-800</option>
-                  <option value="fmm_80a">FMM-80A</option>
-                  <option value="fmm_880">FMM-880</option>
-                  <option value="fmm_920">FMM-920</option>
-                  <option value="fmt_100">FMT-100</option>
-                  <option value="tat_140">TAT-140</option>
-                  <option value="tft_100">TFT-100</option>
-                </optgroup>
-                <optgroup label="Other Devices">
-                  <option value="gt06n-device">GT06N Protocol Device</option>
-                  <option value="et01">ET01</option>
-                </optgroup>
-              </FSelect>
-            </Field>
-            <Field label="Unit Vendor *">
-              <FSelect value={regForm.vendor} onChange={(v) => setRegForm((f) => ({ ...f, vendor: v }))}>
-                <option value="">— Choose vendor —</option>
-                <option value="concox">Concox</option>
-                <option value="teltonika">Teltonika</option>
-                <option value="other">GT06N Manufacturer</option>
-                <option value="xirgo_global">Xirgo Global</option>
-                <option value="king sword">King Sword</option>
-              </FSelect>
-            </Field>
-            <Field label="Client *">
-              <FSelect value={regForm.clientUid} onChange={(v) => setRegForm((f) => ({ ...f, clientUid: v }))}>
-                <option value="">— Select client —</option>
-                {clients.map((c) => <option key={c.uid} value={c.uid}>{c.label}</option>)}
-              </FSelect>
-            </Field>
-            {regForm.status && (
-              <div className="text-[12px] text-[#D93025] font-semibold">{regForm.status}</div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2 mt-5">
-            <CancelBtn onClick={() => setShowRegModal(false)} />
-            <SaveBtn loading={regSaving} onClick={submitRegisterUnit}>Register Unit</SaveBtn>
+            <SaveBtn loading={adSaving} onClick={submitAddDevice}>Add Device</SaveBtn>
           </div>
         </Modal>
       )}

@@ -4,10 +4,7 @@
  * Renders the application header containing the brand identity, global
  * search input, and the current user's RBAC role badges and avatar.
  */
-import React, { useState, useEffect } from "react";
-import { useAuth } from "../../auth/AuthContext";
-import { getRaw } from "../../api/client";
-import { ENDPOINTS } from "../../api/endpoints";
+import React from "react";
 
 // ── Pill variant map ────────────────────────────────────────────────────────
 const pillVariant: Record<string, string> = {
@@ -20,44 +17,22 @@ interface TopBarProps {
   brandName?:        string;
   pageTitle?:        string;
   searchPlaceholder?: string;
+  roles?:            { label: string; variant: "teal" | "azure" | "green" }[];
+  avatarInitial?:    string;
+  whoLabel?:         string;
 }
 
 export function TopBar({
   brandName         = "NAVAS CORE CMS",
   pageTitle         = "NOC Bridge — Console",
   searchPlaceholder = "Search tenants, units, tokens, incidents…",
+  roles = [
+    { label: "SYSADMIN",  variant: "teal" },
+    { label: "can-spend", variant: "azure" },
+  ],
+  avatarInitial = "T",
+  whoLabel      = "Tim • Kampala",
 }: TopBarProps) {
-  const { state: authState } = useAuth();
-  const [userDetails, setUserDetails] = useState<any>(null);
-
-  useEffect(() => {
-    const accountUid = authState.accountUid;
-    if (!accountUid) { setUserDetails(null); return; }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const json = await getRaw<{ status: string; data: any }>(
-          `${ENDPOINTS.AUTH.USER_DETAILS}/${accountUid}/details`
-        );
-        if (!cancelled && json?.status === "success" && json?.data) {
-          setUserDetails(json.data);
-        }
-      } catch {
-        // best-effort — the bar still renders with auth context values
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [authState.accountUid]);
-
-  // Derive display values from fetched details, falling back to auth context
-  const displayName = userDetails?.account_name || "User";
-  const displayRole = (userDetails?.account_role || authState.role || "").toUpperCase().replace(/_/g, " ");
-  const avatarInitial = displayName.charAt(0).toUpperCase();
-  const whoLabel = `${displayName} • ${displayRole}`;
-  const roles = [
-    { label: displayRole || "USER", variant: "teal" as const },
-  ];
   return (
     <header className="
       h-12 flex items-center gap-3 px-4
