@@ -4,12 +4,12 @@
  * Synchronized with AuthContext:
  *   - Fetches permissions when auth status becomes "authenticated"
  *   - Clears permissions on logout
- *   - Uses accountUid from AuthContext only (no cookie fallback)
+ *   - Falls back to reading _nvxs_account_uid cookie for backward compat
  *
  * Exposes:
  *   - permissions: string[]        — list of permission names (e.g. "audit.view")
  *   - role: string                 — user's role name
- *   - hasPermission(p): boolean    — check a single permission (alias-aware, Slice 3)
+ *   - hasPermission(p): boolean    — check a single permission
  *   - hasAnyPermission(ps): boolean — check if user has at least one
  *   - loading: boolean
  *
@@ -21,12 +21,11 @@ import React, {
   useState,
   useEffect,
   useCallback,
-  useMemo,
   ReactNode,
 } from "react";
 import { getUserPermissions } from "../api/services/rbac.service";
 import { useAuth } from "./AuthContext";
-import { legacyAliasMemo, catalogAliasesMemo } from "./permissionAliases";
+import { getCookie } from "../utils/cookies";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
 
@@ -54,9 +53,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchPermissions = useCallback(async () => {
-    const accountUid = authState.accountUid;
+    // Get account UID from AuthContext state or fall back to cookie
+    const accountUid =
+      authState.accountUid || getCookie("_nvxs_account_uid");
 
     if (!accountUid) {
+      // Not logged in — clear state
       setPermissions([]);
       setRole("");
       setLoading(false);
@@ -72,6 +74,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         (data.permissions ?? []).map((p) => p.permission_name),
       );
     } catch {
+      // API error — default to no permissions (safe fail-closed)
       setPermissions([]);
       setRole("");
     } finally {
@@ -79,6 +82,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.accountUid]);
 
+  // React to auth state changes
   useEffect(() => {
     if (authState.status === "authenticated") {
       fetchPermissions();
@@ -89,50 +93,29 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.status, fetchPermissions]);
 
-  // Build a Set for O(1) lookup; rebuilt only when the underlying list changes.
-  const permissionSet = useMemo(() => new Set(permissions), [permissions]);
+  // Initial fetch on mount (handles page refresh when cookie exists but AuthContext is fresh)
+  useEffect(() => {
+    const accountUid = getCookie("_nvxs_account_uid");
+    if (accountUid && authState.status === "logged_out") {
+      fetchPermissions();
+    }
+  }, []);
 
-  /**
-   * Returns true if the user is granted `permission`, checking:
-   *   1. Literal key match
-   *   2. Forward alias: can_* → module.action (legacy backend)
-   *   3. Reverse alias: module.action → can_* (future backend with catalog keys)
-   *
-   * A user with `rbac.create` satisfies `can_create_user`, and vice-versa.
-   */
   const hasPermission = useCallback(
     (permission: string): boolean => {
+      // Bypass roles have full access
       if (BYPASS_ROLES.includes(role)) return true;
-      // 1. Literal match
-      if (permissionSet.has(permission)) return true;
-      // 2. Forward: can_* → module.action
-      const alias = legacyAliasMemo(permission);
-      if (alias && permissionSet.has(alias)) return true;
-      // 3. Reverse: module.action → can_* (any match suffices)
-      const reverseAliases = catalogAliasesMemo(permission);
-      for (const ra of reverseAliases) {
-        if (permissionSet.has(ra)) return true;
-      }
-      return false;
+      return permissions.includes(permission);
     },
-    [permissionSet, role],
+    [permissions, role],
   );
 
   const hasAnyPermission = useCallback(
     (perms: string[]): boolean => {
       if (BYPASS_ROLES.includes(role)) return true;
-      for (const p of perms) {
-        if (permissionSet.has(p)) return true;
-        const alias = legacyAliasMemo(p);
-        if (alias && permissionSet.has(alias)) return true;
-        const reverseAliases = catalogAliasesMemo(p);
-        for (const ra of reverseAliases) {
-          if (permissionSet.has(ra)) return true;
-        }
-      }
-      return false;
+      return perms.some((p) => permissions.includes(p));
     },
-    [permissionSet, role],
+    [permissions, role],
   );
 
   return (

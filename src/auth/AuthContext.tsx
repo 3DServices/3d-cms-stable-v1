@@ -22,7 +22,6 @@ import React, {
 import { post, setAccessToken } from "../api/client";
 import { ENDPOINTS } from "../api/endpoints";
 import { setCookie, clearAllCookies } from "../utils/cookies";
-import { broadcastLogout } from "../api/services/auth.service";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +31,6 @@ export interface AuthState {
   status:      AuthStatus;
   tenant:      string;
   role:        string;
-  accountType: string;
   accountUid:  string | null;
   accountRoot: string | null;
   loginHint:   { email: string } | null;
@@ -53,7 +51,6 @@ const INITIAL_STATE: AuthState = {
   status:      "logged_out",
   tenant:      "",
   role:        "",
-  accountType: "",
   accountUid:  null,
   accountRoot: null,
   loginHint:   null,
@@ -69,7 +66,6 @@ type AuthAction =
       payload: {
         accountUid: string;
         accountRoot: string;
-        accountType: string;
         tenant: string;
         role: string;
       };
@@ -92,7 +88,6 @@ function reducer(state: AuthState, action: AuthAction): AuthState {
         status: "authenticated",
         accountUid: action.payload.accountUid,
         accountRoot: action.payload.accountRoot,
-        accountType: action.payload.accountType,
         tenant: action.payload.tenant,
         role: action.payload.role,
         error: null,
@@ -164,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       payload: {
         accountUid: d.account_uid,
         accountRoot: d.account_root || "",
-        accountType: d.account_type || "",
         tenant: d.primary_account || d.account_root || "",
         role: d.account_role || "",
       },
@@ -187,7 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       payload: {
         accountUid: state.accountUid || "",
         accountRoot: state.accountRoot || "",
-        accountType: state.accountType,
         tenant: state.tenant,
         role: state.role,
       },
@@ -205,27 +198,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * logout — Notify backend to revoke tokens, then clear all local state.
-   *
-   * The backend call:
-   *   1. Revokes the refresh token (HttpOnly cookie, sent automatically).
-   *   2. Blacklists the current JWT access token (sent via Authorization header).
-   * Both happen best-effort — we clear local state regardless.
+   * logout — Clear all auth state and cookies, notify backend.
    */
   const logout = useCallback(() => {
-    // Fire backend logout (best-effort — don't block on failure)
-    post(ENDPOINTS.AUTH.LOGOUT, {}).catch(() => {});
-
-    // Clear in-memory JWT
-    setAccessToken(null);
-
-    // Notify other browser tabs
-    broadcastLogout();
-
-    // Clear all JS-visible cookies
+    // Best-effort backend session invalidation
+    // post(ENDPOINTS.AUTH.LOGOUT, {}).catch(() => {});
     clearAllCookies();
     sessionStorage.removeItem("_nvxs_redirect_in_progress");
-
     dispatch({ type: "LOGOUT" });
     window.location.href = "/";
   }, []);

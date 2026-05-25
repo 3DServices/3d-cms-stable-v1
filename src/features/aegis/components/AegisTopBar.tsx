@@ -9,9 +9,9 @@
  * All styles: Tailwind utility classes only.
  */
 import React, { useState, useEffect } from "react";
+import { getCookie } from "../../../utils/cookies";
 import { getRaw } from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
-import { useAuth } from "../../../auth/AuthContext";
 
 interface AegisTopBarProps {
   tenant?:       string;
@@ -48,42 +48,36 @@ export function AegisTopBar({
   waswaOn       = true,
   onToggleWaswa,
   onOpenTopup,
-  avatarInitial = "?",
-  whoLabel      = "",
+  avatarInitial = "T",
+  whoLabel      = "Tim • SYS_ADMIN",
   tickerItems   = DEFAULT_TICKER,
 }: AegisTopBarProps) {
-  const { state: authState } = useAuth();
   const [userDetails, setUserDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const accountUid = authState.accountUid;
-    if (!accountUid) {
-      setUserDetails(null);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
     const fetchUserDetails = async () => {
+      const accountUid = getCookie("_nvxs_account_uid");
+      if (!accountUid) {
+        setLoading(false);
+        return;
+      }
       try {
         const json = await getRaw<{ status: string; data: any }>(
           `${ENDPOINTS.AUTH.USER_DETAILS}/${accountUid}/details`
         );
-        if (!cancelled && json?.status === "success" && json?.data) {
+        if (json?.status === "success" && json?.data) {
           setUserDetails(json.data);
         }
       } catch (e) {
         console.error("Failed to fetch user details", e);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
 
-    setLoading(true);
     fetchUserDetails();
-    return () => { cancelled = true; };
-  }, [authState.accountUid]);
+  }, []);
 
   // Derive display values
   const displayTenant = userDetails?.primary_account || tenant;

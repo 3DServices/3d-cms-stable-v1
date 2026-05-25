@@ -48,6 +48,7 @@ import { TokenTopupModal }       from "../tokens/components/TokenTopupModal";
 
 // ── Auth & API ──────────────────────────────────────────────────────────────
 import { useAuth } from "../../auth/AuthContext";
+import { getCookie } from "../../utils/cookies";
 import { getRaw } from "../../api/client";
 import { ENDPOINTS } from "../../api/endpoints";
 
@@ -167,7 +168,7 @@ export function AegisDashboard() {
   const [waswaOn,        setWaswaOn]        = useState(true);
   const [waswaDrawerOpen,setWaswaDrawerOpen]= useState(false);
   // Show Airlock modal if not authenticated
-  const [airlockOpen,    setAirlockOpen]    = useState(() => state.status !== "authenticated");
+  const [airlockOpen,    setAirlockOpen]    = useState(() => !getCookie("account_uid"));
   // Statistics metrics state
   const [unitsOnline,    setUnitsOnline]    = useState({ count: 0, total: 0 });
   const [unitsOffline,   setUnitsOffline]   = useState({ count: 0 });
@@ -503,8 +504,8 @@ function AirlockModal({ open, onClose }: { open: boolean; onClose: () => void })
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
-    // Close modal when auth state becomes authenticated
-    if (state.status === "authenticated") { onClose(); }
+    // Close modal if auth state indicates authenticated OR if account_uid cookie exists
+    if (state.status === "authenticated" || getCookie("_nvxs_account_uid")) { onClose(); }
   }, [state.status]);
 
   // Resend cooldown timer
