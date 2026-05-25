@@ -44,7 +44,7 @@ export function hasAccessToken(): boolean {
   return accessToken !== null;
 }
 
-<<<<<<< HEAD
+
 /**
  * Get the current auth token (in-memory JWT only).
  * Returns null if no token is held — the 401 interceptor handles refresh.
@@ -53,8 +53,7 @@ function getAuthToken(): string | null {
   return accessToken;
 }
 
-=======
->>>>>>> parent of ba9189e (Live Monitoring and New Device Configuration)
+
 // ── Token refresh ────────────────────────────────────────────────────────────
 
 let refreshPromise: Promise<boolean> | null = null;

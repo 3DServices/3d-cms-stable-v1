@@ -48,7 +48,7 @@ export function IncomingBookingRequests() {
     setError(null);
     try {
       const res = await getBookingRequests(authState.accountRoot, {
-        params: { direction: "incoming" },
+        params: { direction: "both" },
       });
       setRequests(res.data ?? []);
     } catch (err) {
@@ -108,7 +108,7 @@ export function IncomingBookingRequests() {
     return (
       <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
         <div className="text-[16px] font-extrabold text-[#111B21] mb-1">No booking requests yet</div>
-        <p className="text-[12px] text-[#667781]">When marketplace buyers request bookings on your listed assets, they will appear here.</p>
+        <p className="text-[12px] text-[#667781]">Client booking requests will appear here once marketplace activity begins.</p>
       </div>
     );
   }
@@ -117,9 +117,9 @@ export function IncomingBookingRequests() {
     <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-[#E9EDEF] flex items-center justify-between">
         <div>
-          <h2 className="font-extrabold text-[13px] text-[#111B21]">Incoming Booking Requests</h2>
+          <h2 className="font-extrabold text-[13px] text-[#111B21]">Booking Requests</h2>
           <p className="text-[11px] text-[#667781]">
-            {requests.length} request{requests.length === 1 ? "" : "s"} from marketplace buyers
+            {requests.length} booking request{requests.length === 1 ? "" : "s"} across all clients
           </p>
         </div>
         <button

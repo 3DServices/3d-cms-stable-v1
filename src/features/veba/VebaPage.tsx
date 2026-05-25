@@ -10,14 +10,12 @@
  */
 import React, { useState } from "react";
 import { MarketplaceBrowse } from "./components/MarketplaceBrowse";
-import { MyListings } from "./components/MyListings";
 import { BookingRequestModal } from "./components/BookingRequestModal";
 import { IncomingBookingRequests } from "./components/IncomingBookingRequests";
-import { MyBookings } from "./components/MyBookings";
 import type { VebaListing } from "../../api/types";
 import { usePermissions } from "../../auth/PermissionsContext";
 
-type VebaTab = "marketplace" | "my-listings" | "booking-requests" | "my-bookings" | "ops";
+type VebaTab = "marketplace" | "booking-requests" | "ops";
 
 // ─── Status dots ─────────────────────────────────────────────────────────────
 const sDot: Record<string, string> = {
@@ -119,9 +117,7 @@ export function VebaPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <Pill color="green">+ New Case</Pill>
-                <Pill color="dark">Run Recon</Pill>
                 <Pill>Export</Pill>
-                <Pill>Policies</Pill>
               </div>
             </div>
           </div>
@@ -142,18 +138,6 @@ export function VebaPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("my-listings")}
-              className={[
-                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
-                activeTab === "my-listings"
-                  ? "bg-[#128C7E] text-white"
-                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
-              ].join(" ")}
-            >
-              My Listings
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab("booking-requests")}
               className={[
                 "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
@@ -163,18 +147,6 @@ export function VebaPage() {
               ].join(" ")}
             >
               Booking Requests
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("my-bookings")}
-              className={[
-                "px-3 py-1.5 text-[12px] font-extrabold rounded-md cursor-pointer border-0 transition-colors",
-                activeTab === "my-bookings"
-                  ? "bg-[#128C7E] text-white"
-                  : "bg-transparent text-[#667781] hover:bg-[#F0F2F5]",
-              ].join(" ")}
-            >
-              My Bookings
             </button>
             <button
               type="button"
@@ -195,14 +167,8 @@ export function VebaPage() {
             <MarketplaceBrowse onRequestBooking={(l) => setBookingFor(l)} />
           )}
 
-          {/* ── My Listings tab ─────────────────────────────────────────── */}
-          {activeTab === "my-listings" && <MyListings />}
-
-          {/* ── Booking Requests tab (owner incoming) ──────────────────── */}
+          {/* ── Booking Requests tab (all client booking requests) ──────── */}
           {activeTab === "booking-requests" && <IncomingBookingRequests />}
-
-          {/* ── My Bookings tab (requester outgoing) ───────────────────── */}
-          {activeTab === "my-bookings" && <MyBookings />}
 
           {/* ── Phase 3 booking-request modal (renders only when set) ──── */}
           <BookingRequestModal

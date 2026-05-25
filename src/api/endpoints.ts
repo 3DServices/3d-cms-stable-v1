@@ -129,8 +129,7 @@ export const ENDPOINTS = {
     ALL:         "/users/all",
     ASSIGN_ROLE: "/users",
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
+
   FLEET: {
     LIST_UNITS:       "/devices/configured/all",  // POST {data:{data_level,account_uid}}
     CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
@@ -147,10 +146,7 @@ export const ENDPOINTS = {
     CLIENT_INFO:       "/system32/devices/client-info",
     AUDIT_LOG:         "/system32/audit/logs",
   },
-=======
->>>>>>> parent of ba9189e (Live Monitoring and New Device Configuration)
-=======
->>>>>>> parent of ba9189e (Live Monitoring and New Device Configuration)
+
   AUDIT: {
     EVENTS:     "/audit/events",
     KPIS:       "/audit/kpis",
