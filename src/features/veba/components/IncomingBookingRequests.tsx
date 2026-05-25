@@ -48,7 +48,7 @@ export function IncomingBookingRequests() {
     setError(null);
     try {
       const res = await getBookingRequests(authState.accountRoot, {
-        params: { direction: "both" },
+        params: { direction: "all" },
       });
       setRequests(res.data ?? []);
     } catch (err) {

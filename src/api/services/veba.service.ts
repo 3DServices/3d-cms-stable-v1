@@ -18,9 +18,13 @@ export function getVebaListings(
   accountRoot: string,
   opts?: RequestOptions,
 ): Promise<{ data: VebaListing[] }> {
+  const merged: RequestOptions = {
+    ...opts,
+    params: { account_root: accountRoot, ...(opts?.params ?? {}) },
+  };
   return get<{ data: VebaListing[] }>(
-    `${ENDPOINTS.VEBA.LISTINGS}/${accountRoot}`,
-    opts,
+    ENDPOINTS.VEBA.LISTINGS,
+    merged,
   ).then(res => res.data);
 }
 
@@ -89,9 +93,13 @@ export function getBookingRequests(
   accountRoot: string,
   opts?: RequestOptions,
 ): Promise<{ data: BookingRequest[] }> {
+  const merged: RequestOptions = {
+    ...opts,
+    params: { account_root: accountRoot, ...(opts?.params ?? {}) },
+  };
   return get<{ data: BookingRequest[] }>(
-    `${ENDPOINTS.VEBA.BOOKING_REQUESTS}/${accountRoot}`,
-    opts,
+    ENDPOINTS.VEBA.BOOKING_REQUESTS,
+    merged,
   ).then(res => res.data);
 }
 
