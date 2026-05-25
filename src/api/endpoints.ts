@@ -151,6 +151,8 @@ export const ENDPOINTS = {
     DEVICE_CFG_UPDATE:"/configurations/update",            // POST Teltonika update payload
     ACTIVE_TXNS:      "/system32/payment/transactions/active", // GET append /{userUid}
     UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
+    LIST_REGISTERED:  "/devices/all",           // POST {data:{data_level,account_uid}}
+    REGISTER_UNIT:    "/devices/create",
   },
 
   AUDIT: {
