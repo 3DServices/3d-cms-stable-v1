@@ -52,15 +52,6 @@ function getAuthToken(): string | null {
   return accessToken;
 }
 
-/**
- * Exported read of the current auth token.
- * Use in non-standard HTTP clients (e.g. fleet SSE / external APIs)
- * that cannot go through the central baseFetch helper.
- */
-export function getStoredAuthToken(): string | null {
-  return getAuthToken();
-}
-
 // ── Token refresh ────────────────────────────────────────────────────────────
 
 let refreshPromise: Promise<boolean> | null = null;
