@@ -40,7 +40,7 @@ const DEFAULT_TIP: SidebarTip = {
 };
 
 export function Sidebar({
-  title    = "System Core Console",
+  title    = "Console",
   subtitle = "Primary Ops+Command Center",
   items    = DEFAULT_ITEMS,
   onSelect,
