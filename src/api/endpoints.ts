@@ -44,7 +44,20 @@ export const ENDPOINTS = {
     UPDATE:           "/gateways/mobile-money/update",
   },
   VEBA: {
-    STATISTICS: "/veba/statistics",
+    STATISTICS:       "/veba/statistics",
+    LISTINGS:         "/veba/listings",             // GET /{account_root}
+    LISTINGS_CREATE:  "/veba/listings/create",      // POST
+    LISTINGS_UPDATE:  "/veba/listings",             // PUT /{listing_uid}/update
+    LISTINGS_PAUSE:   "/veba/listings",             // PUT /{listing_uid}/pause
+    LISTINGS_REACTIVATE: "/veba/listings",          // PUT /{listing_uid}/reactivate
+    LISTINGS_ARCHIVE: "/veba/listings",             // PUT /{listing_uid}/archive
+    BOOKING_REQUESTS: "/veba/booking-requests",     // GET /{account_root}
+    BOOKING_CREATE:   "/veba/booking-requests/create", // POST
+    BOOKING_APPROVE:  "/veba/booking-requests",     // PUT /{uid}/approve
+    BOOKING_REJECT:   "/veba/booking-requests",     // PUT /{uid}/reject
+    BOOKING_CANCEL:   "/veba/booking-requests",     // PUT /{uid}/cancel
+    BOOKING_FULFILL:  "/veba/booking-requests",     // PUT /{uid}/fulfill
+    MARKETPLACE:      "/veba/marketplace/listings", // GET public marketplace
   },
   TENANTS: {
     CREATE:          "/tenants/create",
@@ -126,6 +139,7 @@ export const ENDPOINTS = {
     ALL: "/users/all",
     ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
   },
+
   FLEET: {
     LIST_UNITS:       "/system32/devices/configured/all",  // POST {data:{data_level,account_uid}}
     CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
@@ -138,6 +152,7 @@ export const ENDPOINTS = {
     ACTIVE_TXNS:      "/system32/payment/transactions/active", // GET append /{userUid}
     UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
   },
+
   AUDIT: {
     /** CMS-wide audit event stream (all modules). Supports ?domain=&severity=&range= query params */
     EVENTS:         "/audit/events",

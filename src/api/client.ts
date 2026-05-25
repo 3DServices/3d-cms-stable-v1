@@ -37,6 +37,11 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+/** Check whether we currently hold a valid in-memory JWT. */
+export function hasAccessToken(): boolean {
+  return accessToken !== null;
+}
+
 /** Get the current auth token. Prefers in-memory JWT, falls back to cookie. */
 function getAuthToken(): string | null {
   if (accessToken) return accessToken;

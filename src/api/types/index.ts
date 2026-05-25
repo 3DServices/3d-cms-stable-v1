@@ -27,7 +27,23 @@ export type {
   UpdateGatewayResponse,
 } from "./gateways.types";
 
-export type { VebaStatistics } from "./veba.types";
+export type {
+  VebaStatistics,
+  ListingStatus,
+  ListingVisibility,
+  PricingBasis,
+  VebaListingAssetSummary,
+  VebaListing,
+  CreateVebaListingRequest,
+  CreateVebaListingResponse,
+} from "./veba.types";
+
+export type {
+  BookingRequestStatus,
+  BookingRequest,
+  CreateBookingRequest,
+  CreateBookingRequestResponse,
+} from "./booking.types";
 
 export type {
   Client,
