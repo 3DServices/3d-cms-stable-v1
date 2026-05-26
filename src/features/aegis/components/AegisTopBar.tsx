@@ -9,7 +9,7 @@
  * All styles: Tailwind utility classes only.
  */
 import React, { useState, useEffect } from "react";
-import { getCookie } from "../../../utils/cookies";
+import { useAuth } from "../../../auth/AuthContext";
 import { getRaw } from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
 
@@ -52,12 +52,13 @@ export function AegisTopBar({
   whoLabel      = "Tim • SYS_ADMIN",
   tickerItems   = DEFAULT_TICKER,
 }: AegisTopBarProps) {
+  const { state: authState } = useAuth();
   const [userDetails, setUserDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserDetails = async () => {
-      const accountUid = getCookie("_nvxs_account_uid");
+      const accountUid = authState.accountUid;
       if (!accountUid) {
         setLoading(false);
         return;
@@ -77,15 +78,17 @@ export function AegisTopBar({
     };
 
     fetchUserDetails();
-  }, []);
+  }, [authState.accountUid]);
 
-  // Derive display values
-  const displayTenant = userDetails?.primary_account || tenant;
-  const displayAvatarInitial = userDetails?.account_name
-    ? userDetails.account_name.charAt(0).toUpperCase()
+  // Derive display values: fetched details → auth state → prop defaults (last resort)
+  const displayName = userDetails?.account_name || authState.accountUid || "";
+  const displayRole = userDetails?.account_role || authState.role || "";
+  const displayTenant = userDetails?.primary_account || authState.tenant || tenant;
+  const displayAvatarInitial = displayName
+    ? displayName.charAt(0).toUpperCase()
     : avatarInitial;
-  const displayWhoLabel = userDetails
-    ? `${userDetails.account_name} • ${userDetails.account_role?.toUpperCase().replace(/_/g, " ")}`
+  const displayWhoLabel = displayName
+    ? `${displayName} • ${displayRole.toUpperCase().replace(/_/g, " ") || "USER"}`
     : whoLabel;
 
   return (
