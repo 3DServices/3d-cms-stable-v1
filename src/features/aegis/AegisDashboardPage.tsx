@@ -31,13 +31,12 @@ import React, { useState, useEffect } from "react";
 // ── Existing shared components ───────────────────────────────────────────────
 import { NavRail }           from "../../components/navigation";
 import { AccordionSidebar }  from "../../components/navigation";
-import { WaswaAIPanel }      from "../../components/waswa";
+// import { WaswaAIPanel }      from "../../components/waswa";
 import type { ApprovalRow }  from "./components/HITLApprovalTable";
 import { HITLApprovalTable } from "./components/HITLApprovalTable";
 
 // ── New components ───────────────────────────────────────────────────────────
-import { AegisTopBar }           from "./components/AegisTopBar";
-import { AegisStatusStrip }      from "./components/AegisStatusStrip";
+// import { AegisStatusStrip }      from "./components/AegisStatusStrip";
 import { TaskManagerTable }      from "./components/TaskManagerTable";
 import { PaymentGatewaysCard }   from "./components/PaymentGatewaysCard";
 import { TokenEngineCard }       from "./components/TokenEngineCard";
@@ -56,11 +55,11 @@ import { ENDPOINTS } from "../../api/endpoints";
 // Static data
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AEGIS_TICKER = [
-  "Forecast: Healthy",
-  "API 99.95%",
-  "Socket Threads-Open: 5",
-];
+// const AEGIS_TICKER = [
+//   "Forecast: Healthy",
+//   "API 99.95%",
+//   "Socket Threads-Open: 5",
+// ];
 
 const AEGIS_NAV_ITEMS = [
   { key: "home",     glyph: "⌂",  label: "Home",         path: "/"         },
@@ -241,29 +240,7 @@ export function AegisDashboard() {
     fetchStats();
   }, []);
   return (
-    <div className="min-h-screen min-h-dvh flex flex-col bg-[#F0F2F5] pb-14 md:pb-0 overflow-x-hidden w-full">
-
-      {/* 1. Aegis Top Bar */}
-      <AegisTopBar
-        waswaOn={waswaOn}
-        onToggleWaswa={() => setWaswaOn((v) => !v)}
-        onOpenTopup={() => setTopupOpen(true)}
-        tickerItems={AEGIS_TICKER}
-      />
-
-      {/* 2. Aegis Status Strip */}
-      <AegisStatusStrip
-        waswaOn={waswaOn}
-        onToggleWaswa={() => setWaswaOn((v) => !v)}
-        onOpenTopup={() => setTopupOpen(true)}
-      />
-
-      <div className="flex flex-1 min-h-0 min-w-0 overflow-x-hidden">
-
-        
-
-        {/* 5. Main workspace */}
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3">
+    <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3 pb-14 md:pb-3 bg-[#F0F2F5]">
 
           {/* Page heading */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-3 flex flex-wrap items-start gap-3">
@@ -389,12 +366,6 @@ export function AegisDashboard() {
               Kafka: 12s lag&nbsp;•&nbsp;Redis: 97% hit&nbsp;•&nbsp;Cassandra write p95 9ms&nbsp;•&nbsp;MoMo retries 41&nbsp;•&nbsp;UI refresh 30s
             </div>
           </div>
-        </main>
-
-        {/* 6. Waswa AI right panel (desktop) */}
-        <WaswaAIPanel />
-      </div>
-
       {/* Floating Waswa W button */}
       <button
         onClick={() => setWaswaDrawerOpen(true)}
@@ -422,7 +393,7 @@ export function AegisDashboard() {
 
       {/* Airlock login modal overlay */}
       <AirlockModal open={airlockOpen} onClose={() => setAirlockOpen(false)} />
-    </div>
+    </main>
   );
 }
 
