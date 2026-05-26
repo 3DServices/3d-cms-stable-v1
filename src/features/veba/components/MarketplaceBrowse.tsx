@@ -18,6 +18,7 @@ import { useGuardedMutation, GuardedButton } from "../../../auth/guards";
 import type { VebaListing, ListingStatus, PricingBasis } from "../../../api/types";
 import { EditListingDrawer } from "./EditListingDrawer";
 import { ListingDetailPanel } from "./ListingDetailPanel";
+import { ConfirmDialog, useConfirmDialog } from "../../../components/ui/ConfirmDialog";
 
 /* ── Status styling ─────────────────────────────────────────────────── */
 const STATUS_STYLES: Record<ListingStatus, { bg: string; fg: string; label: string }> = {
@@ -114,6 +115,7 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
   const [pendingUid, setPendingUid] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<VebaListing | null>(null);
   const [selectedListing, setSelectedListing] = useState<VebaListing | null>(null);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   /* Fetch ALL listings for the tenant (scope=owner shows every status) */
   const fetchListings = useCallback(async () => {
@@ -125,10 +127,10 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
     setLoading(true);
     setError(null);
     try {
-      const res = await getVebaListings(authState.accountRoot, {
+      const listings = await getVebaListings(authState.accountRoot, {
         params: { scope: "owner" },
       });
-      setListings(res.data ?? []);
+      setListings(Array.isArray(listings) ? listings : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load marketplace listings.");
       setListings([]);
@@ -153,8 +155,11 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
     (uid: string) => archiveVebaListing(uid, authState.accountUid ?? "system"),
   );
 
-  const run = async (mutation: typeof pauseMut, uid: string, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+  const run = async (mutation: typeof pauseMut, uid: string, confirmOpts?: { title: string; message: string; confirmLabel: string; variant?: "danger" | "warning" | "default" }) => {
+    if (confirmOpts) {
+      const ok = await confirm(confirmOpts);
+      if (!ok) return;
+    }
     setPendingUid(uid);
     try {
       await mutation.mutate(uid);
@@ -378,16 +383,14 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
                       <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1.5 justify-end">
-                          {l.status !== "archived" && (
-                            <GuardedButton
-                              permission="can_edit_asset_listing"
-                              onClick={() => setEditingListing(l)}
-                              disabled={isPending}
-                              className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#E9EDEF] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Edit
-                            </GuardedButton>
-                          )}
+                          <GuardedButton
+                            permission="can_edit_asset_listing"
+                            onClick={() => setEditingListing(l)}
+                            disabled={isPending}
+                            className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#E9EDEF] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Edit
+                          </GuardedButton>
                           {l.status === "active" && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
@@ -398,20 +401,26 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
                               {isPending ? "..." : "Pause"}
                             </GuardedButton>
                           )}
-                          {l.status === "paused" && (
+                          {(l.status === "paused" || l.status === "archived") && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
-                              onClick={() => run(reactivateMut, l.listing_uid)}
+                              onClick={() => run(
+                                reactivateMut,
+                                l.listing_uid,
+                                l.status === "archived"
+                                  ? { title: "Unarchive listing?", message: "This listing will become active and visible on the marketplace again.", confirmLabel: "Unarchive", variant: "warning" as const }
+                                  : undefined,
+                              )}
                               disabled={isPending}
                               className="px-2 py-1 text-[11px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {isPending ? "..." : "Reactivate"}
+                              {isPending ? "..." : l.status === "archived" ? "Unarchive" : "Reactivate"}
                             </GuardedButton>
                           )}
                           {l.status !== "archived" && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
-                              onClick={() => run(archiveMut, l.listing_uid, "Archive this listing? No new bookings can be made.")}
+                              onClick={() => run(archiveMut, l.listing_uid, { title: "Archive listing?", message: "No new bookings can be made once archived.", confirmLabel: "Archive", variant: "danger" })}
                               disabled={isPending}
                               className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#FFD6D6] bg-white text-[#B00020] hover:bg-[#FFF5F5] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -452,6 +461,8 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
           onUpdated={fetchListings}
         />
       )}
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }
