@@ -149,3 +149,23 @@ export { createClient, getAllClients, getClientsByProvider, updateClient, trashC
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";
 export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions, createUser, getAllUsers, assignUserRole, createPermission, updatePermission, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "./services/rbac.service";
 export { getAuditEvents, getAuditKpis, getHashChain, getAuditApprovals, approveAuditRequest, rejectAuditRequest, getComplianceSnapshot, requestAuditExport } from "./services/audit.service";
+export {
+  listProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  listProductVariants,
+  createProductVariant,
+  updateProductVariant,
+  deleteProductVariant,
+} from "./services/products.service";
+export type {
+  Product,
+  CreateProductRequest,
+  CreateProductResponse,
+  UpdateProductRequest,
+  ProductVariant,
+  CreateVariantRequest,
+  CreateVariantResponse,
+  UpdateVariantRequest,
+} from "./types";

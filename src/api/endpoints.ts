@@ -155,6 +155,17 @@ export const ENDPOINTS = {
     REGISTER_UNIT:    "/devices/create",
   },
 
+  PRODUCTS: {
+    LIST:           "/billing/products/list",
+    CREATE:         "/billing/products/create",
+    UPDATE:         "/billing/products/update",
+    DELETE:         "/billing/products/delete",
+    VARIANT_LIST:   "/billing/products/variant/list",   // append /{product_uid}
+    VARIANT_CREATE: "/billing/products/variant/create",
+    VARIANT_UPDATE: "/billing/products/variant/update",
+    VARIANT_DELETE: "/billing/products/variant/delete",
+  },
+
   AUDIT: {
     /** CMS-wide audit event stream (all modules). Supports ?domain=&severity=&range= query params */
     EVENTS:         "/audit/events",

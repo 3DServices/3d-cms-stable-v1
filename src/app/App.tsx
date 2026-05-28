@@ -41,6 +41,7 @@ import { FirmwarePage }         from "../features/firmware";
 import { SimPage }             from "../features/sim";
 
 import { AssetDigitalTwinPage }  from "../features/asset-digital-twin";
+import { ProductsPage }          from "../features/products";
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 import { NotFoundPage } from "./NotFoundPage";
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/ai"       element={<ProtectedRoute permission="ai.view"><AIWorkloadsPage /></ProtectedRoute>} />
           <Route path="/rbac"     element={<ProtectedRoute permission="rbac.view"><RbacPage /></ProtectedRoute>} />
           <Route path="/audit"    element={<ProtectedRoute permission="audit.view"><AuditPage /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute permission="products.view_only"><ProductsPage /></ProtectedRoute>} />
 
           {/* ── 404 ─────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFoundPage />} />
