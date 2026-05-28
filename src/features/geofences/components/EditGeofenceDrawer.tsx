@@ -1,8 +1,8 @@
 /**
- * EditGeofenceDrawer — Slide-in drawer for editing an existing geofence.
+ * EditGeofenceDrawer — Inline panel for editing an existing geofence.
  *
- * Allows renaming, changing description, and updating polygon points
- * (if the user has been editing vertices on the map).
+ * Renders as a side panel BELOW the geofence list (not a full-screen overlay)
+ * so the user can still interact with the map to drag polygon vertices.
  */
 import React, { useState, useCallback, useEffect } from "react";
 import { updateGeozone } from "../../../api/services/geozones.service";
@@ -76,83 +76,86 @@ export function EditGeofenceDrawer({
   const pathChanged = editedPath && editedPath.length >= 3;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-
-      <div className="relative w-[400px] max-w-full bg-white h-full flex flex-col shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E9EDEF] shrink-0">
-          <div>
-            <div className="font-black text-[15px] text-[#111B21]">Edit Geofence</div>
-            <div className="text-[11px] text-[#667781] mt-0.5">
-              {geozone.geozone_name}
-            </div>
+    <div className="bg-white border border-[#128C7E] rounded-xl shadow-lg flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-[#128C7E] shrink-0">
+        <div>
+          <div className="font-black text-[13px] text-white">Edit Geofence</div>
+          <div className="text-[10px] text-white/70 mt-0.5">
+            Drag vertices on the map to reshape
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-[#F0F2F5] border border-[#E9EDEF] text-[#667781] font-black text-[13px] cursor-pointer grid place-items-center"
-          >
-            ✕
-          </button>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-6 h-6 rounded-md bg-white/20 border-0 text-white font-black text-[12px] cursor-pointer grid place-items-center hover:bg-white/30"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Editing active banner */}
+      <div className="px-4 py-2 bg-[#E9F7F4] border-b border-[#C2E8E1] flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+        <span className="text-[11px] font-extrabold text-[#075E54]">
+          Edit mode active — drag the white squares on the map to reshape
+        </span>
+      </div>
+
+      {/* Form */}
+      <div className="p-4 flex flex-col gap-3">
+        {/* Name */}
+        <div>
+          <label className="block text-[10px] font-extrabold text-[#667781] mb-1">
+            Geofence Name *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full h-8 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E]"
+          />
         </div>
 
-        {/* Form */}
-        <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-5 flex flex-col gap-4">
-          {/* Name */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-[#667781] mb-1">
-              Geofence Name *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E]"
-            />
-          </div>
+        {/* Description */}
+        <div>
+          <label className="block text-[10px] font-extrabold text-[#667781] mb-1">
+            Description *
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E] resize-none"
+          />
+        </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-[#667781] mb-1">
-              Description *
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-[#E9EDEF] text-[12px] text-[#111B21] outline-none focus:border-[#128C7E] resize-none"
-            />
-          </div>
-
-          {/* Polygon status */}
-          <div className="bg-[#F0F2F5] border border-[#E9EDEF] rounded-xl p-3">
-            <div className="text-[11px] font-extrabold text-[#667781] mb-1">Polygon</div>
-            <div className="text-[11px] text-[#111B21]">
-              {currentPath.length} coordinate points
-            </div>
+        {/* Polygon status */}
+        <div className="bg-[#F0F2F5] border border-[#E9EDEF] rounded-lg p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-extrabold text-[#667781]">
+              Polygon: {currentPath.length} points
+            </span>
             {pathChanged && (
-              <div className="mt-1 text-[10px] font-extrabold text-[#128C7E]">
-                Vertices updated on map — changes will be saved
-              </div>
+              <span className="text-[10px] font-extrabold text-[#128C7E]">
+                Modified
+              </span>
             )}
-            <div className="mt-1 text-[10px] text-[#667781]">
-              Tip: Click "Edit on Map" in the list card, then drag vertices to reshape.
-            </div>
           </div>
-
-          {error && (
-            <div className="text-[11px] text-[#B00020] bg-[#FFF5F5] border border-[#FFD6D6] rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div className="flex gap-2 px-5 py-3 border-t border-[#E9EDEF] shrink-0">
+        {/* Error */}
+        {error && (
+          <div className="text-[11px] text-[#B00020] bg-[#FFF5F5] border border-[#FFD6D6] rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 h-9 rounded-lg border border-[#E9EDEF] bg-white text-[12px] font-extrabold text-[#667781] cursor-pointer"
+            className="flex-1 h-8 rounded-lg border border-[#E9EDEF] bg-white text-[11px] font-extrabold text-[#667781] cursor-pointer"
           >
             Cancel
           </button>
@@ -160,7 +163,7 @@ export function EditGeofenceDrawer({
             type="button"
             onClick={() => updateMutation.mutate()}
             disabled={updateMutation.isRunning}
-            className="flex-1 h-9 rounded-lg border-0 bg-[#128C7E] text-white text-[12px] font-extrabold cursor-pointer hover:bg-[#0D7466] disabled:opacity-50"
+            className="flex-1 h-8 rounded-lg border-0 bg-[#128C7E] text-white text-[11px] font-extrabold cursor-pointer hover:bg-[#0D7466] disabled:opacity-50"
           >
             {updateMutation.isRunning ? "Saving…" : "Save Changes"}
           </button>

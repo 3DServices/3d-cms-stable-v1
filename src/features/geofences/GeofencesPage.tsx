@@ -208,9 +208,18 @@ export function GeofencesPage() {
       <div className="flex-1 min-h-0 p-3 pt-2">
         {activeTab === "my-geofences" ? (
           <div className="flex gap-3 h-full">
-            {/* Left panel — list */}
-            <div className="w-[340px] shrink-0 flex flex-col">
-              {loading ? (
+            {/* Left panel — list OR edit panel */}
+            <div className="w-[340px] shrink-0 flex flex-col gap-2">
+              {/* Inline edit panel (replaces list when editing) */}
+              {editDrawerOpen && editingGeozone ? (
+                <EditGeofenceDrawer
+                  open={editDrawerOpen}
+                  geozone={editingGeozone}
+                  editedPath={editedPath}
+                  onClose={handleEditClose}
+                  onUpdated={fetchGeozones}
+                />
+              ) : loading ? (
                 <div className="flex items-center justify-center flex-1">
                   <div className="w-5 h-5 border-2 border-[#128C7E] border-t-transparent rounded-full animate-spin" />
                 </div>
@@ -260,13 +269,7 @@ export function GeofencesPage() {
         onCreated={fetchGeozones}
       />
 
-      <EditGeofenceDrawer
-        open={editDrawerOpen}
-        geozone={editingGeozone}
-        editedPath={editedPath}
-        onClose={handleEditClose}
-        onUpdated={fetchGeozones}
-      />
+      {/* EditGeofenceDrawer is now rendered inline in the left panel */}
 
       <AttachDevicesModal
         open={!!attachGeozone}

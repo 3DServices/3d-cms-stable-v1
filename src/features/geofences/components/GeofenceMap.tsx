@@ -142,17 +142,30 @@ export function GeofenceMap({
     [onPolygonEdited],
   );
 
-  // ── Store polygon refs ──────────────────────────────────────────────────
+  // ── Store polygon refs & apply editable on load ─────────────────────────
   const onPolygonLoad = useCallback(
     (uid: string, poly: google.maps.Polygon) => {
       polygonRefs.current[uid] = poly;
+      // Apply editable/draggable immediately when the polygon loads
+      const shouldEdit = uid === editingUid;
+      poly.setEditable(shouldEdit);
+      poly.setDraggable(shouldEdit);
     },
-    [],
+    [editingUid],
   );
 
   const onPolygonUnmount = useCallback((uid: string) => {
     delete polygonRefs.current[uid];
   }, []);
+
+  // ── Programmatically toggle editable/draggable via refs ─────────────────
+  useEffect(() => {
+    for (const [uid, poly] of Object.entries(polygonRefs.current)) {
+      const shouldEdit = uid === editingUid;
+      poly.setEditable(shouldEdit);
+      poly.setDraggable(shouldEdit);
+    }
+  }, [editingUid]);
 
   if (!isLoaded) {
     return (
@@ -191,7 +204,7 @@ export function GeofenceMap({
         const isEditing = gz.geozone_uid === editingUid;
         return (
           <Polygon
-            key={gz.geozone_uid}
+            key={`${gz.geozone_uid}-${isEditing ? "edit" : "view"}`}
             paths={gz.path}
             options={{
               ...(isSelected ? POLYGON_SELECTED : POLYGON_DEFAULT),
