@@ -178,7 +178,7 @@ export function DeviceZones() {
                   <GuardedButton
                     permission="can_edit_geofence"
                     fallback="hide"
-                    onClick={() => detachMutation.invoke(z.zone_uid)}
+                    onClick={() => detachMutation.mutate(z.zone_uid)}
                     disabled={detachingId === z.zone_uid}
                     className="shrink-0 ml-2 h-6 px-2 text-[10px] font-extrabold rounded-md bg-[#FFF5F5] border border-[#FFD6D6] text-[#B00020] hover:bg-[#FFD6D6] cursor-pointer disabled:opacity-50"
                   >

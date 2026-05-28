@@ -212,11 +212,11 @@ export function AttachDevicesModal({
             </button>
             <button
               type="button"
-              onClick={() => attachMutation.invoke()}
-              disabled={selected.size === 0 || attachMutation.state === "loading"}
+              onClick={() => attachMutation.mutate()}
+              disabled={selected.size === 0 || attachMutation.isRunning}
               className="h-9 px-4 rounded-lg border-0 bg-[#128C7E] text-white text-[12px] font-extrabold cursor-pointer hover:bg-[#0D7466] disabled:opacity-50"
             >
-              {attachMutation.state === "loading" ? "Attaching…" : "Attach"}
+              {attachMutation.isRunning ? "Attaching…" : "Attach"}
             </button>
           </div>
         </div>

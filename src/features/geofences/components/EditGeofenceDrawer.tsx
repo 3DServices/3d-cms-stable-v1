@@ -158,11 +158,11 @@ export function EditGeofenceDrawer({
           </button>
           <button
             type="button"
-            onClick={() => updateMutation.invoke()}
-            disabled={updateMutation.state === "loading"}
+            onClick={() => updateMutation.mutate()}
+            disabled={updateMutation.isRunning}
             className="flex-1 h-9 rounded-lg border-0 bg-[#128C7E] text-white text-[12px] font-extrabold cursor-pointer hover:bg-[#0D7466] disabled:opacity-50"
           >
-            {updateMutation.state === "loading" ? "Saving…" : "Save Changes"}
+            {updateMutation.isRunning ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>

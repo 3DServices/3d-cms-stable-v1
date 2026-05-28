@@ -300,11 +300,11 @@ export function GeofencesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => deleteMutation.invoke()}
-                disabled={deleteMutation.state === "loading"}
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isRunning}
                 className="h-9 px-4 rounded-lg border-0 bg-[#B00020] text-white text-[12px] font-extrabold cursor-pointer hover:bg-[#8B0018] disabled:opacity-50"
               >
-                {deleteMutation.state === "loading" ? "Deleting…" : "Delete"}
+                {deleteMutation.isRunning ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>
