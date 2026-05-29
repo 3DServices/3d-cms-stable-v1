@@ -142,7 +142,6 @@ interface RegisteredDevice {
 }
 
 interface ClientItem  { uid: string; label: string; }
-interface Transaction { payment_uid: string; payment_validity: string; valid_end_date: string; }
 type ToastV = "success" | "error" | "warn" | "info";
 interface Toast { id: string; variant: ToastV; title: string; body?: string; out?: boolean; }
 type TeltoValues   = Record<string, string>;
@@ -527,8 +526,6 @@ export function DeviceManagementSection() {
   const [loading,       setLoading]       = useState(true);
   const [loadErr,       setLoadErr]       = useState<string | null>(null);
   const [clients,       setClients]       = useState<ClientItem[]>([]);
-  const [transactions,  setTransactions]  = useState<Transaction[]>([]);
-  const [txLoading,     setTxLoading]     = useState(false);
   const [toasts,        setToasts]        = useState<Toast[]>([]);
   const [canManage,     setCanManage]     = useState(false);
   const [isClientAdmin, setIsClientAdmin] = useState(false);
@@ -617,27 +614,6 @@ export function DeviceManagementSection() {
         setClients(j.data.map((c: any) => ({ uid: c.client_uid || c.uid || "", label: c.client_name || c.uid || "" })));
       }
     } catch { /**/ }
-  }
-
-  async function loadTransactions(): Promise<Transaction[]> {
-    const uid = authState.accountRoot || authState.accountUid || "";
-    if (!uid) return [];
-    setTxLoading(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const j = await fleetFetch("GET", `${ENDPOINTS.FLEET.ACTIVE_TXNS}/${encodeURIComponent(uid)}`) as any;
-      if (j?.status === "success" && Array.isArray(j?.data)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const txs = j.data.map((t: any) => ({
-          payment_uid:      t.payment_uid      || "",
-          payment_validity: t.payment_validity || "N/A",
-          valid_end_date:   t.valid_end_date   || "N/A",
-        }));
-        setTransactions(txs);
-        return txs;
-      }
-    } catch { /**/ } finally { setTxLoading(false); }
-    return [];
   }
 
   async function loadClientTokens(clientUid: string) {
@@ -925,20 +901,20 @@ export function DeviceManagementSection() {
   async function openRenew(d: Device) {
     setRenewPayUid(""); setRenewStatus("");
     setRenewDevice(d);
-    await loadTransactions();
+    if (d.client_uid) loadClientTokens(d.client_uid);
   }
 
   async function submitRenew() {
     if (!renewDevice) return;
-    if (!renewPayUid) { setRenewStatus("Select a transaction."); return; }
+    if (!renewPayUid) { setRenewStatus("Select a token subscription."); return; }
     setRenewSaving(true);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const j = await fleetFetch("POST", ENDPOINTS.FLEET.UPDATE_IMEI, {
-        data: { payment_uid: renewPayUid, used_imei: renewDevice.device_imei },
+      const j = await fleetFetch("POST", ENDPOINTS.FLEET.DEVICE_SUB_RENEW, {
+        data: { device_imei: renewDevice.device_imei, token_billing_uid: renewPayUid },
       }) as any;
       if (j?.status === "success") {
-        showToast("success", "Renewed", "Payment applied to device.");
+        showToast("success", "Renewed", "Subscription renewed successfully.");
         setRenewDevice(null); reload();
       } else { setRenewStatus(j?.message ?? "Unexpected response"); }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1030,7 +1006,8 @@ export function DeviceManagementSection() {
               {paged.map((d, i) => {
                 const isTelto  = d.hardware.toLowerCase().includes("teltonika") || isTeltonikaModel(d.hardware_model);
                 const isXirgo  = d.hardware.toLowerCase().includes("xirgo") || isXirgoModel(d.hardware_model);
-                const expired = d.subscription_status.toLowerCase() === "expired";
+                const subRaw   = d.subscription_status.toLowerCase();
+                const isActive = subRaw === "active" || subRaw === "running" || subRaw === "valid";
                 const menuOpen = openMenuImei === d.device_imei;
                 return (
                   <tr key={d.device_imei} className={`border-b border-[#F0F2F5] ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}>
@@ -1078,11 +1055,11 @@ export function DeviceManagementSection() {
                                 Edit Configs
                               </button>
                             )}
-                            {canRenewPayment && expired && (
+                            {canRenewPayment && !isActive && (
                               <button
                                 onClick={() => { openRenew(d); setOpenMenuImei(null); }}
                                 className="w-full text-left px-3 py-2 text-[12px] text-[#F57F17] hover:bg-[#FFF8E1] cursor-pointer bg-transparent border-none">
-                                Renew Payment
+                                Renew
                               </button>
                             )}
                             {canDeleteDevice && (
@@ -1428,24 +1405,30 @@ export function DeviceManagementSection() {
         );
       })()}
 
-      {/* Renew Payment */}
+      {/* Renew Subscription */}
       {renewDevice && (
-        <Modal title="Renew Payment" onClose={() => setRenewDevice(null)}>
+        <Modal title="Renew Subscription" onClose={() => setRenewDevice(null)}>
           <p className="text-[12px] text-[#667781] mb-3">
-            Assign an active transaction to{" "}
+            Select a token to renew the subscription for{" "}
             <span className="font-extrabold text-[#111B21]">{renewDevice.device_name || renewDevice.device_imei}</span>.
           </p>
-          {txLoading ? (
-            <div className="text-[12px] text-[#667781] italic">Loading transactions…</div>
+          {clientTokensLoading ? (
+            <div className="text-[12px] text-[#667781] italic">Loading tokens…</div>
           ) : (
             <FSelect value={renewPayUid} onChange={setRenewPayUid}>
-              <option value="">— Select transaction —</option>
-              {transactions.map((t) => (
-                <option key={t.payment_uid} value={t.payment_uid}>
-                  {t.payment_validity} (until: {t.valid_end_date})
+              <option value="">
+                {renewDevice.client_uid ? "— Select token —" : "— No client linked to this device —"}
+              </option>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {clientTokens.map((t: any) => (
+                <option key={t.token_billing_uid} value={t.token_billing_uid}>
+                  {t.token_name} — {t.variant?.variant_name} ({t.variant?.billing_currency} {t.variant?.billing_amount})
                 </option>
               ))}
             </FSelect>
+          )}
+          {!clientTokensLoading && clientTokens.length === 0 && renewDevice.client_uid && (
+            <div className="text-[11px] text-[#F57F17] mt-2">No available tokens for this client account.</div>
           )}
           {renewStatus && <div className="text-[12px] text-[#D93025] mt-2">{renewStatus}</div>}
           <div className="flex justify-end gap-2 mt-5">

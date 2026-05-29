@@ -154,6 +154,7 @@ export const ENDPOINTS = {
     UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
     LIST_REGISTERED:  "/devices/all",           // POST {data:{data_level,account_uid}}
     REGISTER_UNIT:    "/devices/create",
+    DEVICE_SUB_RENEW: "/subscriptions/device/renew", // POST {data:{device_imei,token_billing_uid}}
   },
 
   PRODUCTS: {
