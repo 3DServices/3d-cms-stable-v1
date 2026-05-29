@@ -29,13 +29,21 @@ export type {
 
 export type {
   VebaStatistics,
-  VebaListing,
   ListingStatus,
   ListingVisibility,
   PricingBasis,
+  VebaListingAssetSummary,
+  VebaListing,
   CreateVebaListingRequest,
   CreateVebaListingResponse,
 } from "./veba.types";
+
+export type {
+  BookingRequestStatus,
+  BookingRequest,
+  CreateBookingRequest,
+  CreateBookingRequestResponse,
+} from "./booking.types";
 
 export type {
   Client,
