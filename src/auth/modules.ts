@@ -333,6 +333,17 @@ const BUILT_MODULES: ModuleDef[] = [
     showInSidebar: true,
     catalogModuleName: "Trip Replay & Audit",
   },
+    {
+    id: "products",
+    name: "Products",
+    navLabel: "Products",
+    navGlyph: "P",
+    route: "/products",
+    viewPermission: "products.view_only",
+    group: "finance",
+    showInNavRail: true,
+    showInSidebar: true,
+  },
 ];
 
 // ── Catalog-only modules ─────────────────────────────────────────────────────

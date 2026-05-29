@@ -1,4 +1,30 @@
 import { useState, useEffect } from "react";
+
+const BILLING_TYPES = [
+  { value: "365",    label: "Annual"           },
+  { value: "90",     label: "Quarterly"        },
+  { value: "180",    label: "Six Months"       },
+  { value: "730",    label: "2 Years"          },
+  { value: "1095",   label: "3 Years"          },
+  { value: "hourly", label: "Hourly"           },
+  { value: "custom", label: "Custom (days)"    },
+] as const;
+
+// Only values that are actually persisted to the DB (not UI-only selectors)
+const BILLING_TYPE_PRESETS = new Set(["365", "90", "180", "730", "1095"]);
+
+function billingTypeLabel(value: string): string {
+  const found = BILLING_TYPES.find((t) => t.value === value);
+  if (found && found.value !== "custom" && found.value !== "hourly") return found.label;
+  if (value.startsWith("H")) {
+    const n = Number(value.slice(1));
+    if (!isNaN(n) && n > 0) return n === 1 ? "1 Hour" : `${n} Hours`;
+  }
+  const n = Number(value);
+  if (!isNaN(n) && n > 0) return `${n} days`;
+  return value;
+}
+
 import {
   listProducts,
   createProduct,
@@ -41,7 +67,9 @@ export function ProductsPage() {
   // Create variant
   const [showCreateVariant, setShowCreateVariant] = useState(false);
   const [variantName, setVariantName] = useState("");
-  const [variantBillingType, setVariantBillingType] = useState("one_time");
+  const [variantBillingType, setVariantBillingType] = useState("365");
+  const [variantCustomDays, setVariantCustomDays] = useState("");
+  const [variantHours, setVariantHours] = useState("1");
   const [variantPrice, setVariantPrice] = useState("");
   const [variantCurrency, setVariantCurrency] = useState("KES");
   const [createVariantLoading, setCreateVariantLoading] = useState(false);
@@ -49,7 +77,9 @@ export function ProductsPage() {
   // Edit variant (inline in canvas)
   const [editVariant, setEditVariant] = useState<ProductVariant | null>(null);
   const [editVariantName, setEditVariantName] = useState("");
-  const [editVariantBillingType, setEditVariantBillingType] = useState("");
+  const [editVariantBillingType, setEditVariantBillingType] = useState("365");
+  const [editVariantCustomDays, setEditVariantCustomDays] = useState("");
+  const [editVariantHours, setEditVariantHours] = useState("1");
   const [editVariantPrice, setEditVariantPrice] = useState("");
   const [editVariantCurrency, setEditVariantCurrency] = useState("");
   const [updateVariantLoading, setUpdateVariantLoading] = useState(false);
@@ -154,19 +184,27 @@ export function ProductsPage() {
   // ── Variant CRUD ─────────────────────────────────────────────────────────────
 
   const handleCreateVariant = async () => {
-    if (!canvasProduct || !variantName.trim() || !variantPrice) return;
+    const resolvedBillingType =
+      variantBillingType === "custom"
+        ? variantCustomDays.trim()
+        : variantBillingType === "hourly"
+          ? `H${variantHours}`
+          : variantBillingType;
+    if (!canvasProduct || !variantName.trim() || !variantPrice || !resolvedBillingType) return;
     setCreateVariantLoading(true);
     try {
       const res = await createProductVariant({
         product_uid: canvasProduct.product_uid,
         variant_name: variantName,
-        billing_type: variantBillingType,
+        billing_type: resolvedBillingType,
         variant_price: parseFloat(variantPrice),
         billing_currency: variantCurrency,
       });
       setShowCreateVariant(false);
       setVariantName("");
-      setVariantBillingType("one_time");
+      setVariantBillingType("365");
+      setVariantCustomDays("");
+      setVariantHours("1");
       setVariantPrice("");
       setVariantCurrency("KES");
       await fetchVariants(canvasProduct.product_uid);
@@ -184,19 +222,37 @@ export function ProductsPage() {
   const startEditVariant = (v: ProductVariant) => {
     setEditVariant(v);
     setEditVariantName(v.variant_name);
-    setEditVariantBillingType(v.billing_type);
+    if (BILLING_TYPE_PRESETS.has(v.billing_type)) {
+      setEditVariantBillingType(v.billing_type);
+      setEditVariantCustomDays("");
+      setEditVariantHours("1");
+    } else if (v.billing_type.startsWith("H")) {
+      setEditVariantBillingType("hourly");
+      setEditVariantHours(v.billing_type.slice(1) || "1");
+      setEditVariantCustomDays("");
+    } else {
+      setEditVariantBillingType("custom");
+      setEditVariantCustomDays(v.billing_type);
+      setEditVariantHours("1");
+    }
     setEditVariantPrice(String(v.billing_amount));
     setEditVariantCurrency(v.billing_currency);
   };
 
   const handleUpdateVariant = async () => {
-    if (!editVariant || !canvasProduct) return;
+    const resolvedBillingType =
+      editVariantBillingType === "custom"
+        ? editVariantCustomDays.trim()
+        : editVariantBillingType === "hourly"
+          ? `H${editVariantHours}`
+          : editVariantBillingType;
+    if (!editVariant || !canvasProduct || !resolvedBillingType) return;
     setUpdateVariantLoading(true);
     try {
       await updateProductVariant({
         variant_uid: editVariant.variant_uid,
         variant_name: editVariantName,
-        billing_type: editVariantBillingType,
+        billing_type: resolvedBillingType,
         variant_price: parseFloat(editVariantPrice),
         billing_currency: editVariantCurrency,
       });
@@ -463,17 +519,42 @@ export function ProductsPage() {
 
                           <label className="flex flex-col gap-1.5">
                             <span className="text-[11px] font-bold text-[#667781]">
-                              Billing Type
+                              Billing Period
                             </span>
                             <select
                               value={editVariantBillingType}
-                              onChange={(e) => setEditVariantBillingType(e.target.value)}
+                              onChange={(e) => {
+                                setEditVariantBillingType(e.target.value);
+                                if (e.target.value !== "custom") setEditVariantCustomDays("");
+                                if (e.target.value !== "hourly") setEditVariantHours("1");
+                              }}
                               className="h-9 px-3 border border-[#E9EDEF] rounded-lg text-[12px] focus:outline-none focus:border-[#128C7E] bg-white"
                             >
-                              <option value="one_time">One Time</option>
-                              <option value="recurring">Recurring</option>
-                              <option value="usage">Usage</option>
+                              {BILLING_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                              ))}
                             </select>
+                            {editVariantBillingType === "hourly" && (
+                              <select
+                                value={editVariantHours}
+                                onChange={(e) => setEditVariantHours(e.target.value)}
+                                className="mt-1 h-9 px-3 border border-[#E9EDEF] rounded-lg text-[12px] focus:outline-none focus:border-[#128C7E] bg-white"
+                              >
+                                {Array.from({ length: 100 }, (_, i) => i + 1).map((h) => (
+                                  <option key={h} value={String(h)}>{h} {h === 1 ? "Hour" : "Hours"}</option>
+                                ))}
+                              </select>
+                            )}
+                            {editVariantBillingType === "custom" && (
+                              <input
+                                type="number"
+                                min="1"
+                                value={editVariantCustomDays}
+                                onChange={(e) => setEditVariantCustomDays(e.target.value)}
+                                placeholder="Number of days"
+                                className="mt-1 h-9 px-3 border border-[#E9EDEF] rounded-lg text-[12px] focus:outline-none focus:border-[#128C7E]"
+                              />
+                            )}
                           </label>
 
                           <div className="flex gap-2">
@@ -489,14 +570,15 @@ export function ProductsPage() {
                             </label>
                             <label className="w-24 flex flex-col gap-1.5">
                               <span className="text-[11px] font-bold text-[#667781]">Currency</span>
-                              <input
+                              <select
                                 value={editVariantCurrency}
-                                maxLength={5}
-                                onChange={(e) =>
-                                  setEditVariantCurrency(e.target.value.toUpperCase())
-                                }
-                                className="h-9 px-3 border border-[#E9EDEF] rounded-lg text-[12px] focus:outline-none focus:border-[#128C7E] uppercase"
-                              />
+                                onChange={(e) => setEditVariantCurrency(e.target.value)}
+                                className="h-9 px-3 border border-[#E9EDEF] rounded-lg text-[12px] focus:outline-none focus:border-[#128C7E] bg-white"
+                              >
+                                <option value="KES">KES</option>
+                                <option value="UGX">UGX</option>
+                                <option value="USD">USD</option>
+                              </select>
                             </label>
                           </div>
 
@@ -532,8 +614,8 @@ export function ProductsPage() {
                               <div className="text-[10px] font-extrabold text-[#667781] uppercase tracking-wide mb-1">
                                 Billing Type
                               </div>
-                              <div className="text-[13px] font-bold text-[#111B21] capitalize">
-                                {activeVariant.billing_type.replace(/_/g, " ")}
+                              <div className="text-[13px] font-bold text-[#111B21]">
+                                {billingTypeLabel(activeVariant.billing_type)}
                               </div>
                             </div>
                             <div className="bg-[#E9F7F4] rounded-xl p-3">
@@ -724,16 +806,41 @@ export function ProductsPage() {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-[#667781]">Billing Type</span>
+              <span className="text-[11px] font-bold text-[#667781]">Billing Period</span>
               <select
                 value={variantBillingType}
-                onChange={(e) => setVariantBillingType(e.target.value)}
+                onChange={(e) => {
+                  setVariantBillingType(e.target.value);
+                  if (e.target.value !== "custom") setVariantCustomDays("");
+                  if (e.target.value !== "hourly") setVariantHours("1");
+                }}
                 className="h-10 px-3 border border-[#E9EDEF] rounded-xl text-[13px] focus:outline-none focus:border-[#128C7E] bg-white"
               >
-                <option value="one_time">One Time</option>
-                <option value="recurring">Recurring</option>
-                <option value="usage">Usage</option>
+                {BILLING_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
+              {variantBillingType === "hourly" && (
+                <select
+                  value={variantHours}
+                  onChange={(e) => setVariantHours(e.target.value)}
+                  className="mt-1 h-10 px-3 border border-[#E9EDEF] rounded-xl text-[13px] focus:outline-none focus:border-[#128C7E] bg-white"
+                >
+                  {Array.from({ length: 100 }, (_, i) => i + 1).map((h) => (
+                    <option key={h} value={String(h)}>{h} {h === 1 ? "Hour" : "Hours"}</option>
+                  ))}
+                </select>
+              )}
+              {variantBillingType === "custom" && (
+                <input
+                  type="number"
+                  min="1"
+                  value={variantCustomDays}
+                  onChange={(e) => setVariantCustomDays(e.target.value)}
+                  placeholder="Number of days"
+                  className="mt-1 h-10 px-3 border border-[#E9EDEF] rounded-xl text-[13px] focus:outline-none focus:border-[#128C7E]"
+                />
+              )}
             </label>
 
             <div className="flex gap-2">
@@ -750,20 +857,28 @@ export function ProductsPage() {
               </label>
               <label className="w-24 flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold text-[#667781]">Currency</span>
-                <input
+                <select
                   value={variantCurrency}
-                  maxLength={5}
-                  onChange={(e) => setVariantCurrency(e.target.value.toUpperCase())}
-                  placeholder="KES"
-                  className="h-10 px-3 border border-[#E9EDEF] rounded-xl text-[13px] focus:outline-none focus:border-[#128C7E] uppercase"
-                />
+                  onChange={(e) => setVariantCurrency(e.target.value)}
+                  className="h-10 px-3 border border-[#E9EDEF] rounded-xl text-[13px] focus:outline-none focus:border-[#128C7E] bg-white"
+                >
+                  <option value="KES">KES</option>
+                  <option value="UGX">UGX</option>
+                  <option value="USD">USD</option>
+                </select>
               </label>
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={handleCreateVariant}
-                disabled={createVariantLoading || !variantName.trim() || !variantPrice}
+                disabled={
+                  createVariantLoading ||
+                  !variantName.trim() ||
+                  !variantPrice ||
+                  (variantBillingType === "custom" && !variantCustomDays.trim()) ||
+                  (variantBillingType === "hourly" && !variantHours)
+                }
                 className="flex-1 h-10 bg-[#128C7E] text-white rounded-xl text-[13px] font-bold hover:bg-[#075E54] disabled:opacity-50"
               >
                 {createVariantLoading ? "Creating…" : "Create Variant"}

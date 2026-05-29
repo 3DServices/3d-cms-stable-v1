@@ -92,12 +92,13 @@ export const ENDPOINTS = {
     GET_TRASHED: "/clients/trashed",
   },
   TOKENS: {
-    GET_ALL:  "/tokens",
-    CREATE:   "/tokens/create",
-    BY_ID:    "/tokens",               // append /{token_id}
-    BUY:      "/payments/tokens/buy",
-    TRANSFER: "/tokens/transfer",
-    BALANCE:  "/tokens",               // append /{client_uid}/balance
+    GET_ALL:   "/tokens",
+    CREATE:    "/tokens/create",
+    BY_ID:     "/tokens",              // append /{token_id}
+    BUY:       "/payments/tokens/buy",
+    AUTHORIZE: "/tokens/special/authorize",
+    TRANSFER:  "/tokens/transfer",
+    BALANCE:   "/tokens",              // append /{client_uid}/balance
   },
   FINANCE: {
     PAYMENTS: "/finance/payments",
@@ -142,7 +143,7 @@ export const ENDPOINTS = {
 
   FLEET: {
     LIST_UNITS:       "/system32/devices/configured/all",  // POST {data:{data_level,account_uid}}
-    CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
+    CHECK_IMEI:       "/subscriptions/device/status",        // POST {data:{device_imei}}
     CLIENTS_ALL:      "/clients",                          // GET  append /{primary_uid}/all
     USER_DETAILS:     "/users",                            // GET  append /{account_uid}/details
     DEVICE_ACTION:    "/devices/action",                   // POST {data:{action,device_imei}}

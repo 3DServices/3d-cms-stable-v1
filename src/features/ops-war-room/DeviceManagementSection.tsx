@@ -5,7 +5,7 @@
  * Ported from devices.qt.php — adapts auth + base-URL to project standards.
  */
 import React, { useState, useEffect, useCallback } from "react";
-import { getStoredAuthToken } from "../../api/client";
+import { getStoredAuthToken, getRaw } from "../../api/client";
 import { ENDPOINTS }          from "../../api/endpoints";
 import { useAuth }            from "../../auth/AuthContext";
 import { usePermissions }     from "../../auth/PermissionsContext";
@@ -534,6 +534,10 @@ export function DeviceManagementSection() {
   const [isClientAdmin, setIsClientAdmin] = useState(false);
   const [isInhouse,     setIsInhouse]     = useState(false);
 
+  // ── Client token balance (for "Token Subscription" in configure modal) ───────
+  const [clientTokens,        setClientTokens]        = useState<any[]>([]);
+  const [clientTokensLoading, setClientTokensLoading] = useState(false);
+
   // ── Registered devices state ─────────────────────────────────────────────────
   const [regDevices,   setRegDevices]   = useState<RegisteredDevice[]>([]);
   const [regLoading,   setRegLoading]   = useState(true);
@@ -636,21 +640,30 @@ export function DeviceManagementSection() {
     return [];
   }
 
+  async function loadClientTokens(clientUid: string) {
+    setClientTokens([]);
+    setClientTokensLoading(true);
+    try {
+      const data = await getRaw<{ data: any[]; status: string }>(
+        `${ENDPOINTS.TOKENS.BALANCE}/${encodeURIComponent(clientUid)}/balance`
+      );
+      if ((data as any)?.status === "success" && Array.isArray((data as any)?.data)) {
+        setClientTokens((data as any).data.filter((t: any) => t.token_status === "new"));
+      }
+    } catch { /**/ } finally { setClientTokensLoading(false); }
+  }
+
   async function enrichSubscriptions(list: Device[]) {
     await Promise.all(
       list.map(async (dev) => {
         if (!dev.device_imei) { dev.subscription_status ||= "No Payment"; return; }
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const j = await fleetFetch("GET", `${ENDPOINTS.FLEET.CHECK_IMEI}/${encodeURIComponent(dev.device_imei)}`) as any;
+          const j = await fleetFetch("POST", ENDPOINTS.FLEET.CHECK_IMEI, { data: { device_imei: dev.device_imei } }) as any;
           if (j?.status === "success" && j?.data) {
             const d = j.data;
-            const expired = d.is_expired === true || String(d.is_expired).toLowerCase() === "true";
-            const valid   = d.is_valid   === true || String(d.is_valid).toLowerCase()   === "true";
-            dev.subscription_status   = expired ? "Expired" : valid ? "Active" : (d.validity_status || "No Payment");
-            if (d.valid_end_date)  dev.subscription_end_date = d.valid_end_date;
-            if (d.validity_status) dev.validity_status       = d.validity_status;
-            if (d.payment_uid)     dev.payment_uid           = d.payment_uid;
+            const raw = String(d.subscription_status || "").toLowerCase();
+            dev.subscription_status = raw === "active" ? "Active" : raw === "expired" ? "Expired" : (d.subscription_status || "No Payment");
           }
         } catch { /**/ }
       })
@@ -839,14 +852,14 @@ export function DeviceManagementSection() {
     });
     setAdValues(emptyTeltoValues()); setAdFormulas(emptyTeltoFormulas()); setAdCalib([]);
     setAdTab("props");
-    await loadTransactions();
     setShowAddModal(true);
+    if (d.client_uid) loadClientTokens(d.client_uid);
   }
 
   async function submitAddDevice() {
     if (!adForm.imei || adForm.imei.length < 10) { setAdForm((f) => ({ ...f, status: "IMEI is required (min 10 digits)." })); return; }
     if (!adForm.name)                             { setAdForm((f) => ({ ...f, status: "Device name is required." })); return; }
-    if (!adForm.paymentUid)                       { setAdForm((f) => ({ ...f, status: "Select a transaction payment." })); return; }
+    if (!adForm.paymentUid)                       { setAdForm((f) => ({ ...f, status: "Select a token subscription." })); return; }
     setAdSaving(true);
     const cfgUsr = authState.accountUid || "";
     const mvs = adCalib.map((e) => e.mv || "");
@@ -1509,7 +1522,10 @@ export function DeviceManagementSection() {
                 <FInput value={adForm.carModel}   onChange={(v) => setAdForm((f) => ({ ...f, carModel: v }))}   placeholder="Car model" />
               </Field>
               <Field label="Client">
-                <FSelect value={adForm.clientUid} onChange={(v) => setAdForm((f) => ({ ...f, clientUid: v }))}>
+                <FSelect value={adForm.clientUid} onChange={(v) => {
+                  setAdForm((f) => ({ ...f, clientUid: v, paymentUid: "" }));
+                  if (v) loadClientTokens(v);
+                }}>
                   <option value="">— Select client —</option>
                   {clients.map((c) => <option key={c.uid} value={c.uid}>{c.label}</option>)}
                 </FSelect>
@@ -1523,12 +1539,14 @@ export function DeviceManagementSection() {
                   {CAR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </FSelect>
               </Field>
-              <Field label="Transaction Payment *">
+              <Field label="Token Subscription *">
                 <FSelect value={adForm.paymentUid} onChange={(v) => setAdForm((f) => ({ ...f, paymentUid: v }))}>
-                  <option value="">{txLoading ? "Loading…" : "— Select transaction —"}</option>
-                  {transactions.map((t) => (
-                    <option key={t.payment_uid} value={t.payment_uid}>
-                      {t.payment_validity} (until: {t.valid_end_date})
+                  <option value="">
+                    {clientTokensLoading ? "Loading tokens…" : adForm.clientUid ? "— Select token —" : "— Select client first —"}
+                  </option>
+                  {clientTokens.map((t: any) => (
+                    <option key={t.token_billing_uid} value={t.token_billing_uid}>
+                      {t.token_name} — {t.variant?.variant_name} ({t.variant?.billing_currency} {t.variant?.billing_amount})
                     </option>
                   ))}
                 </FSelect>
