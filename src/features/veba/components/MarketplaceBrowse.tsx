@@ -18,6 +18,7 @@ import { useGuardedMutation, GuardedButton } from "../../../auth/guards";
 import type { VebaListing, ListingStatus, PricingBasis } from "../../../api/types";
 import { EditListingDrawer } from "./EditListingDrawer";
 import { ListingDetailPanel } from "./ListingDetailPanel";
+import { ConfirmDialog, useConfirmDialog } from "../../../components/ui/ConfirmDialog";
 
 /* ── Status styling ─────────────────────────────────────────────────── */
 const STATUS_STYLES: Record<ListingStatus, { bg: string; fg: string; label: string }> = {
@@ -107,6 +108,18 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
   const { hasPermission } = usePermissions();
   const canBrowse = hasPermission("can_browse_asset_listings");
 
+  // ── My assets state ────────────────────────────────────────────────
+  const [devices, setDevices]         = useState<ClientDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [devicesError, setDevicesError]     = useState<string | null>(null);
+  /** Map: device_imei → VebaListing (or null if not listed). */
+  const [assetListings, setAssetListings] = useState<Record<string, VebaListing | null>>({});
+  const [assetSearch, setAssetSearch] = useState("");
+
+  // Create listing drawer state (opened from "List on Marketplace" button)
+  const [listingDevice, setListingDevice] = useState<ClientDevice | null>(null);
+
+  // ── Marketplace listings state ─────────────────────────────────────
   const [listings, setListings] = useState<VebaListing[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -114,6 +127,7 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
   const [pendingUid, setPendingUid] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<VebaListing | null>(null);
   const [selectedListing, setSelectedListing] = useState<VebaListing | null>(null);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   /* Fetch ALL listings for the tenant (scope=owner shows every status) */
   const fetchListings = useCallback(async () => {
@@ -125,10 +139,10 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
     setLoading(true);
     setError(null);
     try {
-      const res = await getVebaListings(authState.accountRoot, {
+      const listings = await getVebaListings(authState.accountRoot, {
         params: { scope: "owner" },
       });
-      setListings(res.data ?? []);
+      setListings(Array.isArray(listings) ? listings : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load marketplace listings.");
       setListings([]);
@@ -153,8 +167,11 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
     (uid: string) => archiveVebaListing(uid, authState.accountUid ?? "system"),
   );
 
-  const run = async (mutation: typeof pauseMut, uid: string, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+  const run = async (mutation: typeof pauseMut, uid: string, confirmOpts?: { title: string; message: string; confirmLabel: string; variant?: "danger" | "warning" | "default" }) => {
+    if (confirmOpts) {
+      const ok = await confirm(confirmOpts);
+      if (!ok) return;
+    }
     setPendingUid(uid);
     try {
       await mutation.mutate(uid);
@@ -186,6 +203,24 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
   }, [listings]);
 
   const resetFilters = () => setFilters(INITIAL_FILTERS);
+
+  const handleListAsset = (device: ClientDevice) => {
+    setListingDevice(device);
+  };
+
+  const handleListingCreated = () => {
+    fetchDevices();
+    fetchListings();
+  };
+
+  if (!canBrowse) {
+    return (
+      <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
+        <div className="text-[14px] font-extrabold text-[#111B21] mb-1">Access restricted</div>
+        <p className="text-[12px] text-[#667781]">You do not have permission to browse marketplace listings. Contact your administrator to request access.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -278,7 +313,6 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
           <div className="w-5 h-5 border-[3px] border-[#128C7E] border-t-transparent rounded-full animate-spin" />
           <span className="text-[12px] text-[#667781]">Loading all marketplace listings...</span>
         </div>
-      )}
 
       {!loading && error && (
         <div className="bg-white border border-[#FFD6D6] rounded-xl p-6 text-[12px] text-[#B00020]">
@@ -293,12 +327,15 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
         </div>
       )}
 
-      {!loading && !error && listings.length > 0 && visible.length === 0 && (
-        <div className="bg-white border border-[#E9EDEF] rounded-xl p-8 text-center">
-          <div className="text-[14px] font-extrabold text-[#111B21] mb-1">No matches</div>
-          <p className="text-[12px] text-[#667781]">Try widening your filters.</p>
-        </div>
-      )}
+          <div className="flex flex-col gap-1 min-w-[110px]">
+            <span className="text-[10px] font-medium text-[#667781] uppercase tracking-wide">Max daily rate</span>
+            <input
+              type="number" inputMode="numeric" placeholder="no max"
+              value={filters.maxRate}
+              onChange={(e) => setFilters((f) => ({ ...f, maxRate: e.target.value }))}
+              className="px-2 py-1.5 text-[12px] border border-[#E9EDEF] rounded-md bg-white text-[#111B21] outline-none focus:border-[#128C7E]"
+            />
+          </div>
 
       {/* ── Table ────────────────────────────────────────────────────── */}
       {!loading && !error && visible.length > 0 && (
@@ -378,16 +415,14 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
                       <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1.5 justify-end">
-                          {l.status !== "archived" && (
-                            <GuardedButton
-                              permission="can_edit_asset_listing"
-                              onClick={() => setEditingListing(l)}
-                              disabled={isPending}
-                              className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#E9EDEF] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Edit
-                            </GuardedButton>
-                          )}
+                          <GuardedButton
+                            permission="can_edit_asset_listing"
+                            onClick={() => setEditingListing(l)}
+                            disabled={isPending}
+                            className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#E9EDEF] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Edit
+                          </GuardedButton>
                           {l.status === "active" && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
@@ -398,20 +433,26 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
                               {isPending ? "..." : "Pause"}
                             </GuardedButton>
                           )}
-                          {l.status === "paused" && (
+                          {(l.status === "paused" || l.status === "archived") && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
-                              onClick={() => run(reactivateMut, l.listing_uid)}
+                              onClick={() => run(
+                                reactivateMut,
+                                l.listing_uid,
+                                l.status === "archived"
+                                  ? { title: "Unarchive listing?", message: "This listing will become active and visible on the marketplace again.", confirmLabel: "Unarchive", variant: "warning" as const }
+                                  : undefined,
+                              )}
                               disabled={isPending}
                               className="px-2 py-1 text-[11px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {isPending ? "..." : "Reactivate"}
+                              {isPending ? "..." : l.status === "archived" ? "Unarchive" : "Reactivate"}
                             </GuardedButton>
                           )}
                           {l.status !== "archived" && (
                             <GuardedButton
                               permission="can_edit_asset_listing"
-                              onClick={() => run(archiveMut, l.listing_uid, "Archive this listing? No new bookings can be made.")}
+                              onClick={() => run(archiveMut, l.listing_uid, { title: "Archive listing?", message: "No new bookings can be made once archived.", confirmLabel: "Archive", variant: "danger" })}
                               disabled={isPending}
                               className="px-2 py-1 text-[11px] font-extrabold rounded-md border border-[#FFD6D6] bg-white text-[#B00020] hover:bg-[#FFF5F5] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -452,6 +493,8 @@ export function MarketplaceBrowse({ onRequestBooking }: MarketplaceBrowseProps =
           onUpdated={fetchListings}
         />
       )}
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

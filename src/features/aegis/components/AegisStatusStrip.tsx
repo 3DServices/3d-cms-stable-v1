@@ -23,13 +23,13 @@ interface AegisStatusStripProps {
 }
 
 const DEFAULT_TICKER = [
-  "FrontEnd-APIs: Operational",
+  "Primary-Systems: Stable",
   "Server: Online",
   "Bandwidth: 120 Gbps",
   "Bandwidth-Burn: 85 Gbps",
   "Systemd-Process: Running",
   "SSE-Connections: 4,812",
-  "Uptime 99.8%"
+  "Uptime 99.9%"
 ];
 
 const hideScrollbar: React.CSSProperties = {
@@ -43,8 +43,6 @@ export function AegisStatusStrip({
   walletBalance = "1,284,500 T",
   burnRate      = "2.4 T/s",
   waswaOn       = true,
-  onToggleWaswa,
-  onOpenTopup,
   tickerItems   = DEFAULT_TICKER,
 }: AegisStatusStripProps) {
   return (
@@ -64,24 +62,6 @@ export function AegisStatusStrip({
         </div>
       </div>
 
-      {/* Waswa AI toggle */}
-      <div className="flex items-center gap-2 px-3 shrink-0 border-l border-[#E9EDEF] h-full">
-        <span className="text-[11px] text-[#667781] hidden sm:block">Waswa AI</span>
-        <button
-          onClick={onToggleWaswa}
-          aria-pressed={waswaOn}
-          className={`
-            relative w-10 h-5 rounded-full border-none cursor-pointer transition-colors duration-200 shrink-0
-            ${waswaOn ? "bg-[#25D366]" : "bg-[#E9EDEF]"}
-          `}
-        >
-          <span className={`
-            absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200
-            ${waswaOn ? "translate-x-5" : "translate-x-0.5"}
-          `} />
-        </button>
-        <span className="text-[11px] text-[#667781]">›</span>
-      </div>
     </div>
   );
 }

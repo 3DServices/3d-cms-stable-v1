@@ -27,8 +27,8 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  brandName         = "NAVAS CORE CMS",
-  pageTitle         = "NOC Bridge — Console",
+  brandName         = "3D SERVICES",
+  pageTitle         = "TRACKING CONSOLE",
   searchPlaceholder = "Search tenants, units, tokens, incidents…",
 }: TopBarProps) {
   const { state: authState, logout } = useAuth();
