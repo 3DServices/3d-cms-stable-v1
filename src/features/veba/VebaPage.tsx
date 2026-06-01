@@ -88,9 +88,7 @@ const BLADE_TABS = ["Overview","Payments","Telemetry Proof","Audit"];
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function VebaPage() {
   const { hasPermission } = usePermissions();
-  const canBrowse        = hasPermission("can_browse_asset_listings");
   const canManageEscrow  = hasPermission("can_manage_escrow_payment");
-  const canApproveBooking = hasPermission("can_approve_booking");
   const canReleaseEscrow = hasPermission("can_release_escrow_funds");
 
   const [bladeOpen, setBladeOpen] = useState(false);
@@ -109,7 +107,6 @@ export function VebaPage() {
 
           {/* ── Page Header ────────────────────────────────────────────────── */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-3">
-            <div className="text-[10px] font-black text-[#128C7E] bg-[#EAF7F3] border border-[#128C7E] px-2 py-0.5 rounded-full inline-block mb-1">SCREEN 09 • VEBA Marketplace</div>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="font-black text-[16px] text-[#111B21]">Escrow &amp; Settlement Control Room</div>
