@@ -8,6 +8,7 @@
  *         Policies, Role Templates) + right detail blade + create modal
  */
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getAllRoles, getAllPermissions, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "../../api";
 import type { RbacRole, RbacPermission } from "../../api";
 import { PermissionGate } from "../../auth/PermissionGate";
@@ -87,6 +88,7 @@ function mapRbacPermToPermissionSet(p: RbacPermission): PermissionSet {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function RbacPage() {
+  const navigate = useNavigate();
   const guard = usePermissionGuard();
   const [sectionTab, setSectionTab] = useState<SectionTab>("Roles");
   const [bladeOpen, setBladeOpen] = useState(false);
@@ -269,21 +271,14 @@ export function RbacPage() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <PermissionGate permission="rbac.create">
+                  <Pill onClick={() => navigate("/rbac/roles/new")} color="green">+ Create Role</Pill>
+                </PermissionGate>
+                <PermissionGate permission="rbac.create">
                   <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(3); setWizardOpen(true); }} color="green">+ Create User</Pill>
-                </PermissionGate>
-                <PermissionGate permission="rbac.create">
-                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(1); setWizardOpen(true); }} color="green">+ Create Permission</Pill>
-                </PermissionGate>
-                <PermissionGate permission="rbac.create">
-                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(2); setWizardOpen(true); }} color="dark">+ Create Role</Pill>
-                </PermissionGate>
-                <PermissionGate permission="rbac.assign">
-                  <Pill onClick={() => { setWizardMode("quick"); setWizardInitialStep(4); setWizardOpen(true); }} color="dark">Assign Role</Pill>
                 </PermissionGate>
                 <PermissionGate permissions={["rbac.create", "rbac.assign"]}>
                   <Pill onClick={() => { setWizardMode("full"); setWizardInitialStep(1); setWizardOpen(true); }} color="dark">Full Setup</Pill>
                 </PermissionGate>
-                <Pill>Export</Pill>
               </div>
             </div>
           </div>

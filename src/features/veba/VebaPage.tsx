@@ -26,7 +26,17 @@ const TABS: { key: VebaTab; label: string }[] = [
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function VebaPage() {
-  const [activeTab, setActiveTab] = useState<VebaTab>("my-listings");
+  const { hasPermission } = usePermissions();
+  const canManageEscrow  = hasPermission("can_manage_escrow_payment");
+  const canReleaseEscrow = hasPermission("can_release_escrow_funds");
+
+  const [bladeOpen, setBladeOpen] = useState(false);
+  const [bladeTab, setBladeTab] = useState("Overview");
+  const [modalOpen, setModalOpen] = useState(false);
+  // Phase 2 — top-level tab toggle between buyer-facing marketplace browse
+  // and the existing operator-facing settlement control room.
+  const [activeTab, setActiveTab] = useState<VebaTab>("marketplace");
+  // Phase 3 — booking-request modal state.
   const [bookingFor, setBookingFor] = useState<VebaListing | null>(null);
 
   return (

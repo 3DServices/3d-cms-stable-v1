@@ -29,14 +29,10 @@
 import React, { useState, useEffect } from "react";
 
 // ── Existing shared components ───────────────────────────────────────────────
-import { NavRail }           from "../../components/navigation";
-import { AccordionSidebar }  from "../../components/navigation";
-// import { WaswaAIPanel }      from "../../components/waswa";
 import type { ApprovalRow }  from "./components/HITLApprovalTable";
 import { HITLApprovalTable } from "./components/HITLApprovalTable";
 
 // ── New components ───────────────────────────────────────────────────────────
-// import { AegisStatusStrip }      from "./components/AegisStatusStrip";
 import { TaskManagerTable }      from "./components/TaskManagerTable";
 import { VebaGovernanceTable }   from "./components/VebaGovernanceTable";
 import { AuditTrailCard }        from "./components/AuditTrailCard";
@@ -51,98 +47,6 @@ import { ENDPOINTS } from "../../api/endpoints";
 // ─────────────────────────────────────────────────────────────────────────────
 // Static data
 // ─────────────────────────────────────────────────────────────────────────────
-
-// const AEGIS_TICKER = [
-//   "Forecast: Healthy",
-//   "API 99.95%",
-//   "Socket Threads-Open: 5",
-// ];
-
-const AEGIS_NAV_ITEMS = [
-  { key: "home",     glyph: "⌂",  label: "Home",         path: "/"         },
-  { key: "health",   glyph: "♥",  label: "Health",       path: "/health"   },
-  { key: "alarms",   glyph: "!",  label: "Alarms",       path: "/alarms"   },
-  { key: "tokens",   glyph: "T",  label: "Tokens",       path: "/tokens"   },
-  { key: "billing",  glyph: "$",  label: "Billing",      path: "/billing"  },
-  { key: "veba",     glyph: "V",  label: "VEBA",         path: "/veba"     },
-  { key: "waswa",    glyph: "W",  label: "Waswa AI",     path: "/ai"       },
-  { key: "rbac",     glyph: "R",  label: "RBAC",         path: "/rbac"     },
-  { key: "settings", glyph: "⚙",  label: "Settings",     path: "/audit"    },
-  { key: "mobile",   glyph: "📱", label: "Mobile",       path: "/payments" },
-];
-
-const AEGIS_SIDEBAR_GROUPS = [
-  {
-    id: "cmd",
-    title: "Command & Control",
-    icon: "⌂",
-    items: [
-      { id: "login",   label: "Login & SSO",        path: "/airlock" },
-      { id: "ops",     label: "Ops + Biz Dash",     path: "/aegis"   },
-      { id: "syshealth",label:"System Health CMS",  path: "/health"  },
-      { id: "alarms",  label: "Alarm Center",       path: "/alarms"  },
-      { id: "ai",      label: "AI Console",         path: "/ai"      },
-      { id: "logout",  label: "Logout Trail",       path: "/audit"   },
-    ],
-  },
-  {
-    id: "tokenomics",
-    title: "Tokenomics & Revenue",
-    icon: "₳",
-    items: [
-      { id: "tokens",   label: "Token Engine",       path: "/tokens"   },
-      { id: "payments", label: "Payments Gateways",  path: "/payments" },
-      { id: "billing",  label: "Billing",            path: "/billing"  },
-    ],
-  },
-  {
-    id: "infra",
-    title: "Infrastructure & Connectivity",
-    icon: "⚙",
-    items: [
-      { id: "kafka", label: "Kafka / Queues", path: "/health" },
-      { id: "redis", label: "Redis / Cache",  path: "/health" },
-      { id: "dbs",   label: "Databases",     path: "/health" },
-    ],
-  },
-  {
-    id: "asset",
-    title: "Asset & Resource Governance",
-    icon: "V",
-    items: [
-      { id: "veba-gov",   label: "VEBA Governance",  path: "/veba"  },
-      { id: "veba-books", label: "VEBA Bookings Ops",path: "/veba"  },
-    ],
-  },
-  {
-    id: "telem",
-    title: "Telematics & GIS Ops",
-    icon: "📡",
-    items: [
-      { id: "gis",  label: "GIS Live Intelligence", path: "/veba"  },
-      { id: "track",label: "Fleet Tracking",        path: "/veba"  },
-    ],
-  },
-  {
-    id: "veba-mkt",
-    title: "VEBA Marketplace",
-    icon: "🏪",
-    items: [
-      { id: "veba-mkt-home", label: "Rental Ops",  path: "/veba" },
-      { id: "leakage",       label: "Leakage Ops", path: "/veba" },
-    ],
-  },
-  {
-    id: "utility",
-    title: "Utility & Support",
-    icon: "?",
-    items: [
-      { id: "ecosystem", label: "The Ecosystem", path: "/audit" },
-      { id: "rbac",      label: "RBAC",          path: "/rbac"  },
-      { id: "audit",     label: "Audit Trail",   path: "/audit" },
-    ],
-  },
-];
 
 const HITL_ROWS: ApprovalRow[] = [
   { id: "h1", time: "09:14", action: "Price rule change (OLIWA-PLUS) — +10%",   state: "Pending",  actor: "Waswa AI"    },
@@ -235,7 +139,7 @@ export function AegisDashboard() {
     fetchStats();
   }, []);
   return (
-    <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3 pb-14 md:pb-3 bg-[#F0F2F5]">
+    <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col gap-3 p-3 bg-[#F0F2F5]">
 
           {/* Page heading */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-3 flex flex-wrap items-start gap-3">

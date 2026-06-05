@@ -22,31 +22,6 @@ const ICONS = {
 
 const DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
 
-// Injected once — strips Google Maps InfoWindow's own background/padding so our
-// HTML becomes fully bleed (header color goes edge-to-edge).
-const IW_CSS = `
-  .gm-style .gm-style-iw-c{
-    padding:0!important;background:transparent!important;
-    border-radius:12px!important;overflow:hidden!important;
-    box-shadow:0 8px 32px rgba(0,0,0,0.28)!important;
-    max-width:none!important;
-  }
-  .gm-style .gm-style-iw-d{
-    overflow:hidden!important;padding:0!important;max-height:none!important;
-  }
-  .gm-style .gm-style-iw-t::after{ display:none!important; }
-  .gm-style .gm-style-iw-chr{
-    position:absolute!important;top:6px!important;right:6px!important;z-index:10!important;
-  }
-  .gm-style .gm-ui-hover-effect{
-    background:rgba(255,255,255,0.2)!important;border-radius:50%!important;
-    width:26px!important;height:26px!important;opacity:1!important;
-  }
-  .gm-style .gm-ui-hover-effect:hover{ background:rgba(255,255,255,0.35)!important; }
-  .gm-style .gm-ui-hover-effect>span{ background-color:white!important; }
-  .gm-style .gm-ui-hover-effect img{ filter:brightness(100)!important; }
-`;
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 type MotionStatus = "Moving" | "Parked" | "Idling" | "Offline";
 
@@ -56,11 +31,17 @@ interface VehicleUnit {
   subscription_status: string;
   status:              MotionStatus;
   speed:               number;
+  altitude:            number;
+  course:              number;
+  satellites:          number;
+  mileage:             number;
+  fuel:                number;
   motion_state:        string;
   geocoded_location:   string;
   coords:              { lat: number; lng: number } | null;
   last_sync:           string;
   country:             string;
+  sensors:             { label: string; value: string }[];
 }
 
 interface ClientItem { uid: string; label: string; }
@@ -69,11 +50,11 @@ type ToastVariant = "warn" | "error" | "info" | "success";
 interface Toast { id: string; variant: ToastVariant; title: string; body?: string; out?: boolean; }
 
 // ─── Status palette ───────────────────────────────────────────────────────────
-const ST: Record<MotionStatus, { bg: string; dim: string; label: string }> = {
-  Moving:  { bg: "#2E7D32", dim: "rgba(46,125,50,0.88)",   label: "Moving"  },
-  Parked:  { bg: "#C62828", dim: "rgba(198,40,40,0.88)",   label: "Parked"  },
-  Idling:  { bg: "#1565C0", dim: "rgba(21,101,192,0.88)",  label: "Idling"  },
-  Offline: { bg: "#455A64", dim: "rgba(69,90,100,0.85)",   label: "Offline" },
+const ST: Record<MotionStatus, { bg: string; label: string }> = {
+  Moving:  { bg: "#2E7D32", label: "Moving"  },
+  Parked:  { bg: "#C62828", label: "Parked"  },
+  Idling:  { bg: "#1565C0", label: "Idling"  },
+  Offline: { bg: "#455A64", label: "Offline" },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,8 +70,6 @@ async function fleetFetch(method: string, path: string, body?: unknown): Promise
   return res.json();
 }
 
-// Fetch account_type + role from the user-details API.
-// Returns null on any error so callers can fall back to cookies.
 async function fetchUserDetails(accountUid: string): Promise<{ account_type: string; role: string } | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -108,19 +87,11 @@ async function fetchUserDetails(accountUid: string): Promise<{ account_type: str
 const sseUrl = (imei: string) =>
   `${FLEET_SSE}/data-stream/${encodeURIComponent(imei)}/x-location`;
 
-function esc(s: unknown): string {
-  return String(s ?? "")
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
 function normalizeStatus(ms: string, spd: number): MotionStatus {
   const s = ms.toLowerCase();
-  // motion_state text takes priority — more reliable than speed alone
   if (s.includes("park") || s.includes("stop")) return "Parked";
   if (s.includes("idl")  || s === "idle")        return "Idling";
   if (s.includes("mov")  || s.includes("driv"))  return "Moving";
-  // fall back to speed; threshold of 5 km/h filters out GPS position jitter
   if (Number.isFinite(spd) && spd >= 5)          return "Moving";
   if (Number.isFinite(spd) && spd > 0)           return "Idling";
   return "Offline";
@@ -136,139 +107,25 @@ function dotColor(st: MotionStatus): string {
        : st === "Idling" ? "#1565C0" : "#607D8B";
 }
 
-// ─── InfoWindow HTML builders ─────────────────────────────────────────────────
-// Car SVG used in the header icon circle
-const CAR_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-  <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3
-    12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0
-    1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5
-    13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5
-    1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-</svg>`;
-
-function row(label: string, value: string): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;
-    padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1)">
-    <span style="font-size:12px;color:rgba(255,255,255,0.65);font-weight:500">${label}</span>
-    <span style="font-size:12px;color:#fff;font-weight:700;
-      max-width:160px;overflow:hidden;text-overflow:ellipsis;
-      white-space:nowrap;text-align:right">${value}</span>
-  </div>`;
-}
-
-function buildPopupHtml(u: VehicleUnit): string {
-  const st      = ST[u.status] ?? ST.Offline;
-  const name    = esc(u.name || u.imei);
-  const imei    = esc(u.imei);
-  const speed   = u.speed > 0 ? `${u.speed} km/h` : "0 km/h";
-  const motion  = esc(u.motion_state || u.status);
-  const loc     = esc(u.geocoded_location || u.country || "—");
-  const sync    = esc(u.last_sync || "—");
-  const mapsHref = u.coords
-    ? `https://www.google.com/maps?q=${u.coords.lat},${u.coords.lng}` : null;
-
-  return `
-<div style="
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  width:280px;background:${st.bg};color:#fff;border-radius:12px;overflow:hidden;
-">
-  <!-- Header -->
-  <div style="padding:14px 40px 12px 14px;
-    display:flex;align-items:flex-start;gap:11px;
-    border-bottom:1px solid rgba(255,255,255,0.18);
-    background:${st.dim};
-  ">
-    <div style="width:40px;height:40px;border-radius:50%;flex-shrink:0;
-      background:rgba(255,255,255,0.18);
-      display:flex;align-items:center;justify-content:center">
-      ${CAR_SVG}
-    </div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:14px;font-weight:800;color:#fff;line-height:1.25;
-        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
-      <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:3px;
-        font-family:monospace;letter-spacing:.5px">${imei}</div>
-    </div>
-  </div>
-
-  <!-- Rows -->
-  <div style="padding:4px 14px 2px">
-    ${row("Speed",     speed)}
-    ${row("Motion",    motion)}
-    ${row("Location",  loc)}
-    ${row("Last Sync", sync)}
-  </div>
-
-  <!-- Footer link -->
-  ${mapsHref ? `
-  <div style="padding:8px 14px 12px;text-align:right">
-    <a href="${mapsHref}" target="_blank" rel="noopener noreferrer" style="
-      font-size:11px;color:rgba(255,255,255,0.8);font-weight:700;
-      text-decoration:none;display:inline-flex;align-items:center;gap:3px;
-    ">
-      Open in Google Maps
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-        stroke="rgba(255,255,255,0.8)" stroke-width="2.5" stroke-linecap="round">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
-    </a>
-  </div>` : `<div style="padding-bottom:10px"></div>`}
-</div>`;
-}
-
-function buildWaitingHtml(name: string): string {
-  const bg = ST.Offline.bg;
-  return `
-<div style="
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  width:240px;background:${bg};color:#fff;border-radius:12px;overflow:hidden;
-">
-  <div style="padding:12px 40px 12px 14px;background:${ST.Offline.dim};
-    border-bottom:1px solid rgba(255,255,255,0.18);
-    display:flex;align-items:center;gap:11px">
-    <div style="width:36px;height:36px;border-radius:50%;flex-shrink:0;
-      background:rgba(255,255,255,0.18);
-      display:flex;align-items:center;justify-content:center">
-      ${CAR_SVG}
-    </div>
-    <div style="font-size:13px;font-weight:800;color:#fff;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
-  </div>
-  <div style="padding:14px;display:flex;align-items:center;gap:10px">
-    <style>@keyframes gw-spin{to{transform:rotate(360deg)}}.gw-s{animation:gw-spin 1s linear infinite;transform-origin:center}</style>
-    <svg class="gw-s" width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke="rgba(255,255,255,0.8)" stroke-width="2.5" stroke-linecap="round">
-      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83
-               M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-    </svg>
-    <span style="font-size:12px;color:rgba(255,255,255,0.8)">Waiting for live GPS fix…</span>
-  </div>
-</div>`;
-}
-
-function buildOfflineHtml(name: string): string {
-  const bg = ST.Offline.bg;
-  return `
-<div style="
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-  width:240px;background:${bg};color:#fff;border-radius:12px;overflow:hidden;
-">
-  <div style="padding:12px 40px 12px 14px;background:${ST.Offline.dim};
-    border-bottom:1px solid rgba(255,255,255,0.15);
-    display:flex;align-items:center;gap:11px">
-    <div style="width:36px;height:36px;border-radius:50%;flex-shrink:0;
-      background:rgba(255,255,255,0.15);
-      display:flex;align-items:center;justify-content:center">
-      ${CAR_SVG}
-    </div>
-    <div style="font-size:13px;font-weight:800;color:#fff;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
-  </div>
-  <div style="padding:12px 14px;font-size:12px;color:rgba(255,255,255,0.75)">
-    No data available — unit may be offline or out of coverage.
-  </div>
-</div>`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseSensors(d: any): { label: string; value: string }[] {
+  const result: { label: string; value: string }[] = [];
+  const map: [string, string, string][] = [
+    ["fls_temp",    "FLS TEMP",   " °C"],
+    ["fuel_temp",   "FUEL TEMP",  " °C"],
+    ["engine_temp", "ENG TEMP",   " °C"],
+    ["generator",   "GENERATOR",  " On/Off"],
+    ["door_status", "DOOR",       ""],
+    ["battery",     "BATTERY",    " V"],
+    ["ignition",    "IGNITION",   ""],
+    ["axle_weight", "AXLE WEIGHT"," kg"],
+  ];
+  for (const [field, label, unit] of map) {
+    if (d[field] != null && d[field] !== "") {
+      result.push({ label, value: `${d[field]}${unit}` });
+    }
+  }
+  return result;
 }
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
@@ -332,8 +189,7 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: st
             className={[
               "pointer-events-auto flex flex-col w-[300px] rounded-xl overflow-hidden",
               "bg-white border border-[#E9EDEF] shadow-[0_8px_30px_rgba(0,0,0,0.18)]",
-              `border-l-[4px]`,
-              "transition-all duration-300",
+              "border-l-[4px] transition-all duration-300",
               t.out ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0",
             ].join(" ")}
             style={{ borderLeftColor: s.col }}
@@ -359,9 +215,117 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: st
   );
 }
 
+// ─── Unit Detail Panel ────────────────────────────────────────────────────────
+function UnitDetailPanel({
+  unit, onClose, onShowOnMap,
+}: {
+  unit: VehicleUnit; onClose: () => void; onShowOnMap: () => void;
+}) {
+  const st = ST[unit.status] ?? ST.Offline;
+
+  const stats = [
+    { label: "SPEED",      value: `${unit.speed} km/h` },
+    { label: "ALTITUDE",   value: unit.altitude  > 0 ? `${unit.altitude} m`  : "—" },
+    { label: "COURSE",     value: unit.course    > 0 ? `${unit.course}°`     : "—" },
+    { label: "SATELLITES", value: unit.satellites > 0 ? String(unit.satellites) : "—" },
+    { label: "MILEAGE",    value: unit.mileage   > 0 ? `${unit.mileage} km`  : "—" },
+    { label: "FUEL",       value: unit.fuel      > 0 ? `${unit.fuel} L`      : "—" },
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#E9EDEF]">
+        <span className="font-black text-[15px] text-[#111B21] truncate pr-2">
+          {unit.name || unit.imei}
+        </span>
+        <button
+          onClick={onClose}
+          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-md
+            text-[#667781] hover:text-[#111B21] hover:bg-[#F0F2F5]
+            bg-transparent border border-[#E9EDEF] cursor-pointer text-[16px] leading-none transition-colors"
+        >×</button>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4" style={{ scrollbarWidth: "thin" }}>
+
+        {/* Status badge */}
+        <div
+          className="w-full py-2.5 rounded-xl text-center font-black text-white text-[14px] tracking-wide select-none"
+          style={{ background: st.bg }}
+        >
+          {unit.status}
+        </div>
+
+        {/* Stats grid — 2 × 3 */}
+        <div className="grid grid-cols-2 gap-2">
+          {stats.map((s) => (
+            <div key={s.label} className="border border-[#E9EDEF] rounded-lg p-3 bg-[#FAFAFA]">
+              <div className="text-[9px] font-extrabold text-[#667781] tracking-widest mb-1.5">{s.label}</div>
+              <div className="text-[16px] font-black text-[#111B21] leading-none">{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Location */}
+        <div>
+          <div className="text-[9px] font-extrabold text-[#667781] tracking-widest mb-1.5">LOCATION</div>
+          <div className="font-bold text-[13px] text-[#111B21] leading-snug mb-0.5">
+            {unit.geocoded_location || unit.country || "—"}
+          </div>
+          {unit.coords && (
+            <div className="font-mono text-[11px] text-[#128C7E]">
+              {unit.coords.lat.toFixed(6)},&nbsp;{unit.coords.lng.toFixed(6)}
+            </div>
+          )}
+        </div>
+
+        {/* Last Update */}
+        <div>
+          <div className="text-[9px] font-extrabold text-[#667781] tracking-widest mb-1.5">LAST UPDATE</div>
+          <div className="font-bold text-[13px] text-[#111B21]">{unit.last_sync || "—"}</div>
+        </div>
+
+        {/* Show on Map */}
+        <button
+          onClick={onShowOnMap}
+          disabled={!unit.coords}
+          className="w-full h-10 rounded-lg border-2 border-[#128C7E] text-[#128C7E]
+            font-extrabold text-[12px] flex items-center justify-center gap-2
+            bg-white hover:bg-[#F0FFF4] transition-colors
+            disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0
+              9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+          Show on Map
+        </button>
+
+        {/* Sensors */}
+        {unit.sensors.length > 0 && (
+          <div>
+            <div className="text-[9px] font-extrabold text-[#667781] tracking-widest mb-2">SENSORS</div>
+            <div className="grid grid-cols-2 gap-2">
+              {unit.sensors.map((s) => (
+                <div key={s.label} className="border border-[#E9EDEF] rounded-lg p-3 bg-[#FAFAFA]">
+                  <div className="text-[9px] font-extrabold text-[#667781] tracking-widest mb-1.5">{s.label}</div>
+                  <div className="text-[14px] font-black text-[#111B21] leading-none">{s.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function GatehousePage() {
-  const [, forceUpdate]     = useState(0);
+  const [, forceUpdate]    = useState(0);
   const [loading,        setLoading]       = useState(true);
   const [listError,      setListError]     = useState<string | null>(null);
   const [searchQ,        setSearchQ]       = useState("");
@@ -372,19 +336,14 @@ export default function GatehousePage() {
   const [toasts,         setToasts]        = useState<Toast[]>([]);
   const [page,           setPage]          = useState(1);
   const [statusFilter,   setStatusFilter]  = useState<MotionStatus | "">("");
+  const [selectedImei,   setSelectedImei]  = useState<string | null>(null);
 
-  const mapDivRef    = useRef<HTMLDivElement>(null);
-  const gMap         = useRef<unknown>(null);
-  const infoWin      = useRef<unknown>(null);
-  const markers      = useRef(new Map<string, unknown>());
-  const sseConns     = useRef(new Map<string, EventSource>());
-  const units        = useRef(new Map<string, VehicleUnit>());
-  const pendingFocus = useRef<string | null>(null);
-  const activePopup  = useRef<string | null>(null);
+  const mapDivRef = useRef<HTMLDivElement>(null);
+  const gMap      = useRef<unknown>(null);
+  const markers   = useRef(new Map<string, unknown>());
+  const sseConns  = useRef(new Map<string, EventSource>());
+  const units     = useRef(new Map<string, VehicleUnit>());
 
-  // RAF-based tick: batches all SSE updates within one animation frame into
-  // a single re-render. This prevents rapid SSE messages from interrupting
-  // user input focus (typing in the search box).
   const rafRef = useRef<number | null>(null);
   const tick   = useCallback(() => {
     if (rafRef.current !== null) return;
@@ -409,18 +368,17 @@ export default function GatehousePage() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 320);
   }, []);
 
-  // Filtered + paginated list — re-derived on every render
+  // Filtered + paginated list
   const q        = searchQ.trim().toLowerCase();
   const allUnits = Array.from(units.current.values());
   const list     = allUnits.filter((u) => {
-    const matchQ = !q || u.name.toLowerCase().includes(q)
+    const matchQ  = !q || u.name.toLowerCase().includes(q)
       || u.imei.toLowerCase().includes(q)
       || (u.geocoded_location || u.country || "").toLowerCase().includes(q);
     const matchSt = !statusFilter || u.status === statusFilter;
     return matchQ && matchSt;
   });
 
-  // Per-status counts shown on filter chips (always over all units, ignoring status filter)
   const statusCounts = allUnits.reduce<Record<string, number>>((acc, u) => {
     acc[u.status] = (acc[u.status] ?? 0) + 1;
     return acc;
@@ -447,7 +405,7 @@ export default function GatehousePage() {
     if (!m) {
       m = new G.Marker({ position: u.coords, map: gMap.current, title: u.name || u.imei, icon });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (m as any).addListener("click", () => openPopup(u.imei, true));
+      (m as any).addListener("click", () => setSelectedImei(u.imei));
       markers.current.set(u.imei, m);
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -456,22 +414,11 @@ export default function GatehousePage() {
     return m;
   }
 
-  function openPopup(imei: string, fromMarker: boolean) {
-    const u = units.current.get(imei);
+  function panToUnit(imei: string) {
+    const u  = units.current.get(imei);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const IW = infoWin.current as any; const GM = gMap.current as any;
-    if (!u || !GM || !IW) return;
-    activePopup.current = imei;
-    if (!u.coords) {
-      pendingFocus.current = imei;
-      IW.setPosition(GM.getCenter());
-      IW.setContent(buildWaitingHtml(u.name || imei));
-      IW.open(GM); return;
-    }
-    const m = ensureMarker(u); if (!m) return;
-    IW.setContent(buildPopupHtml(u));
-    IW.open({ map: GM, anchor: m });
-    if (!fromMarker) { GM.panTo(u.coords); GM.setZoom(15); }
+    const GM = gMap.current as any;
+    if (u?.coords && GM) { GM.panTo(u.coords); GM.setZoom(15); }
   }
 
   // ── SSE ───────────────────────────────────────────────────────────────────
@@ -492,41 +439,29 @@ export default function GatehousePage() {
       if (res.status === "heartbeat") return;
 
       if (res.status === "no_data") {
-        u.status = "Offline"; tick();
-        const m = ensureMarker(u);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const IW = infoWin.current as any; const GM = gMap.current as any;
-        if (activePopup.current === imei && IW && GM) {
-          if (m) { IW.setContent(buildPopupHtml(u)); IW.open({ map: GM, anchor: m }); }
-          else   { IW.setContent(buildOfflineHtml(u.name || imei)); IW.open(GM); }
-        }
-        if (pendingFocus.current === imei && IW && GM) {
-          IW.setContent(buildOfflineHtml(u.name || imei));
-          IW.open(GM); pendingFocus.current = null;
-        }
-        return;
+        u.status = "Offline"; tick(); return;
       }
 
       if (res.status !== "success" || !res.data) return;
-      const d = res.data;
+      const d   = res.data;
       const lat = parseFloat(d.data_latitude), lng = parseFloat(d.data_longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
       u.speed             = Number(d.speed_log) || 0;
+      u.altitude          = Number(d.altitude   || d.data_altitude)  || 0;
+      u.course            = Number(d.course     || d.data_course)    || 0;
+      u.satellites        = Number(d.satellites || d.data_satellites || d.sat_count) || 0;
+      u.mileage           = Number(d.mileage    || d.odometer)       || 0;
+      u.fuel              = Number(d.fuel       || d.fuel_level)     || 0;
       u.motion_state      = d.motion_state || "";
       u.status            = normalizeStatus(u.motion_state, u.speed);
       u.coords            = { lat, lng };
       u.geocoded_location = d.geocoded_location || u.geocoded_location || "";
       u.last_sync         = `${d.local_system_datestamp || ""} ${d.local_system_timestamp || ""}`.trim();
+      u.sensors           = parseSensors(d);
 
       tick();
-      const m = ensureMarker(u);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const IW = infoWin.current as any; const GM = gMap.current as any;
-      if (activePopup.current === imei && IW && GM && m) {
-        IW.setContent(buildPopupHtml(u)); IW.open({ map: GM, anchor: m });
-      }
-      if (pendingFocus.current === imei) { pendingFocus.current = null; openPopup(imei, false); }
+      ensureMarker(u);
     };
 
     es.onerror = () => {
@@ -536,7 +471,7 @@ export default function GatehousePage() {
     };
   }
 
-  function startAll() { stopAll(); units.current.forEach((_, i) => openStream(i)); }
+  function startAll() { stopAll(); units.current.forEach((_, imei) => openStream(imei)); }
 
   // ── API ───────────────────────────────────────────────────────────────────
   async function enrichSubs() {
@@ -544,13 +479,11 @@ export default function GatehousePage() {
       Array.from(units.current.entries()).map(async ([imei, u]) => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const j = await fleetFetch("GET", `${ENDPOINTS.FLEET.CHECK_IMEI}/${encodeURIComponent(imei)}`) as any;
+          const j = await fleetFetch("POST", ENDPOINTS.FLEET.CHECK_IMEI, { data: { device_imei: imei } }) as any;
           if (j?.status !== "success" || !j.data) return;
-          const d = j.data;
-          const expired = d.is_expired === true || String(d.is_expired).toLowerCase() === "true" || String(d.is_expired) === "1";
-          const valid   = d.is_valid   === true || String(d.is_valid).toLowerCase()   === "true" || String(d.is_valid)   === "1";
-          u.subscription_status = expired ? "expired" : valid ? "running"
-            : String(d.validity_status || d.subscription_status || "unknown").toLowerCase();
+          const d   = j.data;
+          const raw = String(d.subscription_status || "").toLowerCase();
+          u.subscription_status = raw === "active" ? "running" : raw || "unknown";
         } catch { /**/ }
       })
     );
@@ -568,14 +501,17 @@ export default function GatehousePage() {
       }
       units.current.clear();
       setPage(1);
+      setSelectedImei(null);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resp.data.forEach((u: any) => {
         if (!u.device_imei) return;
         units.current.set(u.device_imei, {
           imei: u.device_imei, name: u.device_name || u.device_imei,
           subscription_status: u.subscription_status || "",
-          status: "Offline", speed: 0, motion_state: "",
-          geocoded_location: "", coords: null, last_sync: "", country: "",
+          status: "Offline", speed: 0, altitude: 0, course: 0,
+          satellites: 0, mileage: 0, fuel: 0,
+          motion_state: "", geocoded_location: "", coords: null,
+          last_sync: "", country: "", sensors: [],
         });
       });
       tick(); setLoading(false);
@@ -590,20 +526,11 @@ export default function GatehousePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const G = (window as any).google?.maps;
       if (!mapDivRef.current || gMap.current || !G) return;
-
-      // Inject InfoWindow style override once — makes content full-bleed edge-to-edge
-      if (!document.getElementById("navas-iw-css")) {
-        const el = document.createElement("style");
-        el.id = "navas-iw-css";
-        el.textContent = IW_CSS;
-        document.head.appendChild(el);
-      }
-
-      gMap.current    = new G.Map(mapDivRef.current, {
+      gMap.current = new G.Map(mapDivRef.current, {
         zoom: 6, center: DEFAULT_CENTER, mapTypeId: "roadmap",
-        gestureHandling: "greedy", zoomControl: true, fullscreenControl: false,
+        gestureHandling: "greedy", zoomControl: true,
+        fullscreenControl: false, mapTypeControl: true,
       });
-      infoWin.current = new G.InfoWindow({ maxWidth: 300, disableAutoPan: false });
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -627,10 +554,9 @@ export default function GatehousePage() {
       const rawUid = getCookie("_nvxs_account_uid") ?? "";
       if (!rawUid) { setListError("Missing session — please log in."); setLoading(false); return; }
 
-      // Fetch account type and role from API; fall back to cookies (mirrors PHP loadUserDataLevel + loadUserRole)
-      const details  = await fetchUserDetails(rawUid);
-      const type     = details?.account_type || (getCookie("_nvxs_account_type") ?? "client").toLowerCase();
-      const role     = details?.role         || (getCookie("_nvxs_account_role") ?? "").toLowerCase();
+      const details = await fetchUserDetails(rawUid);
+      const type    = details?.account_type || (getCookie("_nvxs_account_type") ?? "client").toLowerCase();
+      const role    = details?.role         || (getCookie("_nvxs_account_role") ?? "").toLowerCase();
       if (type === "client" && role === "admin") setIsClientAdmin(true);
 
       const dataLevel  = type;
@@ -655,7 +581,8 @@ export default function GatehousePage() {
         `${u.name || imei} — renew the subscription to enable live tracking.`);
       return;
     }
-    openPopup(imei, false);
+    setSelectedImei(imei);
+    panToUnit(imei);
   }
 
   async function onOpenModal() {
@@ -667,7 +594,7 @@ export default function GatehousePage() {
       if (j?.status === "success" && Array.isArray(j?.data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setClients(j.data.map((c: any) => ({
-          uid: c.client_uid || c.uid || "",
+          uid:   c.client_uid || c.uid   || "",
           label: c.client_name || c.label || c.client_uid || "",
         })));
       }
@@ -688,6 +615,8 @@ export default function GatehousePage() {
     await loadUnits("client", selClient);
   }
 
+  const selectedUnit = selectedImei ? (units.current.get(selectedImei) ?? null) : null;
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-[#F0F2F5]">
@@ -699,118 +628,126 @@ export default function GatehousePage() {
           Fleet Monitoring — Live Vehicle Tracking
         </h1>
         <p className="text-[12px] text-[#667781] m-0 mt-0.5">
-          Real-time GPS via SSE · Click a unit to focus the map · Expired subscriptions are locked.
+          Real-time GPS via SSE · Click a unit to view details · Expired subscriptions are locked.
         </p>
       </div>
 
       {/* Two-panel body */}
       <div className="flex-1 min-h-0 grid xl:grid-cols-[360px_1fr] gap-3 px-5 pb-5 overflow-hidden">
 
-        {/* Vehicle list */}
+        {/* Left column — detail panel OR unit list */}
         <div className="min-h-0 flex flex-col bg-white border border-[#E9EDEF] rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-          <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#E9EDEF]">
-            <div>
-              <div className="font-black text-[15px] text-[#111B21]">Vehicle Units</div>
-              <div className="text-[12px] text-[#667781] mt-0.5">
-                {list.length} unit{list.length !== 1 ? "s" : ""}{(q || statusFilter) ? " (filtered)" : ""}
-              </div>
-            </div>
-            <span className="shrink-0 text-[11px] font-extrabold text-white px-2.5 py-1 rounded-full bg-[#25D366]">LIVE</span>
-          </div>
 
-          <div className="shrink-0 px-4 pt-3 pb-2 flex gap-2">
-            <input
-              type="search"
-              value={searchQ}
-              onChange={(e) => { setSearchQ(e.target.value); setPage(1); }}
-              placeholder="Search name, IMEI, location…"
-              className="flex-1 h-9 rounded-lg border border-[#E9EDEF] px-3 text-[12px] text-[#111B21]
-                placeholder:text-[#667781] bg-[#F8F9FA] outline-none focus:border-[#128C7E] transition-colors"
+          {selectedUnit ? (
+            <UnitDetailPanel
+              unit={selectedUnit}
+              onClose={() => setSelectedImei(null)}
+              onShowOnMap={() => panToUnit(selectedImei!)}
             />
-            {isClientAdmin && <Btn variant="azure" onClick={onOpenModal}>Load Client</Btn>}
-          </div>
-
-          {/* Status filter chips */}
-          <div className="shrink-0 px-4 pb-2 flex flex-wrap gap-1.5">
-            {([["", "All"], ["Moving", "Moving"], ["Parked", "Parked"], ["Idling", "Idling"], ["Offline", "Offline"]] as [MotionStatus | "", string][]).map(([val, label]) => {
-              const active  = statusFilter === val;
-              const c       = val ? BADGE_COLORS[val as MotionStatus] : { bg: "#E9EDEF", color: "#111B21" };
-              const count   = val ? (statusCounts[val] ?? 0) : allUnits.length;
-              return (
-                <button
-                  key={val}
-                  onClick={() => { setStatusFilter(val); setPage(1); }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all cursor-pointer"
-                  style={active
-                    ? { background: c.color, color: "#fff", borderColor: c.color }
-                    : { background: "transparent", color: c.color, borderColor: c.color }}
-                >
-                  {val && <span className="w-1.5 h-1.5 rounded-full" style={{ background: active ? "#fff" : c.color }} />}
-                  {label}
-                  <span className="opacity-75">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
-            {loading   && <div className="px-4 py-3 text-[12px] text-[#667781] italic">Loading units…</div>}
-            {listError && <div className="px-4 py-3 text-[12px] text-[#D93025]">{listError}</div>}
-            {!loading && !listError && list.length === 0 && (
-              <div className="px-4 py-3 text-[12px] text-[#667781] italic">No units found.</div>
-            )}
-            {pagedList.map((u, i) => {
-              const expired = String(u.subscription_status).toLowerCase() === "expired";
-              const loc     = u.geocoded_location || u.country || "—";
-              return (
-                <div key={u.imei} onClick={() => onUnitClick(u.imei)}
-                  className={[
-                    "flex items-center justify-between gap-3 px-4 py-2.5 cursor-pointer",
-                    "border-b border-[#E9EDEF] last:border-b-0 hover:bg-[#F0F2F5] transition-colors",
-                    i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]",
-                    expired ? "opacity-60" : "",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor(u.status) }} />
-                    <div className="min-w-0">
-                      <div className="font-extrabold text-[12px] text-[#111B21] truncate">{u.name || u.imei}</div>
-                      <div className="text-[11px] text-[#667781] truncate max-w-[200px]" title={loc}>{loc}</div>
-                    </div>
+          ) : (
+            <>
+              {/* List header */}
+              <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#E9EDEF]">
+                <div>
+                  <div className="font-black text-[15px] text-[#111B21]">Vehicle Units</div>
+                  <div className="text-[12px] text-[#667781] mt-0.5">
+                    {list.length} unit{list.length !== 1 ? "s" : ""}{(q || statusFilter) ? " (filtered)" : ""}
                   </div>
-                  <StatusBadge status={u.status} />
                 </div>
-              );
-            })}
-          </div>
+                <span className="shrink-0 text-[11px] font-extrabold text-white px-2.5 py-1 rounded-full bg-[#25D366]">LIVE</span>
+              </div>
 
-          {/* Pagination footer */}
-          <div className="shrink-0 flex items-center justify-between px-4 py-2 border-t border-[#E9EDEF] bg-white">
-            <span className="text-[11px] text-[#667781]">
-              {list.length === 0
-                ? "0 units"
-                : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, list.length)} of ${list.length}`}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
-                className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                  text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] transition-colors
-                  border-none bg-transparent cursor-pointer disabled:cursor-not-allowed"
-              >‹</button>
-              <span className="text-[11px] font-extrabold text-[#111B21] min-w-[52px] text-center">
-                {safePage} / {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage >= totalPages}
-                className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
-                  text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] transition-colors
-                  border-none bg-transparent cursor-pointer disabled:cursor-not-allowed"
-              >›</button>
-            </div>
-          </div>
+              {/* Search + Load Client */}
+              <div className="shrink-0 px-4 pt-3 pb-2 flex gap-2">
+                <input
+                  type="search"
+                  value={searchQ}
+                  onChange={(e) => { setSearchQ(e.target.value); setPage(1); }}
+                  placeholder="Search name, IMEI, location…"
+                  className="flex-1 h-9 rounded-lg border border-[#E9EDEF] px-3 text-[12px] text-[#111B21]
+                    placeholder:text-[#667781] bg-[#F8F9FA] outline-none focus:border-[#128C7E] transition-colors"
+                />
+                {isClientAdmin && <Btn variant="azure" onClick={onOpenModal}>Load Client</Btn>}
+              </div>
+
+              {/* Status filter chips */}
+              <div className="shrink-0 px-4 pb-2 flex flex-wrap gap-1.5">
+                {([["", "All"], ["Moving", "Moving"], ["Parked", "Parked"], ["Idling", "Idling"], ["Offline", "Offline"]] as [MotionStatus | "", string][]).map(([val, label]) => {
+                  const active = statusFilter === val;
+                  const c      = val ? BADGE_COLORS[val as MotionStatus] : { bg: "#E9EDEF", color: "#111B21" };
+                  const count  = val ? (statusCounts[val] ?? 0) : allUnits.length;
+                  return (
+                    <button
+                      key={val}
+                      onClick={() => { setStatusFilter(val); setPage(1); }}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all cursor-pointer"
+                      style={active
+                        ? { background: c.color, color: "#fff", borderColor: c.color }
+                        : { background: "transparent", color: c.color, borderColor: c.color }}
+                    >
+                      {val && <span className="w-1.5 h-1.5 rounded-full" style={{ background: active ? "#fff" : c.color }} />}
+                      {label}
+                      <span className="opacity-75">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Unit rows */}
+              <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+                {loading   && <div className="px-4 py-3 text-[12px] text-[#667781] italic">Loading units…</div>}
+                {listError && <div className="px-4 py-3 text-[12px] text-[#D93025]">{listError}</div>}
+                {!loading && !listError && list.length === 0 && (
+                  <div className="px-4 py-3 text-[12px] text-[#667781] italic">No units found.</div>
+                )}
+                {pagedList.map((u, i) => {
+                  const expired = String(u.subscription_status).toLowerCase() === "expired";
+                  const loc     = u.geocoded_location || u.country || "—";
+                  return (
+                    <div key={u.imei} onClick={() => onUnitClick(u.imei)}
+                      className={[
+                        "flex items-center justify-between gap-3 px-4 py-2.5 cursor-pointer",
+                        "border-b border-[#E9EDEF] last:border-b-0 hover:bg-[#F0F2F5] transition-colors",
+                        i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]",
+                        expired ? "opacity-60" : "",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor(u.status) }} />
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-[12px] text-[#111B21] truncate">{u.name || u.imei}</div>
+                          <div className="text-[11px] text-[#667781] truncate max-w-[200px]" title={loc}>{loc}</div>
+                        </div>
+                      </div>
+                      <StatusBadge status={u.status} />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Pagination */}
+              <div className="shrink-0 flex items-center justify-between px-4 py-2 border-t border-[#E9EDEF] bg-white">
+                <span className="text-[11px] text-[#667781]">
+                  {list.length === 0
+                    ? "0 units"
+                    : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, list.length)} of ${list.length}`}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+                    className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
+                      text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] transition-colors
+                      border-none bg-transparent cursor-pointer disabled:cursor-not-allowed">‹</button>
+                  <span className="text-[11px] font-extrabold text-[#111B21] min-w-[52px] text-center">
+                    {safePage} / {totalPages}
+                  </span>
+                  <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                    className="w-7 h-7 rounded flex items-center justify-center text-[18px] leading-none
+                      text-[#667781] disabled:opacity-30 hover:bg-[#F0F2F5] transition-colors
+                      border-none bg-transparent cursor-pointer disabled:cursor-not-allowed">›</button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Map */}
@@ -818,7 +755,7 @@ export default function GatehousePage() {
           <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#E9EDEF]">
             <div>
               <div className="font-black text-[15px] text-[#111B21]">Unit Locations</div>
-              <div className="text-[12px] text-[#667781] mt-0.5">Click a unit to pan &amp; zoom</div>
+              <div className="text-[12px] text-[#667781] mt-0.5">Click a unit or marker to view details</div>
             </div>
             <span className="shrink-0 text-[11px] font-extrabold text-white px-2.5 py-1 rounded-full bg-[#34B7F1]">MAP</span>
           </div>
@@ -827,7 +764,7 @@ export default function GatehousePage() {
 
       </div>
 
-      {/* Modal */}
+      {/* Client modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-2xl w-[320px] overflow-hidden border border-[#E9EDEF]">
@@ -853,7 +790,6 @@ export default function GatehousePage() {
         </div>
       )}
 
-      {/* Toasts */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

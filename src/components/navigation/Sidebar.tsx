@@ -52,6 +52,7 @@ const DEFAULT_ITEMS: SidebarItem[] = [
   { key: "rbac",               label: "RBAC / Access Control",   path: "/rbac",              permission: "rbac.view" },
   // { key: "runbooks",           label: "Runbooks",                path: "/audit"             },
   { key: "audit",              label: "Audit Trail",             path: "/audit",             permission: "audit.view" },
+  { key: "products",           label: "Products",                path: "/products",          permission: "products.view_only" },
 
 ];
 

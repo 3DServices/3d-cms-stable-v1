@@ -7,7 +7,7 @@
  *   BOTTOM: Price Rule Versions + Trash → HITL box → Audit Log
  *   MODAL:  Create Token Definition wizard (Step 2/4, sections A–E)
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { getRaw, post, put, del } from "../../api/client";
 import { ENDPOINTS } from "../../api/endpoints";
 import { PermissionGate } from "../../auth/PermissionGate";
@@ -870,6 +870,39 @@ const MODAL_PARAMS = [
   { param:"kyc_verify",             origin:"VEBA", rps:"8.7", bill:"Yes", state:"ON"   },
 ];
 
+// ─── Billing type helpers ────────────────────────────────────────────────────
+const BILLING_TYPE_MAP: Record<string, string> = {
+  "365": "Annual",
+  "90": "Quarterly",
+  "180": "Six Months",
+  "730": "2 Years",
+  "1095": "3 Years",
+};
+function billingTypeLabel(val: string): string {
+  if (BILLING_TYPE_MAP[val]) return BILLING_TYPE_MAP[val];
+  if (val.startsWith("H")) {
+    const n = Number(val.slice(1));
+    if (!isNaN(n) && n > 0) return n === 1 ? "1 Hour" : `${n} Hours`;
+  }
+  const n = Number(val);
+  if (!isNaN(n) && n > 0) return `${n} days`;
+  return val;
+}
+
+// ─── Variant picker types ─────────────────────────────────────────────────────
+interface VariantOption {
+  variant_uid: string;
+  variant_name: string;
+  billing_amount: number;
+  billing_currency: string;
+  billing_type: string;
+}
+interface ProductGroup {
+  product_uid: string;
+  product_name: string;
+  variants: VariantOption[];
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 export function TokensPage() {
   const [selected, setSelected] = useState("BODA_LEAD_UNLOCK");
@@ -877,11 +910,11 @@ export function TokensPage() {
 
   // Statistics state
   const [stats, setStats] = useState({
-    runningTokens: 0,
-    expiredTokens: 0,
+    activeSubscriptions: 0,
+    expiredSubscriptions: 0,
+    pausedSubscriptions: 0,
     activeVebaTokens: 0,
-    expiredVebaTokens: 0,
-    totalActiveTokens: 0,
+    totalActive: 0,
   });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -893,9 +926,7 @@ export function TokensPage() {
   const [createForm, setCreateForm] = useState({
     token_name: "",
     token_type: "",
-    token_amount: "",
-    token_currency: "",
-    token_validity: "",
+    token_product_variant_uid: "",
     parameters: [] as string[],
   });
   const [createLoading, setCreateLoading] = useState(false);
@@ -907,29 +938,47 @@ export function TokensPage() {
   const [editForm, setEditForm] = useState({
     token_name: "",
     token_type: "",
-    token_amount: "",
-    token_currency: "UGX",
-    token_validity: "",
+    token_product_variant_uid: "",
     parameters: [] as string[],
   });
   const [editLoading, setEditLoading] = useState(false);
 
+  const [variantGroups, setVariantGroups] = useState<ProductGroup[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+
+  // Pre-fund menu
+  const [preFundMenuOpen, setPreFundMenuOpen] = useState(false);
+  const preFundMenuRef = useRef<HTMLDivElement>(null);
+
+  // Clients list (shared by both pre-fund blades)
+  const [clientsList, setClientsList] = useState<{ uid: string; label: string }[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+
+  // Authorise Tokens blade
+  const [authoriseBladeOpen, setAuthoriseBladeOpen] = useState(false);
+  const [authoriseForm, setAuthoriseForm] = useState({ client_uid: "", token_uid: "", quantity_authorized: "" });
+  const [authoriseLoading, setAuthoriseLoading] = useState(false);
+
+  // Instant Buy Tokens blade
+  const [instantBuyBladeOpen, setInstantBuyBladeOpen] = useState(false);
+  const [instantBuyForm, setInstantBuyForm] = useState({ token_buyer: "", token_uid: "", token_quantity: "", mobile_money_number: "" });
+  const [instantBuyLoading, setInstantBuyLoading] = useState(false);
+  const [instantBuyStatus, setInstantBuyStatus] = useState<{ type: "success" | "error" | "pending" | ""; message: string }>({ type: "", message: "" });
+  const instantBuyPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const handleCreateToken = async () => {
-    if (!createForm.token_name || !createForm.token_type || !createForm.token_amount || !createForm.token_currency) {
+    if (!createForm.token_name || !createForm.token_type || !createForm.token_product_variant_uid) {
       alert("Please fill in all required fields");
       return;
     }
 
     setCreateLoading(true);
     try {
-      // API expects wrapper object under `data` just like the PHP version
       const payload = {
         data: {
           token_name: createForm.token_name,
           token_type: createForm.token_type,
-          token_amount: createForm.token_amount,
-          token_currency: createForm.token_currency,
-          token_validity: createForm.token_validity || "",
+          token_product_variant_uid: createForm.token_product_variant_uid,
           token_parameters: createForm.parameters,
         },
       };
@@ -937,17 +986,13 @@ export function TokensPage() {
       const response = await post<any>(ENDPOINTS.TOKENS.CREATE, payload);
 
       if (response.status === "success") {
-        // Reset form
         setCreateForm({
           token_name: "",
           token_type: "",
-          token_amount: "",
-          token_currency: "UGX",
-          token_validity: "",
+          token_product_variant_uid: "",
           parameters: [],
         });
         setCreateBladeOpen(false);
-        // Refresh tokens list
         fetchTokens();
       }
     } catch (error) {
@@ -978,9 +1023,7 @@ export function TokensPage() {
       setEditForm({
         token_name: token.token_name,
         token_type: token.token_type,
-        token_amount: token.token_amount,
-        token_currency: token.token_currency,
-        token_validity: token.token_validity,
+        token_product_variant_uid: token.token_product_variant_uid || "",
         parameters: token.token_parameters || [],
       });
       setEditMode(true);
@@ -992,7 +1035,7 @@ export function TokensPage() {
   };
 
   const handleUpdateToken = async () => {
-    if (!editForm.token_name || !editForm.token_type || !editForm.token_amount) {
+    if (!editForm.token_name || !editForm.token_type || !editForm.token_product_variant_uid) {
       alert("Please fill in all required fields");
       return;
     }
@@ -1003,9 +1046,7 @@ export function TokensPage() {
         data: {
           token_name: editForm.token_name,
           token_type: editForm.token_type,
-          token_amount: editForm.token_amount,
-          token_currency: editForm.token_currency,
-          token_validity: editForm.token_validity,
+          token_product_variant_uid: editForm.token_product_variant_uid,
           token_parameters: editForm.parameters,
         }
       };
@@ -1014,7 +1055,6 @@ export function TokensPage() {
       setSideBladeOpen(false);
       setSelectedToken(null);
       setEditMode(false);
-      // Refresh tokens list
       fetchTokens();
     } catch (error) {
       console.error("Failed to update token:", error);
@@ -1050,28 +1090,181 @@ export function TokensPage() {
     }
   };
 
+  const fetchVariantOptions = async () => {
+    setVariantsLoading(true);
+    try {
+      const productsData = await getRaw<{ data: any[] }>(ENDPOINTS.PRODUCTS.LIST);
+      const products = productsData.data || [];
+      const groups: ProductGroup[] = [];
+      await Promise.all(
+        products.map(async (product: any) => {
+          try {
+            const variantsData = await getRaw<{ data: any[] }>(
+              `${ENDPOINTS.PRODUCTS.VARIANT_LIST}/${product.product_uid}`
+            );
+            const variants: VariantOption[] = (variantsData.data || []).map((v: any) => ({
+              variant_uid: v.variant_uid,
+              variant_name: v.variant_name,
+              billing_amount: v.billing_amount,
+              billing_currency: v.billing_currency,
+              billing_type: v.billing_type,
+            }));
+            if (variants.length > 0) {
+              groups.push({ product_uid: product.product_uid, product_name: product.product_name, variants });
+            }
+          } catch (_e) {
+            // skip products where variant fetch fails
+          }
+        })
+      );
+      setVariantGroups(groups);
+    } catch (error) {
+      console.error("Failed to fetch variant options:", error);
+    } finally {
+      setVariantsLoading(false);
+    }
+  };
+
+  // Close pre-fund dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (preFundMenuRef.current && !preFundMenuRef.current.contains(e.target as Node)) {
+        setPreFundMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (instantBuyPollRef.current) clearInterval(instantBuyPollRef.current);
+    };
+  }, []);
+
+  const fetchClients = async () => {
+    if (clientsList.length > 0) return;
+    setClientsLoading(true);
+    try {
+      const data = await getRaw<{ data: any[]; status: string }>(ENDPOINTS.CLIENTS.GET_ALL);
+      if (Array.isArray((data as any).data)) {
+        setClientsList((data as any).data.map((c: any) => ({
+          uid: c.client_uid || c.uid || "",
+          label: c.client_name || c.uid || "",
+        })));
+      }
+    } catch (error) {
+      console.error("Failed to load clients:", error);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
+  const handleAuthorise = async () => {
+    if (!authoriseForm.client_uid || !authoriseForm.token_uid || !authoriseForm.quantity_authorized) {
+      alert("Please fill in all required fields");
+      return;
+    }
+    setAuthoriseLoading(true);
+    try {
+      const response = await post<any>(ENDPOINTS.TOKENS.AUTHORIZE, {
+        data: {
+          token_uid: authoriseForm.token_uid,
+          quantity_authorized: authoriseForm.quantity_authorized,
+          client_uid: authoriseForm.client_uid,
+        },
+      });
+      if (response.status === "success") {
+        alert(response.message || "Token(s) Authorized Successfully");
+        setAuthoriseBladeOpen(false);
+        setAuthoriseForm({ client_uid: "", token_uid: "", quantity_authorized: "" });
+        setAuthoriseTokenSearch("");
+      }
+    } catch (error: any) {
+      alert(error?.message || "Failed to authorise tokens. Please try again.");
+    } finally {
+      setAuthoriseLoading(false);
+    }
+  };
+
+  const stopInstantBuyPoll = () => {
+    if (instantBuyPollRef.current) {
+      clearInterval(instantBuyPollRef.current);
+      instantBuyPollRef.current = null;
+    }
+  };
+
+  const pollTransactionStatus = (transactionUid: string) => {
+    instantBuyPollRef.current = setInterval(async () => {
+      try {
+        const data = await getRaw<{ data: { transaction_status: string }; status: string }>(
+          `${ENDPOINTS.PAYMENTS.TRANSACTIONS}/${transactionUid}/status`
+        );
+        const txStatus = (data as any).data?.transaction_status;
+        if (txStatus === "successful") {
+          stopInstantBuyPoll();
+          setInstantBuyStatus({ type: "success", message: "Payment successful! Tokens purchased." });
+          setInstantBuyLoading(false);
+        } else if (txStatus === "failed") {
+          stopInstantBuyPoll();
+          setInstantBuyStatus({ type: "error", message: "Payment failed. Please try again." });
+          setInstantBuyLoading(false);
+        }
+      } catch { /* keep polling */ }
+    }, 5000);
+  };
+
+  const handleInstantBuy = async () => {
+    if (!instantBuyForm.token_buyer || !instantBuyForm.token_uid || !instantBuyForm.token_quantity || !instantBuyForm.mobile_money_number) {
+      alert("Please fill in all required fields");
+      return;
+    }
+    stopInstantBuyPoll();
+    setInstantBuyLoading(true);
+    setInstantBuyStatus({ type: "pending", message: "Processing payment — enter your PIN on your mobile phone…" });
+    try {
+      const response = await post<any>(ENDPOINTS.TOKENS.BUY, {
+        data: {
+          token_buyer: instantBuyForm.token_buyer,
+          token_uid: instantBuyForm.token_uid,
+          token_quantity: instantBuyForm.token_quantity,
+          mobile_money_number: instantBuyForm.mobile_money_number,
+        },
+      });
+      if (response.status === "success") {
+        const transactionUid = (response as any).data?.transaction_uid;
+        setInstantBuyStatus({ type: "pending", message: response.message || "Payment Processing — Enter PIN" });
+        if (transactionUid) pollTransactionStatus(transactionUid);
+      }
+    } catch (error: any) {
+      setInstantBuyLoading(false);
+      setInstantBuyStatus({ type: "error", message: error?.message || "Failed to initiate payment. Please try again." });
+    }
+  };
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [activeData, expiredData, vebaActiveData, vebaExpiredData] = await Promise.all([
+        const [activeData, expiredData, pausedData, vebaActiveData] = await Promise.all([
           getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.TOKENS_ACTIVE),
           getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.TOKENS_EXPIRED),
+          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.TOKENS_PAUSED),
           getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_ACTIVE),
-          getRaw<{ data: { count: number } }>(ENDPOINTS.STATISTICS.VEBA_TOKENS_EXPIRED),
         ]);
 
-        const runningTokens = activeData.data.count;
-        const expiredTokens = expiredData.data.count;
+        const activeSubscriptions = activeData.data.count;
+        const expiredSubscriptions = expiredData.data.count;
+        const pausedSubscriptions = pausedData.data.count;
         const activeVebaTokens = vebaActiveData.data.count;
-        const expiredVebaTokens = vebaExpiredData.data.count;
-        const totalActiveTokens = runningTokens + activeVebaTokens;
+        const totalActive = activeSubscriptions + activeVebaTokens;
 
         setStats({
-          runningTokens,
-          expiredTokens,
+          activeSubscriptions,
+          expiredSubscriptions,
+          pausedSubscriptions,
           activeVebaTokens,
-          expiredVebaTokens,
-          totalActiveTokens,
+          totalActive,
         });
       } catch (error) {
         console.error("Failed to fetch stats:", error);
@@ -1082,6 +1275,7 @@ export function TokensPage() {
 
     fetchStats();
     fetchTokens();
+    fetchVariantOptions();
   }, []);
 
   return (
@@ -1119,11 +1313,11 @@ export function TokensPage() {
               </>
             ) : (
               [
-                { label: "Running Tokens", value: stats.runningTokens.toString(), pct: Math.min(stats.runningTokens / 100 * 100, 100), tone: "bg-[#128C7E]" },
-                { label: "Expired Tokens", value: stats.expiredTokens.toString(), pct: Math.min(stats.expiredTokens / 100 * 100, 100), tone: "bg-[#F97316]" },
+                { label: "Active Subscriptions", value: stats.activeSubscriptions.toString(), pct: Math.min(stats.activeSubscriptions / 100 * 100, 100), tone: "bg-[#128C7E]" },
+                { label: "Expired Subscriptions", value: stats.expiredSubscriptions.toString(), pct: Math.min(stats.expiredSubscriptions / 100 * 100, 100), tone: "bg-[#EF4444]" },
+                { label: "Paused Subscriptions", value: stats.pausedSubscriptions.toString(), pct: Math.min(stats.pausedSubscriptions / 100 * 100, 100), tone: "bg-[#F59E0B]" },
                 { label: "Active VEBA Tokens", value: stats.activeVebaTokens.toString(), pct: Math.min(stats.activeVebaTokens / 100 * 100, 100), tone: "bg-[#F97316]" },
-                { label: "Expired VEBA Tokens", value: stats.expiredVebaTokens.toString(), pct: Math.min(stats.expiredVebaTokens / 100 * 100, 100), tone: "bg-[#25D366]" },
-                { label: "Total Active Tokens", value: stats.totalActiveTokens.toString(), pct: Math.min(stats.totalActiveTokens / 100 * 100, 100), tone: "bg-[#34B7F1]" },
+                { label: "Total Active", value: stats.totalActive.toString(), pct: Math.min(stats.totalActive / 100 * 100, 100), tone: "bg-[#34B7F1]" },
               ].map(b => (
                 <div key={b.label} className="bg-white border border-[#E9EDEF] rounded-xl p-3">
                   <div className="font-black text-[12px] text-[#111B21]">{b.label}</div>
@@ -1143,18 +1337,44 @@ export function TokensPage() {
                 <div className="font-black text-[13px] text-[#111B21]">Tokens List</div>
                 <div className="text-[11px] text-[#667781] mt-0.5">Kafka → Cassandra (immutable) • Denominator enforced • idempotent keys</div>
               </div>
-              <PermissionGate permission="tokens.create">
-                <button
-                  onClick={() => setCreateBladeOpen(true)}
-                  className="h-7 px-3 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer hover:brightness-105"
-                >
-                  + Create Token
-                </button>
-              </PermissionGate>
+              <div className="flex items-center gap-2">
+                <PermissionGate permission="tokens.create">
+                  <button
+                    onClick={() => setCreateBladeOpen(true)}
+                    className="h-7 px-3 rounded-lg bg-[#25D366] text-[#075E54] text-[12px] font-black border-none cursor-pointer hover:brightness-105"
+                  >
+                    + Create Token
+                  </button>
+                </PermissionGate>
+                <div className="relative" ref={preFundMenuRef}>
+                  <button
+                    onClick={() => { fetchClients(); setPreFundMenuOpen(p => !p); }}
+                    className="h-7 px-3 rounded-lg bg-[#F59E0B] text-white text-[12px] font-black border-none cursor-pointer hover:brightness-105 flex items-center gap-1"
+                  >
+                    Pre Fund Token ▾
+                  </button>
+                  {preFundMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-[200] bg-white border border-[#E9EDEF] rounded-xl shadow-lg overflow-hidden min-w-[180px]">
+                      <button
+                        onClick={() => { setPreFundMenuOpen(false); setAuthoriseBladeOpen(true); }}
+                        className="w-full text-left px-4 py-2.5 text-[12px] text-[#111B21] hover:bg-[#F8FAFC] font-bold border-none cursor-pointer bg-white"
+                      >
+                        Authorise Tokens
+                      </button>
+                      <button
+                        onClick={() => { setPreFundMenuOpen(false); setInstantBuyBladeOpen(true); }}
+                        className="w-full text-left px-4 py-2.5 text-[12px] text-[#111B21] hover:bg-[#F8FAFC] font-bold border-none cursor-pointer bg-white border-t border-[#E9EDEF]"
+                      >
+                        Instant Buy Tokens
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <table className="w-full text-[11px] table-fixed">
               <thead><tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
-                {["ID","Name","Type","Amount","Validity","Status","Actions"].map(h => (
+                {["ID","Name","Type","Variant","Period","Price","Created","Actions"].map(h => (
                   <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
                 ))}
               </tr></thead>
@@ -1169,31 +1389,25 @@ export function TokensPage() {
                       <td className="px-3 py-2"><div className="h-3 bg-[#E9EDEF] rounded animate-pulse"></div></td>
                       <td className="px-3 py-2"><div className="h-3 bg-[#E9EDEF] rounded animate-pulse"></div></td>
                       <td className="px-3 py-2"><div className="h-3 bg-[#E9EDEF] rounded animate-pulse"></div></td>
+                      <td className="px-3 py-2"><div className="h-3 bg-[#E9EDEF] rounded animate-pulse"></div></td>
                     </tr>
                   ))
                 ) : tokens.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-[#667781] italic">
+                    <td colSpan={8} className="px-3 py-8 text-center text-[#667781] italic">
                       No tokens found
                     </td>
                   </tr>
                 ) : (
                   tokens.map((token: any, i) => (
                     <tr key={token.token_id || i} className="border-b border-[#E9EDEF] last:border-0 hover:bg-[#F8FAFC]">
-                      <td className="px-3 py-2 font-mono text-[#667781]">{token.token_id}</td>
-                      <td className="px-3 py-2 text-[#111B21] truncate">{token.token_name}</td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-[#667781]">{token.token_id ? `${token.token_id.slice(0,8)}…` : "—"}</td>
+                      <td className="px-3 py-2 text-[#111B21] truncate font-bold">{token.token_name}</td>
                       <td className="px-3 py-2 text-[#667781]">{token.token_type}</td>
-                      <td className="px-3 py-2 font-extrabold text-[#111B21]">{token.token_currency?.toUpperCase()} {token.token_amount}</td>
-                      <td className="px-3 py-2 font-black text-[#EF4444]">{token.token_validity} Hours</td>
-                      <td className="px-3 py-2 text-[#667781]">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-black ${
-                          token.token_type === 'active' ? 'bg-[#25D366] text-white' :
-                          token.token_type === 'expired' ? 'bg-[#EF4444] text-white' :
-                          'bg-[#F97316] text-white'
-                        }`}>
-                          {token.token_type || 'active'}
-                        </span>
-                      </td>
+                      <td className="px-3 py-2 text-[#111B21] truncate">{token.variant?.variant_name ?? "—"}</td>
+                      <td className="px-3 py-2 text-[#667781]">{token.variant ? billingTypeLabel(String(token.variant.billing_type)) : "—"}</td>
+                      <td className="px-3 py-2 font-extrabold text-[#111B21]">{token.variant ? `${token.variant.billing_currency} ${token.variant.billing_amount}` : "—"}</td>
+                      <td className="px-3 py-2 text-[#667781] text-[10px]">{token.date_created ? String(token.date_created).split("T")[0] : "—"}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <button
@@ -1270,38 +1484,13 @@ export function TokensPage() {
                     <option value="veba">VEBA Token</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[12px] font-black text-[#667781] mb-1">Amount</label>
-                    <input
-                      type="text"
-                      value={createForm.token_amount}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, token_amount: e.target.value }))}
-                      placeholder="Enter Amount"
-                      className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-black text-[#667781] mb-1">Currency</label>
-                    <select
-                      value={createForm.token_currency}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, token_currency: e.target.value }))}
-                      className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
-                    >
-                      <option value="">Select Currency</option>
-                      <option value="ugx">UGX</option>
-                      <option value="kes">KES</option>
-                    </select>
-                  </div>
-                </div>
                 <div>
-                  <label className="block text-[12px] font-black text-[#667781] mb-1">Validity (Hours)</label>
-                  <input
-                    type="text"
-                    value={createForm.token_validity}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, token_validity: e.target.value }))}
-                    placeholder="Enter Validity"
-                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Product Variant</label>
+                  <VariantPicker
+                    value={createForm.token_product_variant_uid}
+                    onChange={(uid) => setCreateForm(prev => ({ ...prev, token_product_variant_uid: uid }))}
+                    groups={variantGroups}
+                    loading={variantsLoading}
                   />
                 </div>
                 {createForm.token_type === "parameter" && (
@@ -1415,6 +1604,168 @@ export function TokensPage() {
       )}
 
       {/* ── Token Details/Edit Side Blade ───────────────────────────────────── */}
+      {/* ── Authorise Tokens Blade ──────────────────────────────────────────── */}
+      {authoriseBladeOpen && (
+        <div className="fixed inset-0 z-[9000] bg-[#111B21]/30 flex justify-end" onClick={() => setAuthoriseBladeOpen(false)}>
+          <div className="bg-white w-full max-w-[500px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between px-5 py-3.5 bg-[#075E54] shrink-0">
+              <span className="font-black text-[15px] text-white">Authorise Tokens</span>
+              <button onClick={() => setAuthoriseBladeOpen(false)} className="w-8 h-8 rounded-lg bg-white/10 border border-white/25 text-white font-black text-[14px] cursor-pointer grid place-items-center">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-[#F0F2F5] p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Client</label>
+                  <select
+                    value={authoriseForm.client_uid}
+                    onChange={(e) => setAuthoriseForm(prev => ({ ...prev, client_uid: e.target.value }))}
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  >
+                    <option value="">{clientsLoading ? "Loading clients…" : "Select Client"}</option>
+                    {clientsList.map(c => (
+                      <option key={c.uid} value={c.uid}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Token</label>
+                  <TokenPicker
+                    value={authoriseForm.token_uid}
+                    onChange={(uid) => setAuthoriseForm(prev => ({ ...prev, token_uid: uid }))}
+                    tokens={tokens}
+                    loading={tokensLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={authoriseForm.quantity_authorized}
+                    onChange={(e) => setAuthoriseForm(prev => ({ ...prev, quantity_authorized: e.target.value }))}
+                    placeholder="Enter quantity to authorise"
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-[#E9EDEF] bg-white shrink-0">
+              <button onClick={() => setAuthoriseBladeOpen(false)} className="h-9 px-5 rounded-lg bg-white border border-[#E9EDEF] text-[12px] font-black text-[#111B21] cursor-pointer hover:bg-[#F8FAFC]">Cancel</button>
+              <button
+                onClick={handleAuthorise}
+                disabled={authoriseLoading}
+                className="h-9 px-5 rounded-lg bg-[#128C7E] border-none text-white text-[12px] font-black cursor-pointer hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {authoriseLoading ? "Authorising…" : "Authorise"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Instant Buy Tokens Blade ─────────────────────────────────────────── */}
+      {instantBuyBladeOpen && (
+        <div className="fixed inset-0 z-[9000] bg-[#111B21]/30 flex justify-end" onClick={() => { if (!instantBuyLoading) { setInstantBuyBladeOpen(false); stopInstantBuyPoll(); } }}>
+          <div className="bg-white w-full max-w-[500px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between px-5 py-3.5 bg-[#075E54] shrink-0">
+              <span className="font-black text-[15px] text-white">Instant Buy Tokens</span>
+              <button
+                onClick={() => { stopInstantBuyPoll(); setInstantBuyBladeOpen(false); setInstantBuyStatus({ type: "", message: "" }); setInstantBuyLoading(false); }}
+                className="w-8 h-8 rounded-lg bg-white/10 border border-white/25 text-white font-black text-[14px] cursor-pointer grid place-items-center"
+              >✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-[#F0F2F5] p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Client (Token Buyer)</label>
+                  <select
+                    value={instantBuyForm.token_buyer}
+                    onChange={(e) => setInstantBuyForm(prev => ({ ...prev, token_buyer: e.target.value }))}
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  >
+                    <option value="">{clientsLoading ? "Loading clients…" : "Select Client"}</option>
+                    {clientsList.map(c => (
+                      <option key={c.uid} value={c.uid}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Token</label>
+                  <TokenPicker
+                    value={instantBuyForm.token_uid}
+                    onChange={(uid) => setInstantBuyForm(prev => ({ ...prev, token_uid: uid }))}
+                    tokens={tokens}
+                    loading={tokensLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={instantBuyForm.token_quantity}
+                    onChange={(e) => setInstantBuyForm(prev => ({ ...prev, token_quantity: e.target.value }))}
+                    placeholder="Enter quantity"
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Mobile Money Number</label>
+                  <input
+                    type="tel"
+                    value={instantBuyForm.mobile_money_number}
+                    onChange={(e) => setInstantBuyForm(prev => ({ ...prev, mobile_money_number: e.target.value }))}
+                    placeholder="e.g. 256757635222"
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E] font-mono"
+                  />
+                </div>
+
+                {instantBuyStatus.message && (
+                  <div className={`rounded-xl p-3 text-[12px] font-semibold ${
+                    instantBuyStatus.type === "success" ? "bg-[#E8F5E9] text-[#2E7D32]" :
+                    instantBuyStatus.type === "error"   ? "bg-[#FFEBEE] text-[#C62828]" :
+                    "bg-[#FFF8E1] text-[#F57F17]"
+                  }`}>
+                    {instantBuyStatus.type === "pending" && (
+                      <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-2 align-middle" />
+                    )}
+                    {instantBuyStatus.message}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-[#E9EDEF] bg-white shrink-0">
+              <button
+                onClick={() => { stopInstantBuyPoll(); setInstantBuyBladeOpen(false); setInstantBuyStatus({ type: "", message: "" }); setInstantBuyLoading(false); }}
+                className="h-9 px-5 rounded-lg bg-white border border-[#E9EDEF] text-[12px] font-black text-[#111B21] cursor-pointer hover:bg-[#F8FAFC]"
+              >
+                {instantBuyStatus.type === "success" ? "Close" : "Cancel"}
+              </button>
+              {instantBuyStatus.type !== "success" && (
+                <button
+                  onClick={handleInstantBuy}
+                  disabled={instantBuyLoading}
+                  className="h-9 px-5 rounded-lg bg-[#128C7E] border-none text-white text-[12px] font-black cursor-pointer hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {instantBuyLoading ? "Processing…" : "Buy Tokens"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {sideBladeOpen && (
         <div className="fixed inset-0 z-[8000] bg-[#111B21]/30 flex justify-end" onClick={() => setSideBladeOpen(false)}>
           <div className="bg-white w-full max-w-[500px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300" onClick={e => e.stopPropagation()}>
@@ -1467,38 +1818,13 @@ export function TokensPage() {
                           <option value="veba">VEBA Token</option>
                         </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[12px] font-black text-[#667781] mb-1">Amount</label>
-                          <input
-                            type="number"
-                            value={editForm.token_amount}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, token_amount: e.target.value }))}
-                            className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[12px] font-black text-[#667781] mb-1">Currency</label>
-                          <select
-                            value={editForm.token_currency}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, token_currency: e.target.value }))}
-                            className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
-                          >
-                            <option value="ugx">UGX</option>
-                            <option value="kes">KES</option>
-                            <option value="usd">USD</option>
-                            <option value="tzs">TZS</option>
-                            <option value="rwf">RWF</option>
-                          </select>
-                        </div>
-                      </div>
                       <div>
-                        <label className="block text-[12px] font-black text-[#667781] mb-1">Validity (Hours)</label>
-                        <input
-                          type="number"
-                          value={editForm.token_validity}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, token_validity: e.target.value }))}
-                          className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
+                        <label className="block text-[12px] font-black text-[#667781] mb-1">Product Variant</label>
+                        <VariantPicker
+                          value={editForm.token_product_variant_uid}
+                          onChange={(uid) => setEditForm(prev => ({ ...prev, token_product_variant_uid: uid }))}
+                          groups={variantGroups}
+                          loading={variantsLoading}
                         />
                       </div>
                       {editForm.token_type === "parameter" && (
@@ -1556,23 +1882,25 @@ export function TokensPage() {
                         <span className="text-[13px] text-[#111B21]">{selectedToken?.token_type}</span>
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
-                        <span className="text-[12px] font-black text-[#667781]">Amount</span>
-                        <span className="text-[13px] text-[#111B21] font-bold">{selectedToken?.token_currency?.toUpperCase()} {selectedToken?.token_amount}</span>
+                        <span className="text-[12px] font-black text-[#667781]">Date Created</span>
+                        <span className="text-[13px] text-[#111B21]">{selectedToken?.date_created ? String(selectedToken.date_created).split("T")[0] : "—"}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
-                        <span className="text-[12px] font-black text-[#667781]">Validity</span>
-                        <span className="text-[13px] text-[#111B21]">{selectedToken?.token_validity} Hours</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
-                        <span className="text-[12px] font-black text-[#667781]">Status</span>
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-black ${
-                          selectedToken?.token_type === 'active' ? 'bg-[#25D366] text-white' :
-                          selectedToken?.token_type === 'expired' ? 'bg-[#EF4444] text-white' :
-                          'bg-[#F97316] text-white'
-                        }`}>
-                          {selectedToken?.token_type || 'active'}
-                        </span>
-                      </div>
+                      {selectedToken?.variant && (
+                        <>
+                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                            <span className="text-[12px] font-black text-[#667781]">Variant</span>
+                            <span className="text-[13px] text-[#111B21] font-bold">{selectedToken.variant.variant_name}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                            <span className="text-[12px] font-black text-[#667781]">Billing Period</span>
+                            <span className="text-[13px] text-[#111B21]">{billingTypeLabel(String(selectedToken.variant.billing_type))}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                            <span className="text-[12px] font-black text-[#667781]">Price</span>
+                            <span className="text-[13px] text-[#111B21] font-bold">{selectedToken.variant.billing_currency} {selectedToken.variant.billing_amount}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1619,6 +1947,110 @@ export function TokensPage() {
   );
 }
 
+function TokenPicker({
+  value,
+  onChange,
+  tokens,
+  loading,
+}: {
+  value: string;
+  onChange: (tokenId: string) => void;
+  tokens: any[];
+  loading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const selected = useMemo(() => tokens.find((t: any) => (t.token_id || t.token_uid) === value), [value, tokens]);
+  const q = search.trim().toLowerCase();
+  const filtered = useMemo(
+    () => q ? tokens.filter((t: any) => (t.token_name || "").toLowerCase().includes(q)) : tokens,
+    [q, tokens]
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => !loading && setOpen(o => !o)}
+        className={[
+          "w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-left",
+          "flex items-center justify-between outline-none transition-colors",
+          open ? "border-[#128C7E]" : "",
+          loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+        ].join(" ")}
+      >
+        <span className={`truncate ${selected ? "text-[#111B21]" : "text-[#667781]"}`}>
+          {loading ? "Loading tokens…" : selected ? selected.token_name : "Select Token"}
+        </span>
+        <span className="ml-2 text-[#667781] text-[10px] shrink-0">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && !loading && (
+        <div className="absolute left-0 right-0 top-[38px] z-[300] bg-white border border-[#E9EDEF] rounded-lg shadow-xl flex flex-col" style={{ maxHeight: "16rem" }}>
+          <div className="px-2 py-2 border-b border-[#E9EDEF] shrink-0">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search tokens…"
+              className="w-full h-8 rounded-lg border border-[#E9EDEF] bg-[#F0F2F5] px-3 text-[12px] outline-none focus:border-[#128C7E]"
+            />
+          </div>
+          <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-4 text-[12px] text-[#667781] italic text-center">
+                {tokens.length === 0 ? "No tokens available" : "No results"}
+              </div>
+            ) : (
+              filtered.map((t: any) => {
+                const uid = t.token_id || t.token_uid;
+                return (
+                  <button
+                    key={uid}
+                    type="button"
+                    onClick={() => { onChange(uid); setOpen(false); setSearch(""); }}
+                    className={[
+                      "w-full text-left px-4 py-2.5 border-b border-[#F0F2F5] last:border-0 transition-colors",
+                      uid === value ? "bg-[#E9F7F4]" : "hover:bg-[#F8FAFC]",
+                    ].join(" ")}
+                  >
+                    <div className={`text-[12px] font-bold ${uid === value ? "text-[#128C7E]" : "text-[#111B21]"}`}>
+                      {t.token_name}
+                    </div>
+                    {t.token_type && (
+                      <div className="text-[11px] text-[#667781] mt-0.5">{t.token_type}</div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Reusable components ─────────────────────────────────────────────────────
 const pillStyles: Record<string, string> = {
   green: "bg-[#25D366] text-[#075E54]",
@@ -1643,6 +2075,174 @@ function ModalSection({ title, children }: { title: string; children: React.Reac
     <div className="mb-3 border border-[#E9EDEF] rounded-xl overflow-hidden bg-white">
       <div className="bg-[#E9EDEF] px-4 py-2.5 font-black text-[13px] text-[#111B21]">{title}</div>
       {children}
+    </div>
+  );
+}
+
+function VariantPicker({
+  value,
+  onChange,
+  groups,
+  loading,
+}: {
+  value: string;
+  onChange: (uid: string) => void;
+  groups: ProductGroup[];
+  loading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  // groups start collapsed; clicking the header expands them
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // focus search on open
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const selected = useMemo(() => {
+    for (const g of groups) {
+      const v = g.variants.find(v => v.variant_uid === value);
+      if (v) return { productName: g.product_name, variant: v };
+    }
+    return null;
+  }, [value, groups]);
+
+  const toggleExpand = (productUid: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(productUid)) next.delete(productUid);
+      else next.add(productUid);
+      return next;
+    });
+  };
+
+  // filtered groups — when searching, expand all matching groups automatically
+  const q = search.trim().toLowerCase();
+  const filteredGroups = useMemo(() => {
+    if (!q) return groups;
+    return groups
+      .map(g => ({
+        ...g,
+        variants: g.variants.filter(
+          v =>
+            v.variant_name.toLowerCase().includes(q) ||
+            g.product_name.toLowerCase().includes(q)
+        ),
+      }))
+      .filter(g => g.variants.length > 0);
+  }, [q, groups]);
+
+  const isSearching = q.length > 0;
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => !loading && setOpen(o => !o)}
+        className={[
+          "w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-left",
+          "flex items-center justify-between outline-none transition-colors",
+          open ? "border-[#128C7E]" : "",
+          loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+        ].join(" ")}
+      >
+        <span className={`truncate ${selected ? "text-[#111B21]" : "text-[#667781]"}`}>
+          {loading
+            ? "Loading variants…"
+            : selected
+              ? `${selected.productName} › ${selected.variant.variant_name}`
+              : "Select Variant"}
+        </span>
+        <span className="ml-2 text-[#667781] text-[10px] shrink-0">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && !loading && (
+        <div className="absolute left-0 right-0 top-[38px] z-[200] bg-white border border-[#E9EDEF] rounded-lg shadow-xl flex flex-col" style={{ maxHeight: "18rem" }}>
+          {/* Search bar — sticky at top */}
+          <div className="px-2 py-2 border-b border-[#E9EDEF] shrink-0">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search variants…"
+              className="w-full h-8 rounded-lg border border-[#E9EDEF] bg-[#F0F2F5] px-3 text-[12px] outline-none focus:border-[#128C7E]"
+            />
+          </div>
+
+          {/* Scrollable list */}
+          <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1">
+            {filteredGroups.length === 0 ? (
+              <div className="px-3 py-4 text-[12px] text-[#667781] italic text-center">
+                {groups.length === 0 ? "No variants available" : "No results"}
+              </div>
+            ) : (
+              filteredGroups.map(group => {
+                const isExpanded = isSearching || expanded.has(group.product_uid);
+                return (
+                  <div key={group.product_uid}>
+                    {/* Group header */}
+                    <button
+                      type="button"
+                      onClick={() => !isSearching && toggleExpand(group.product_uid)}
+                      className={[
+                        "w-full flex items-center justify-between px-3 py-2 bg-[#F0F2F5] text-left border-b border-[#E9EDEF]",
+                        isSearching ? "cursor-default" : "hover:bg-[#E9EDEF] cursor-pointer",
+                      ].join(" ")}
+                    >
+                      <span className="font-black text-[11px] text-[#111B21] uppercase tracking-wide">
+                        {group.product_name}
+                      </span>
+                      <span className="text-[#667781] text-[10px] font-bold">
+                        {!isSearching && (isExpanded ? "▲" : "▼")} {group.variants.length}
+                      </span>
+                    </button>
+
+                    {/* Variant rows */}
+                    {isExpanded && group.variants.map(v => (
+                      <button
+                        key={v.variant_uid}
+                        type="button"
+                        onClick={() => { onChange(v.variant_uid); setOpen(false); setSearch(""); }}
+                        className={[
+                          "w-full text-left px-4 py-2.5 border-b border-[#F0F2F5] last:border-0 transition-colors",
+                          v.variant_uid === value
+                            ? "bg-[#E9F7F4]"
+                            : "text-[#111B21] hover:bg-[#F8FAFC]",
+                        ].join(" ")}
+                      >
+                        <div className={`text-[12px] font-bold ${v.variant_uid === value ? "text-[#128C7E]" : ""}`}>
+                          {v.variant_name}
+                        </div>
+                        <div className="text-[11px] text-[#667781] mt-0.5">
+                          {v.billing_currency} {v.billing_amount} · {billingTypeLabel(String(v.billing_type))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

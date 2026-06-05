@@ -106,12 +106,13 @@ export const ENDPOINTS = {
     GET_TRASHED: "/clients/trashed",
   },
   TOKENS: {
-    GET_ALL:  "/tokens",
-    CREATE:   "/tokens/create",
-    BY_ID:    "/tokens",               // append /{token_id}
-    BUY:      "/payments/tokens/buy",
-    TRANSFER: "/tokens/transfer",
-    BALANCE:  "/tokens",               // append /{client_uid}/balance
+    GET_ALL:   "/tokens",
+    CREATE:    "/tokens/create",
+    BY_ID:     "/tokens",              // append /{token_id}
+    BUY:       "/payments/tokens/buy",
+    AUTHORIZE: "/tokens/special/authorize",
+    TRANSFER:  "/tokens/transfer",
+    BALANCE:   "/tokens",              // append /{client_uid}/balance
   },
   FINANCE: {
     PAYMENTS: "/finance/payments",
@@ -166,7 +167,7 @@ export const ENDPOINTS = {
 
   FLEET: {
     LIST_UNITS:       "/system32/devices/configured/all",  // POST {data:{data_level,account_uid}}
-    CHECK_IMEI:       "/system32/payment/check-imei",      // GET  append /{imei}
+    CHECK_IMEI:       "/subscriptions/device/status",        // POST {data:{device_imei}}
     CLIENTS_ALL:      "/clients",                          // GET  append /{primary_uid}/all
     USER_DETAILS:     "/users",                            // GET  append /{account_uid}/details
     DEVICE_ACTION:    "/devices/action",                   // POST {data:{action,device_imei}}
@@ -177,6 +178,18 @@ export const ENDPOINTS = {
     UPDATE_IMEI:      "/system32/payment/update-imei",     // POST {data:{payment_uid,used_imei}}
     LIST_REGISTERED:  "/devices/all",           // POST {data:{data_level,account_uid}}
     REGISTER_UNIT:    "/devices/create",
+    DEVICE_SUB_RENEW: "/subscriptions/device/renew", // POST {data:{device_imei,token_billing_uid}}
+  },
+
+  PRODUCTS: {
+    LIST:           "/billing/products/list",
+    CREATE:         "/billing/products/create",
+    UPDATE:         "/billing/products/update",
+    DELETE:         "/billing/products/delete",
+    VARIANT_LIST:   "/billing/products/variant/list",   // append /{product_uid}
+    VARIANT_CREATE: "/billing/products/variant/create",
+    VARIANT_UPDATE: "/billing/products/variant/update",
+    VARIANT_DELETE: "/billing/products/variant/delete",
   },
 
   AUDIT: {

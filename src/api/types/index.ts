@@ -130,6 +130,17 @@ export type {
 } from "./billing.types";
 
 export type {
+  Product,
+  CreateProductRequest,
+  CreateProductResponse,
+  UpdateProductRequest,
+  ProductVariant,
+  CreateVariantRequest,
+  CreateVariantResponse,
+  UpdateVariantRequest,
+} from "./products.types";
+
+export type {
   AuditDomain,
   AuditSeverity,
   AuditEvent,

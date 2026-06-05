@@ -30,6 +30,7 @@ export const DEFAULT_NAV_ITEMS: NavRailItem[] = [
   { key: "ai",                glyph: "W",  label: "AI Workloads",         path: "/ai"                },
   { key: "rbac",              glyph: "R",  label: "RBAC",                 path: "/rbac"              },
   { key: "audit",             glyph: "📋", label: "Audit Trail",          path: "/audit"             },
+  { key: "products",          glyph: "P",  label: "Products",             path: "/products"          },
 ];
 
 // ── Default Sidebar items (used by MainLayout) ──────────────────────────────
@@ -66,4 +67,5 @@ export const DEFAULT_SIDEBAR_ITEMS: SidebarItem[] = [
   { key: "rbac",              label: "RBAC / Access Control",   path: "/rbac"              },
   { key: "runbooks",          label: "Runbooks",                path: "/audit"             },
   { key: "audit",             label: "Audit Trail",             path: "/audit"             },
+  { key: "products",          label: "Products",                path: "/products"          },
 ];

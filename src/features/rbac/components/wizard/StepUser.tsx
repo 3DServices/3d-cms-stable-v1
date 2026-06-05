@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { createUser, getAllRoles } from "../../../../api";
-import type { RbacRole } from "../../../../api";
+import { createUser, getAllRoles, getAllClients } from "../../../../api";
+import type { RbacRole, Client } from "../../../../api";
 import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, Field, StepSuccessBanner, ErrorBanner, INPUT_CLS, SELECT_CLS, BTN_PRIMARY } from "./WizardShared";
 
@@ -19,9 +19,13 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [accountType, setAccountType] = useState("Admin");
+  const [accountType, setAccountType] = useState("Inhouse");
   const [assignedRole, setAssignedRole] = useState(preSelectedRoleName ?? "");
   const [billingType, setBillingType] = useState("per_month");
+
+  const [organization, setOrganization] = useState("");
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
 
   const [roles, setRoles] = useState<RbacRole[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -46,6 +50,24 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
       .finally(() => setRolesLoading(false));
   }, []);
 
+  // Fetch clients when account type is "Customer"
+  useEffect(() => {
+    if (accountType !== "Customer") {
+      setClients([]);
+      setOrganization("");
+      return;
+    }
+    setClientsLoading(true);
+    getAllClients()
+      .then((res) => {
+        const list = res.data ?? [];
+        setClients(list);
+        if (list.length > 0) setOrganization(list[0].client_name);
+      })
+      .catch(() => {})
+      .finally(() => setClientsLoading(false));
+  }, [accountType]);
+
   async function handleSubmit() {
     if (!accountName.trim() || !username.trim() || !email.trim() || !password.trim()) return;
     setSubmitting(true);
@@ -62,6 +84,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
         root_account: accountRoot ?? "engine",
         author: accountUid ?? "engine",
         billing_type: billingType,
+        ...(accountType === "Customer" && organization ? { organization } : {}),
       });
       const uid = res.data?.account_uid;
       if (mode === "full") {
@@ -78,7 +101,8 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
   }
 
   const canSubmit = accountName.trim() && username.trim() && email.trim() && password.trim()
-    && assignedRole && !submitting;
+    && assignedRole && !submitting
+    && (accountType !== "Customer" || organization);
 
   return (
     <div>
@@ -116,9 +140,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
           <div className={`grid gap-3 ${mode === "full" ? "grid-cols-2" : "grid-cols-2"}`}>
             <Field label="Account Type" required>
               <select value={accountType} onChange={(e) => setAccountType(e.target.value)} className={SELECT_CLS}>
-                <option value="Admin">Admin</option>
-                <option value="Operator">Operator</option>
-                <option value="Viewer">Viewer</option>
+                <option value="Inhouse">Inhouse</option>
                 <option value="Customer">Customer</option>
               </select>
             </Field>
@@ -144,6 +166,25 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
               </select>
             </Field>
           </div>
+
+          {/* Organization dropdown — visible only for Customer accounts */}
+          {accountType === "Customer" && (
+            <Field label="Organization" required>
+              {clientsLoading ? (
+                <div className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781] bg-white flex items-center">Loading clients...</div>
+              ) : clients.length === 0 ? (
+                <div className="w-full h-9 px-3 rounded-lg border border-[#FFD6D6] text-[12px] text-[#B00020] bg-white flex items-center">No clients found</div>
+              ) : (
+                <select value={organization} onChange={(e) => setOrganization(e.target.value)} className={SELECT_CLS}>
+                  {clients.map((c) => (
+                    <option key={c.client_uid} value={c.client_name}>
+                      {c.client_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          )}
         </div>
       </MSection>
 

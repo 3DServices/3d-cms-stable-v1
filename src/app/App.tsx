@@ -31,6 +31,7 @@ import { PaymentsPage }        from "../features/payments";
 import { VebaPage }            from "../features/veba";
 import { AIWorkloadsPage }     from "../features/ai-workloads";
 import { RbacPage }            from "../features/rbac";
+import { RoleCreatorPage }     from "../features/rbac/RoleCreatorPage";
 import { AuditPage }           from "../features/audit";
 import { TenantTowerPage }     from "../features/tenant-tower";
 import { BillingInvoicingPage } from "../features/billing-invoicing";
@@ -40,6 +41,7 @@ import { FirmwarePage }         from "../features/firmware";
 import { SimPage }             from "../features/sim";
 
 import { AssetDigitalTwinPage }  from "../features/asset-digital-twin";
+import { ProductsPage }          from "../features/products";
 
 // ── 404 ──────────────────────────────────────────────────────────────────────
 import { NotFoundPage } from "./NotFoundPage";
@@ -86,7 +88,10 @@ export default function App() {
           <Route path="/veba"     element={<ProtectedRoute permission="veba.view"><VebaPage /></ProtectedRoute>} />
           <Route path="/ai"       element={<ProtectedRoute permission="ai.view"><AIWorkloadsPage /></ProtectedRoute>} />
           <Route path="/rbac"     element={<ProtectedRoute permission="rbac.view"><RbacPage /></ProtectedRoute>} />
+          <Route path="/rbac/roles/new"      element={<ProtectedRoute permission="rbac.view"><RoleCreatorPage /></ProtectedRoute>} />
+          <Route path="/rbac/roles/:uid/edit" element={<ProtectedRoute permission="rbac.view"><RoleCreatorPage /></ProtectedRoute>} />
           <Route path="/audit"    element={<ProtectedRoute permission="audit.view"><AuditPage /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute permission="products.view_only"><ProductsPage /></ProtectedRoute>} />
 
           {/* ── 404 ─────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFoundPage />} />
