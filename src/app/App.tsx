@@ -9,6 +9,7 @@ import { useSessionMonitor } from "../hooks/useSessionMonitor";
 
 // ── Shared layout components ─────────────────────────────────────────────────
 import { TopBar }      from "../components/navigation";
+import { StatusStrip } from "../components/navigation";
 import { NavRail }     from "../components/navigation";
 import { Sidebar }     from "../components/navigation";
 
@@ -55,12 +56,12 @@ export default function App() {
     <PermissionsProvider>
     <div className="h-dvh flex flex-col bg-[#F0F2F5] overflow-hidden w-full">
       <TopBar />
+      <StatusStrip />
 
-      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden w-full">
+      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <NavRail />
         <Sidebar />
 
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
         <Routes>
           {/* ── Dashboard (no permission required — landing page) ─────── */}
           <Route path="/"               element={<AegisDashboardPage />} />
@@ -96,7 +97,6 @@ export default function App() {
           {/* ── 404 ─────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-        </div>
       </div>
 
       <footer className="hidden md:flex items-center h-[22px] bg-white border-t border-[#E9EDEF] px-3 text-[11px] text-[#667781] overflow-x-auto whitespace-nowrap shrink-0">
