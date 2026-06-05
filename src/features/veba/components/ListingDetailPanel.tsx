@@ -14,6 +14,7 @@ import {
   archiveVebaListing,
 } from "../../../api/services/veba.service";
 import type { VebaListing, ListingStatus, PricingBasis } from "../../../api/types";
+import { ConfirmDialog, useConfirmDialog } from "../../../components/ui/ConfirmDialog";
 
 /* ── Status styling ─────────────────────────────────────────────────── */
 const STATUS_STYLES: Record<ListingStatus, { bg: string; fg: string; label: string }> = {
@@ -66,6 +67,7 @@ export function ListingDetailPanel({
   const { state: authState } = useAuth();
   const [actionPending, setActionPending] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const { confirm, dialogProps } = useConfirmDialog();
 
   const pauseMut = useGuardedMutation(
     "can_edit_asset_listing",
@@ -80,8 +82,11 @@ export function ListingDetailPanel({
     (uid: string) => archiveVebaListing(uid, authState.accountUid ?? "system"),
   );
 
-  const runAction = async (mutation: typeof pauseMut, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+  const runAction = async (mutation: typeof pauseMut, confirmOpts?: { title: string; message: string; confirmLabel: string; variant?: "danger" | "warning" | "default" }) => {
+    if (confirmOpts) {
+      const ok = await confirm(confirmOpts);
+      if (!ok) return;
+    }
     setActionPending(true);
     setActionError(null);
     try {
@@ -249,20 +254,18 @@ export function ListingDetailPanel({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Edit — available for non-archived listings */}
-            {l.status !== "archived" && (
-              <GuardedButton
-                permission="can_edit_asset_listing"
-                onClick={() => {
-                  onClose();
-                  onEdit(l);
-                }}
-                disabled={actionPending}
-                className="px-3 py-1.5 text-[11px] font-extrabold rounded-md border border-[#128C7E] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Edit Listing
-              </GuardedButton>
-            )}
+            {/* Edit — available for all listings */}
+            <GuardedButton
+              permission="can_edit_asset_listing"
+              onClick={() => {
+                onClose();
+                onEdit(l);
+              }}
+              disabled={actionPending}
+              className="px-3 py-1.5 text-[11px] font-extrabold rounded-md border border-[#128C7E] bg-white text-[#128C7E] hover:bg-[#E9F7F4] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Edit Listing
+            </GuardedButton>
 
             {/* Pause — only for active listings */}
             {l.status === "active" && (
@@ -276,15 +279,22 @@ export function ListingDetailPanel({
               </GuardedButton>
             )}
 
-            {/* Reactivate — only for paused listings */}
-            {l.status === "paused" && (
+            {/* Reactivate — for paused or archived listings */}
+            {(l.status === "paused" || l.status === "archived") && (
               <GuardedButton
                 permission="can_edit_asset_listing"
-                onClick={() => runAction(reactivateMut)}
+                onClick={() =>
+                  runAction(
+                    reactivateMut,
+                    l.status === "archived"
+                      ? { title: "Unarchive listing?", message: "This listing will become active and visible on the marketplace again.", confirmLabel: "Unarchive & Reactivate", variant: "warning" as const }
+                      : undefined,
+                  )
+                }
                 disabled={actionPending}
                 className="px-3 py-1.5 text-[11px] font-extrabold rounded-md bg-[#128C7E] text-white hover:bg-[#0D7466] border-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {actionPending ? "Reactivating..." : "Reactivate Listing"}
+                {actionPending ? "Reactivating..." : l.status === "archived" ? "Unarchive & Reactivate" : "Reactivate Listing"}
               </GuardedButton>
             )}
 
@@ -295,7 +305,7 @@ export function ListingDetailPanel({
                 onClick={() =>
                   runAction(
                     archiveMut,
-                    "Archive this listing? Existing bookings will continue, but no new ones can be requested."
+                    { title: "Archive listing?", message: "Existing bookings will continue, but no new ones can be requested.", confirmLabel: "Archive", variant: "danger" },
                   )
                 }
                 disabled={actionPending}
@@ -304,16 +314,11 @@ export function ListingDetailPanel({
                 {actionPending ? "Archiving..." : "Archive Listing"}
               </GuardedButton>
             )}
-
-            {/* Archived: read-only message */}
-            {l.status === "archived" && (
-              <span className="text-[11px] text-[#667781] italic">
-                This listing is archived. No further actions are available.
-              </span>
-            )}
           </div>
         </div>
       </aside>
+
+      <ConfirmDialog {...dialogProps} />
     </>
   );
 }

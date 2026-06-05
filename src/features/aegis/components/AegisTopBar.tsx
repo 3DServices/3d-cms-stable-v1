@@ -26,13 +26,13 @@ interface AegisTopBarProps {
 }
 
 const DEFAULT_TICKER = [
-  "FrontEnd-APIs: Operational",
+  "Primary-Systems: Stable",
   "Server: Online",
   "Bandwidth: 120 Gbps",
   "Bandwidth-Burn: 85 Gbps",
   "Systemd-Process: Running",
   "SSE-Connections: 4,812",
-  "Uptime 99.8%"
+  "Uptime 99.9%"
 ];
 
 const hideScrollbar: React.CSSProperties = {
