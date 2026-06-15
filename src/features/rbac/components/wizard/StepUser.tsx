@@ -50,12 +50,17 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
       .finally(() => setRolesLoading(false));
   }, []);
 
-  // Fetch clients when account type is "Customer"
+  // Fetch clients when account type is "Customer" and auto-select the customer_tracker role
   useEffect(() => {
     if (accountType !== "Customer") {
       setClients([]);
       setOrganization("");
       return;
+    }
+    // Auto-select the customer_tracker role for Customer accounts
+    const customerRole = roles.find((r) => r.role_name === "customer_tracker");
+    if (customerRole) {
+      setAssignedRole(customerRole.role_name);
     }
     setClientsLoading(true);
     getAllClients()
@@ -66,7 +71,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
       })
       .catch(() => {})
       .finally(() => setClientsLoading(false));
-  }, [accountType]);
+  }, [accountType, roles]);
 
   async function handleSubmit() {
     if (!accountName.trim() || !username.trim() || !email.trim() || !password.trim()) return;
@@ -149,9 +154,15 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
                 <div className="w-full h-9 px-3 rounded-lg border border-[#E9EDEF] text-[12px] text-[#667781] bg-white flex items-center">Loading roles...</div>
               ) : (
                 <select value={assignedRole} onChange={(e) => setAssignedRole(e.target.value)} className={SELECT_CLS}>
-                  {roles.map((r) => (
+                  {(accountType === "Customer"
+                    ? /* Show customer_tracker first, then the rest */
+                      [...roles].sort((a, b) =>
+                        a.role_name === "customer_tracker" ? -1 : b.role_name === "customer_tracker" ? 1 : 0
+                      )
+                    : roles
+                  ).map((r) => (
                     <option key={r.role_uid} value={r.role_name}>
-                      {r.role_name}
+                      {r.role_name}{accountType === "Customer" && r.role_name === "customer_tracker" ? " (Recommended)" : ""}
                     </option>
                   ))}
                 </select>

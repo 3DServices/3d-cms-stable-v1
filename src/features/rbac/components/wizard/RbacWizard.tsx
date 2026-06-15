@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useWizardState, type StepNumber } from "./useWizardState";
-import { WizardStepperSidebar, FULL_SETUP_STEPS } from "./WizardStepperSidebar";
+import { WizardStepperSidebar } from "./WizardStepperSidebar";
+import { FULL_SETUP_STEPS } from "./wizardSteps";
 import { StepPermission } from "./StepPermission";
 import { StepRole } from "./StepRole";
 import { StepUser } from "./StepUser";
