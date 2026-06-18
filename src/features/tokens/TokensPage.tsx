@@ -870,6 +870,40 @@ const MODAL_PARAMS = [
   { param:"kyc_verify",             origin:"VEBA", rps:"8.7", bill:"Yes", state:"ON"   },
 ];
 
+// ─── Billing option helpers ──────────────────────────────────────────────────
+const TOKEN_TYPE_OPTIONS = [
+  { value: "time",        label: "Time-Based",              desc: "Bills per hour of continuous access" },
+  { value: "parameter",   label: "Parameter-Based",         desc: "Bills per individual data point read" },
+  { value: "event",       label: "Event-Based",             desc: "Bills per trigger (harsh brake, geofence, alert…)" },
+  { value: "volume",      label: "Volume-Based",            desc: "Bills per MB, record batch, or data consumed" },
+  { value: "distance",    label: "Distance-Based",          desc: "Bills per kilometre or metre travelled" },
+  { value: "video",       label: "Video / Media",           desc: "Bills per image, clip, or stream minute" },
+  { value: "conditional", label: "Conditional / Threshold", desc: "Bills only when a value crosses a defined threshold" },
+  { value: "action",      label: "Action / Command",        desc: "Bills per remote command executed on device" },
+  { value: "compliance",  label: "Compliance / Report",     desc: "Bills per scheduled audit report generated" },
+];
+
+const BILLING_UNIT_BY_TYPE: Record<string, { value: string; label: string }[]> = {
+  time:        [{ value: "hour",     label: "Per Hour" }],
+  parameter:   [{ value: "unit",     label: "Per Unit Read" }],
+  event:       [{ value: "event",    label: "Per Event" }],
+  volume:      [{ value: "mb",       label: "Per MB" }, { value: "record", label: "Per Record" }],
+  distance:    [{ value: "km",       label: "Per Kilometre" }, { value: "meter", label: "Per Metre" }],
+  video:       [{ value: "image",    label: "Per Image / Snapshot" }, { value: "mb", label: "Per MB Stream" }],
+  conditional: [{ value: "event",    label: "Per Threshold Breach" }],
+  action:      [{ value: "command",  label: "Per Command Sent" }],
+  compliance:  [{ value: "report",   label: "Per Report" }, { value: "period", label: "Per Period" }],
+};
+
+const BILLING_SCOPE_OPTIONS = [
+  { value: "asset",    label: "Per Asset (device)" },
+  { value: "driver",   label: "Per Driver" },
+  { value: "fleet",    label: "Whole Fleet" },
+  { value: "shipment", label: "Per Shipment" },
+];
+
+const CONDITION_OPERATORS = [">", ">=", "<", "<=", "==", "!="];
+
 // ─── Billing type helpers ────────────────────────────────────────────────────
 const BILLING_TYPE_MAP: Record<string, string> = {
   "365": "Annual",
@@ -928,6 +962,9 @@ export function TokensPage() {
     token_type: "",
     token_product_variant_uid: "",
     parameters: [] as string[],
+    billing_unit: "",
+    billing_scope: "asset",
+    billing_conditions: [] as { parameter: string; operator: string; threshold: string }[],
   });
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -940,6 +977,9 @@ export function TokensPage() {
     token_type: "",
     token_product_variant_uid: "",
     parameters: [] as string[],
+    billing_unit: "",
+    billing_scope: "asset",
+    billing_conditions: [] as { parameter: string; operator: string; threshold: string }[],
   });
   const [editLoading, setEditLoading] = useState(false);
 
@@ -958,6 +998,7 @@ export function TokensPage() {
   const [authoriseBladeOpen, setAuthoriseBladeOpen] = useState(false);
   const [authoriseForm, setAuthoriseForm] = useState({ client_uid: "", token_uid: "", quantity_authorized: "" });
   const [authoriseLoading, setAuthoriseLoading] = useState(false);
+  const [authoriseTokenSearch, setAuthoriseTokenSearch] = useState("");
 
   // Instant Buy Tokens blade
   const [instantBuyBladeOpen, setInstantBuyBladeOpen] = useState(false);
@@ -971,6 +1012,10 @@ export function TokensPage() {
       alert("Please fill in all required fields");
       return;
     }
+    if (createForm.token_type === "conditional" && createForm.billing_conditions.length === 0) {
+      alert("Conditional tokens require at least one billing condition");
+      return;
+    }
 
     setCreateLoading(true);
     try {
@@ -980,6 +1025,9 @@ export function TokensPage() {
           token_type: createForm.token_type,
           token_product_variant_uid: createForm.token_product_variant_uid,
           token_parameters: createForm.parameters,
+          billing_unit: createForm.billing_unit || undefined,
+          billing_scope: createForm.billing_scope,
+          billing_conditions: createForm.billing_conditions,
         },
       };
 
@@ -991,6 +1039,9 @@ export function TokensPage() {
           token_type: "",
           token_product_variant_uid: "",
           parameters: [],
+          billing_unit: "",
+          billing_scope: "asset",
+          billing_conditions: [],
         });
         setCreateBladeOpen(false);
         fetchTokens();
@@ -1025,6 +1076,9 @@ export function TokensPage() {
         token_type: token.token_type,
         token_product_variant_uid: token.token_product_variant_uid || "",
         parameters: token.token_parameters || [],
+        billing_unit: token.billing_unit || "",
+        billing_scope: token.billing_scope || "asset",
+        billing_conditions: token.billing_conditions || [],
       });
       setEditMode(true);
       setSideBladeOpen(true);
@@ -1048,6 +1102,9 @@ export function TokensPage() {
           token_type: editForm.token_type,
           token_product_variant_uid: editForm.token_product_variant_uid,
           token_parameters: editForm.parameters,
+          billing_unit: editForm.billing_unit || undefined,
+          billing_scope: editForm.billing_scope,
+          billing_conditions: editForm.billing_conditions,
         }
       };
 
@@ -1461,6 +1518,7 @@ export function TokensPage() {
             <div className="flex-1 overflow-y-auto bg-[#F0F2F5] p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
               <div className="space-y-4">
+                {/* Name */}
                 <div>
                   <label className="block text-[12px] font-black text-[#667781] mb-1">Name</label>
                   <input
@@ -1471,19 +1529,66 @@ export function TokensPage() {
                     className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
                   />
                 </div>
+
+                {/* Type */}
                 <div>
                   <label className="block text-[12px] font-black text-[#667781] mb-1">Type</label>
                   <select
                     value={createForm.token_type}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, token_type: e.target.value }))}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      setCreateForm(prev => ({
+                        ...prev,
+                        token_type: t,
+                        billing_unit: BILLING_UNIT_BY_TYPE[t]?.[0]?.value ?? "",
+                        billing_conditions: t !== "conditional" ? [] : prev.billing_conditions,
+                      }));
+                    }}
                     className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
                   >
                     <option value="">Select Type</option>
-                    <option value="dynamic">Dynamic</option>
-                    <option value="parameter">Parameter</option>
-                    <option value="veba">VEBA Token</option>
+                    {TOKEN_TYPE_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  {createForm.token_type && (
+                    <div className="text-[11px] text-[#667781] mt-1">
+                      {TOKEN_TYPE_OPTIONS.find(o => o.value === createForm.token_type)?.desc}
+                    </div>
+                  )}
+                </div>
+
+                {/* Billing Unit — shown only once a type is selected */}
+                {createForm.token_type && (
+                  <div>
+                    <label className="block text-[12px] font-black text-[#667781] mb-1">Billing Unit</label>
+                    <select
+                      value={createForm.billing_unit}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, billing_unit: e.target.value }))}
+                      className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                    >
+                      {(BILLING_UNIT_BY_TYPE[createForm.token_type] ?? []).map(u => (
+                        <option key={u.value} value={u.value}>{u.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Billing Scope */}
+                <div>
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Billing Scope</label>
+                  <select
+                    value={createForm.billing_scope}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, billing_scope: e.target.value }))}
+                    className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                  >
+                    {BILLING_SCOPE_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
+
+                {/* Product Variant */}
                 <div>
                   <label className="block text-[12px] font-black text-[#667781] mb-1">Product Variant</label>
                   <VariantPicker
@@ -1493,7 +1598,9 @@ export function TokensPage() {
                     loading={variantsLoading}
                   />
                 </div>
-                {createForm.token_type === "parameter" && (
+
+                {/* Parameters — shown for all types */}
+                {createForm.token_type && (
                   <div>
                     <label className="block text-[12px] font-black text-[#667781] mb-1">Parameters</label>
                     <select
@@ -1506,24 +1613,92 @@ export function TokensPage() {
                       className="w-full h-40 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                       <optgroup label="Xirgo Parameters">
-                        {XIRGO_PARAMS.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
+                        {XIRGO_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                       </optgroup>
                       <optgroup label="Teltonika Parameters">
-                        {TELTONIKA_PARAMS.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
+                        {TELTONIKA_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                       </optgroup>
                       <optgroup label="Other IOT Parameters">
-                        {OTHER_IOT_PARAMS.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
+                        {OTHER_IOT_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                       </optgroup>
                     </select>
-                    <div className="text-[11px] text-[#667781] mt-1">
-                      Hold Ctrl/Cmd to select multiple
+                    <div className="text-[11px] text-[#667781] mt-1">Hold Ctrl/Cmd to select multiple</div>
+                  </div>
+                )}
+
+                {/* Billing Conditions — only for conditional type */}
+                {createForm.token_type === "conditional" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[12px] font-black text-[#667781]">Billing Conditions</label>
+                      <button
+                        type="button"
+                        onClick={() => setCreateForm(prev => ({
+                          ...prev,
+                          billing_conditions: [...prev.billing_conditions, { parameter: "", operator: ">", threshold: "" }],
+                        }))}
+                        className="text-[11px] text-[#128C7E] font-black hover:underline bg-transparent border-none cursor-pointer"
+                      >
+                        + Add Condition
+                      </button>
                     </div>
+                    {createForm.billing_conditions.length === 0 && (
+                      <div className="text-[11px] text-[#667781] italic">No conditions yet. Add at least one threshold rule.</div>
+                    )}
+                    {createForm.billing_conditions.map((cond, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 mb-2">
+                        <select
+                          value={cond.parameter}
+                          onChange={(e) => {
+                            const updated = [...createForm.billing_conditions];
+                            updated[idx] = { ...updated[idx], parameter: e.target.value };
+                            setCreateForm(prev => ({ ...prev, billing_conditions: updated }));
+                          }}
+                          className="flex-1 h-8 rounded-lg border border-[#E9EDEF] bg-white px-2 text-[12px] outline-none focus:border-[#128C7E]"
+                        >
+                          <option value="">Parameter</option>
+                          <optgroup label="Xirgo">
+                            {XIRGO_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </optgroup>
+                          <optgroup label="Teltonika">
+                            {TELTONIKA_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </optgroup>
+                          <optgroup label="Other IoT">
+                            {OTHER_IOT_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </optgroup>
+                        </select>
+                        <select
+                          value={cond.operator}
+                          onChange={(e) => {
+                            const updated = [...createForm.billing_conditions];
+                            updated[idx] = { ...updated[idx], operator: e.target.value };
+                            setCreateForm(prev => ({ ...prev, billing_conditions: updated }));
+                          }}
+                          className="w-14 h-8 rounded-lg border border-[#E9EDEF] bg-white px-1 text-[12px] outline-none focus:border-[#128C7E]"
+                        >
+                          {CONDITION_OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+                        </select>
+                        <input
+                          type="text"
+                          value={cond.threshold}
+                          onChange={(e) => {
+                            const updated = [...createForm.billing_conditions];
+                            updated[idx] = { ...updated[idx], threshold: e.target.value };
+                            setCreateForm(prev => ({ ...prev, billing_conditions: updated }));
+                          }}
+                          placeholder="value"
+                          className="w-16 h-8 rounded-lg border border-[#E9EDEF] bg-white px-2 text-[12px] outline-none focus:border-[#128C7E]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = createForm.billing_conditions.filter((_, i) => i !== idx);
+                            setCreateForm(prev => ({ ...prev, billing_conditions: updated }));
+                          }}
+                          className="w-7 h-8 rounded-lg bg-[#EF4444] text-white text-[12px] font-black border-none cursor-pointer hover:brightness-110 shrink-0"
+                        >×</button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1809,13 +1984,52 @@ export function TokensPage() {
                         <label className="block text-[12px] font-black text-[#667781] mb-1">Token Type</label>
                         <select
                           value={editForm.token_type}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, token_type: e.target.value }))}
+                          onChange={(e) => {
+                            const t = e.target.value;
+                            setEditForm(prev => ({
+                              ...prev,
+                              token_type: t,
+                              billing_unit: BILLING_UNIT_BY_TYPE[t]?.[0]?.value ?? prev.billing_unit,
+                              billing_conditions: t !== "conditional" ? [] : prev.billing_conditions,
+                            }));
+                          }}
                           className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
                         >
                           <option value="">Select Type</option>
-                          <option value="dynamic">Dynamic</option>
-                          <option value="parameter">Parameter</option>
-                          <option value="veba">VEBA Token</option>
+                          {TOKEN_TYPE_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        {editForm.token_type && (
+                          <div className="text-[11px] text-[#667781] mt-1">
+                            {TOKEN_TYPE_OPTIONS.find(o => o.value === editForm.token_type)?.desc}
+                          </div>
+                        )}
+                      </div>
+                      {editForm.token_type && (
+                        <div>
+                          <label className="block text-[12px] font-black text-[#667781] mb-1">Billing Unit</label>
+                          <select
+                            value={editForm.billing_unit}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, billing_unit: e.target.value }))}
+                            className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
+                          >
+                            {(BILLING_UNIT_BY_TYPE[editForm.token_type] ?? []).map(u => (
+                              <option key={u.value} value={u.value}>{u.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-[12px] font-black text-[#667781] mb-1">Billing Scope</label>
+                        <select
+                          value={editForm.billing_scope}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, billing_scope: e.target.value }))}
+                          className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
+                        >
+                          {BILLING_SCOPE_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -1827,7 +2041,7 @@ export function TokensPage() {
                           loading={variantsLoading}
                         />
                       </div>
-                      {editForm.token_type === "parameter" && (
+                      {editForm.token_type && (
                         <div>
                           <label className="block text-[12px] font-black text-[#667781] mb-1">Parameters</label>
                           <select
@@ -1840,24 +2054,90 @@ export function TokensPage() {
                             className="w-full h-32 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                           >
                             <optgroup label="Xirgo Parameters">
-                              {XIRGO_PARAMS.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                              ))}
+                              {XIRGO_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </optgroup>
                             <optgroup label="Teltonika Parameters">
-                              {TELTONIKA_PARAMS.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                              ))}
+                              {TELTONIKA_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </optgroup>
                             <optgroup label="Other IOT Parameters">
-                              {OTHER_IOT_PARAMS.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                              ))}
+                              {OTHER_IOT_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                             </optgroup>
                           </select>
-                          <div className="text-[11px] text-[#667781] mt-2">
-                            Hold Ctrl/Cmd to select multiple parameters
+                          <div className="text-[11px] text-[#667781] mt-1">Hold Ctrl/Cmd to select multiple</div>
+                        </div>
+                      )}
+                      {editForm.token_type === "conditional" && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-[12px] font-black text-[#667781]">Billing Conditions</label>
+                            <button
+                              type="button"
+                              onClick={() => setEditForm(prev => ({
+                                ...prev,
+                                billing_conditions: [...prev.billing_conditions, { parameter: "", operator: ">", threshold: "" }],
+                              }))}
+                              className="text-[11px] text-[#128C7E] font-black hover:underline bg-transparent border-none cursor-pointer"
+                            >
+                              + Add Condition
+                            </button>
                           </div>
+                          {editForm.billing_conditions.length === 0 && (
+                            <div className="text-[11px] text-[#667781] italic">No conditions yet.</div>
+                          )}
+                          {editForm.billing_conditions.map((cond, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5 mb-2">
+                              <select
+                                value={cond.parameter}
+                                onChange={(e) => {
+                                  const updated = [...editForm.billing_conditions];
+                                  updated[idx] = { ...updated[idx], parameter: e.target.value };
+                                  setEditForm(prev => ({ ...prev, billing_conditions: updated }));
+                                }}
+                                className="flex-1 h-8 rounded-lg border border-[#E9EDEF] bg-white px-2 text-[12px] outline-none focus:border-[#128C7E]"
+                              >
+                                <option value="">Parameter</option>
+                                <optgroup label="Xirgo">
+                                  {XIRGO_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </optgroup>
+                                <optgroup label="Teltonika">
+                                  {TELTONIKA_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </optgroup>
+                                <optgroup label="Other IoT">
+                                  {OTHER_IOT_PARAMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                </optgroup>
+                              </select>
+                              <select
+                                value={cond.operator}
+                                onChange={(e) => {
+                                  const updated = [...editForm.billing_conditions];
+                                  updated[idx] = { ...updated[idx], operator: e.target.value };
+                                  setEditForm(prev => ({ ...prev, billing_conditions: updated }));
+                                }}
+                                className="w-14 h-8 rounded-lg border border-[#E9EDEF] bg-white px-1 text-[12px] outline-none focus:border-[#128C7E]"
+                              >
+                                {CONDITION_OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+                              </select>
+                              <input
+                                type="text"
+                                value={cond.threshold}
+                                onChange={(e) => {
+                                  const updated = [...editForm.billing_conditions];
+                                  updated[idx] = { ...updated[idx], threshold: e.target.value };
+                                  setEditForm(prev => ({ ...prev, billing_conditions: updated }));
+                                }}
+                                placeholder="value"
+                                className="w-16 h-8 rounded-lg border border-[#E9EDEF] bg-white px-2 text-[12px] outline-none focus:border-[#128C7E]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = editForm.billing_conditions.filter((_, i) => i !== idx);
+                                  setEditForm(prev => ({ ...prev, billing_conditions: updated }));
+                                }}
+                                className="w-7 h-8 rounded-lg bg-[#EF4444] text-white text-[12px] font-black border-none cursor-pointer hover:brightness-110 shrink-0"
+                              >×</button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1869,19 +2149,31 @@ export function TokensPage() {
                   <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
                     <h3 className="font-black text-[14px] text-[#111B21] mb-4">Token Information</h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
                         <span className="text-[12px] font-black text-[#667781]">Token ID</span>
                         <span className="text-[13px] text-[#111B21] font-mono">{selectedToken?.token_id}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
                         <span className="text-[12px] font-black text-[#667781]">Token Name</span>
                         <span className="text-[13px] text-[#111B21] font-bold">{selectedToken?.token_name}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
                         <span className="text-[12px] font-black text-[#667781]">Token Type</span>
-                        <span className="text-[13px] text-[#111B21]">{selectedToken?.token_type}</span>
+                        <span className="text-[13px] text-[#111B21]">{TOKEN_TYPE_OPTIONS.find(o => o.value === selectedToken?.token_type)?.label ?? selectedToken?.token_type}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                        <span className="text-[12px] font-black text-[#667781]">Billing Unit</span>
+                        <span className="text-[13px] text-[#111B21]">{selectedToken?.billing_unit ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                        <span className="text-[12px] font-black text-[#667781]">Billing Trigger</span>
+                        <span className="text-[13px] text-[#111B21] font-mono text-[11px]">{selectedToken?.billing_trigger ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                        <span className="text-[12px] font-black text-[#667781]">Billing Scope</span>
+                        <span className="text-[13px] text-[#111B21]">{BILLING_SCOPE_OPTIONS.find(o => o.value === selectedToken?.billing_scope)?.label ?? selectedToken?.billing_scope ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
                         <span className="text-[12px] font-black text-[#667781]">Date Created</span>
                         <span className="text-[13px] text-[#111B21]">{selectedToken?.date_created ? String(selectedToken.date_created).split("T")[0] : "—"}</span>
                       </div>
@@ -1912,6 +2204,20 @@ export function TokensPage() {
                           <div key={index} className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-[#25D366] shrink-0"></span>
                             <span className="text-[12px] text-[#111B21]">{param}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedToken?.billing_conditions && selectedToken.billing_conditions.length > 0 && (
+                    <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
+                      <h3 className="font-black text-[14px] text-[#111B21] mb-4">Billing Conditions</h3>
+                      <div className="space-y-2">
+                        {selectedToken.billing_conditions.map((cond: any, index: number) => (
+                          <div key={index} className="flex items-center gap-2 bg-[#F0F2F5] rounded-lg px-3 py-2">
+                            <span className="text-[12px] font-bold text-[#111B21]">{cond.parameter}</span>
+                            <span className="text-[12px] font-black text-[#128C7E]">{cond.operator}</span>
+                            <span className="text-[12px] text-[#111B21]">{cond.threshold}</span>
                           </div>
                         ))}
                       </div>
