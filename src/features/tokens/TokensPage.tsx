@@ -923,18 +923,10 @@ function billingTypeLabel(val: string): string {
   return val;
 }
 
-// ─── Variant picker types ─────────────────────────────────────────────────────
-interface VariantOption {
-  variant_uid: string;
-  variant_name: string;
-  billing_amount: number;
-  billing_currency: string;
-  billing_type: string;
-}
-interface ProductGroup {
+// ─── Product picker types ─────────────────────────────────────────────────────
+interface ProductOption {
   product_uid: string;
   product_name: string;
-  variants: VariantOption[];
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -960,7 +952,9 @@ export function TokensPage() {
   const [createForm, setCreateForm] = useState({
     token_name: "",
     token_type: "",
-    token_product_variant_uid: "",
+    token_product_uid: "",
+    token_amount: "",
+    token_currency: "KES",
     parameters: [] as string[],
     billing_unit: "",
     billing_scope: "asset",
@@ -975,7 +969,9 @@ export function TokensPage() {
   const [editForm, setEditForm] = useState({
     token_name: "",
     token_type: "",
-    token_product_variant_uid: "",
+    token_product_uid: "",
+    token_amount: "",
+    token_currency: "KES",
     parameters: [] as string[],
     billing_unit: "",
     billing_scope: "asset",
@@ -983,8 +979,8 @@ export function TokensPage() {
   });
   const [editLoading, setEditLoading] = useState(false);
 
-  const [variantGroups, setVariantGroups] = useState<ProductGroup[]>([]);
-  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
 
   // Pre-fund menu
   const [preFundMenuOpen, setPreFundMenuOpen] = useState(false);
@@ -1008,7 +1004,7 @@ export function TokensPage() {
   const instantBuyPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleCreateToken = async () => {
-    if (!createForm.token_name || !createForm.token_type || !createForm.token_product_variant_uid) {
+    if (!createForm.token_name || !createForm.token_type || !createForm.token_product_uid || !createForm.token_amount || !createForm.token_currency) {
       alert("Please fill in all required fields");
       return;
     }
@@ -1023,7 +1019,9 @@ export function TokensPage() {
         data: {
           token_name: createForm.token_name,
           token_type: createForm.token_type,
-          token_product_variant_uid: createForm.token_product_variant_uid,
+          token_product_uid: createForm.token_product_uid,
+          token_amount: createForm.token_amount,
+          token_currency: createForm.token_currency,
           token_parameters: createForm.parameters,
           billing_unit: createForm.billing_unit || undefined,
           billing_scope: createForm.billing_scope,
@@ -1037,7 +1035,9 @@ export function TokensPage() {
         setCreateForm({
           token_name: "",
           token_type: "",
-          token_product_variant_uid: "",
+          token_product_uid: "",
+          token_amount: "",
+          token_currency: "KES",
           parameters: [],
           billing_unit: "",
           billing_scope: "asset",
@@ -1074,7 +1074,9 @@ export function TokensPage() {
       setEditForm({
         token_name: token.token_name,
         token_type: token.token_type,
-        token_product_variant_uid: token.token_product_variant_uid || "",
+        token_product_uid: token.token_product_uid || token.product?.product_uid || "",
+        token_amount: token.token_amount != null ? String(token.token_amount) : "",
+        token_currency: token.token_currency || "KES",
         parameters: token.token_parameters || [],
         billing_unit: token.billing_unit || "",
         billing_scope: token.billing_scope || "asset",
@@ -1089,7 +1091,7 @@ export function TokensPage() {
   };
 
   const handleUpdateToken = async () => {
-    if (!editForm.token_name || !editForm.token_type || !editForm.token_product_variant_uid) {
+    if (!editForm.token_name || !editForm.token_type || !editForm.token_product_uid || !editForm.token_amount || !editForm.token_currency) {
       alert("Please fill in all required fields");
       return;
     }
@@ -1100,7 +1102,9 @@ export function TokensPage() {
         data: {
           token_name: editForm.token_name,
           token_type: editForm.token_type,
-          token_product_variant_uid: editForm.token_product_variant_uid,
+          token_product_uid: editForm.token_product_uid,
+          token_amount: editForm.token_amount,
+          token_currency: editForm.token_currency,
           token_parameters: editForm.parameters,
           billing_unit: editForm.billing_unit || undefined,
           billing_scope: editForm.billing_scope,
@@ -1147,38 +1151,19 @@ export function TokensPage() {
     }
   };
 
-  const fetchVariantOptions = async () => {
-    setVariantsLoading(true);
+  const fetchProductOptions = async () => {
+    setProductsLoading(true);
     try {
       const productsData = await getRaw<{ data: any[] }>(ENDPOINTS.PRODUCTS.LIST);
-      const products = productsData.data || [];
-      const groups: ProductGroup[] = [];
-      await Promise.all(
-        products.map(async (product: any) => {
-          try {
-            const variantsData = await getRaw<{ data: any[] }>(
-              `${ENDPOINTS.PRODUCTS.VARIANT_LIST}/${product.product_uid}`
-            );
-            const variants: VariantOption[] = (variantsData.data || []).map((v: any) => ({
-              variant_uid: v.variant_uid,
-              variant_name: v.variant_name,
-              billing_amount: v.billing_amount,
-              billing_currency: v.billing_currency,
-              billing_type: v.billing_type,
-            }));
-            if (variants.length > 0) {
-              groups.push({ product_uid: product.product_uid, product_name: product.product_name, variants });
-            }
-          } catch (_e) {
-            // skip products where variant fetch fails
-          }
-        })
-      );
-      setVariantGroups(groups);
+      const options: ProductOption[] = (productsData.data || []).map((p: any) => ({
+        product_uid: p.product_uid,
+        product_name: p.product_name,
+      }));
+      setProductOptions(options);
     } catch (error) {
-      console.error("Failed to fetch variant options:", error);
+      console.error("Failed to fetch product options:", error);
     } finally {
-      setVariantsLoading(false);
+      setProductsLoading(false);
     }
   };
 
@@ -1332,7 +1317,7 @@ export function TokensPage() {
 
     fetchStats();
     fetchTokens();
-    fetchVariantOptions();
+    fetchProductOptions();
   }, []);
 
   return (
@@ -1431,7 +1416,7 @@ export function TokensPage() {
             </div>
             <table className="w-full text-[11px] table-fixed">
               <thead><tr className="bg-[#F8FAFC] border-b border-[#E9EDEF]">
-                {["ID","Name","Type","Variant","Period","Price","Created","Actions"].map(h => (
+                {["ID","Name","Type","Product","Amount","Currency","Created","Actions"].map(h => (
                   <th key={h} className="text-left px-3 py-2 font-black text-[#667781]">{h}</th>
                 ))}
               </tr></thead>
@@ -1461,9 +1446,9 @@ export function TokensPage() {
                       <td className="px-3 py-2 font-mono text-[10px] text-[#667781]">{token.token_id ? `${token.token_id.slice(0,8)}…` : "—"}</td>
                       <td className="px-3 py-2 text-[#111B21] truncate font-bold">{token.token_name}</td>
                       <td className="px-3 py-2 text-[#667781]">{token.token_type}</td>
-                      <td className="px-3 py-2 text-[#111B21] truncate">{token.variant?.variant_name ?? "—"}</td>
-                      <td className="px-3 py-2 text-[#667781]">{token.variant ? billingTypeLabel(String(token.variant.billing_type)) : "—"}</td>
-                      <td className="px-3 py-2 font-extrabold text-[#111B21]">{token.variant ? `${token.variant.billing_currency} ${token.variant.billing_amount}` : "—"}</td>
+                      <td className="px-3 py-2 text-[#111B21] truncate">{token.product?.product_name ? String(token.product.product_name).toUpperCase() : "—"}</td>
+                      <td className="px-3 py-2 font-extrabold text-[#111B21]">{token.token_amount != null ? Number(token.token_amount).toLocaleString() : "—"}</td>
+                      <td className="px-3 py-2 text-[#667781]">{token.token_currency || "—"}</td>
                       <td className="px-3 py-2 text-[#667781] text-[10px]">{token.date_created ? String(token.date_created).split("T")[0] : "—"}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
@@ -1588,15 +1573,48 @@ export function TokensPage() {
                   </select>
                 </div>
 
-                {/* Product Variant */}
+                {/* Product */}
                 <div>
-                  <label className="block text-[12px] font-black text-[#667781] mb-1">Product Variant</label>
-                  <VariantPicker
-                    value={createForm.token_product_variant_uid}
-                    onChange={(uid) => setCreateForm(prev => ({ ...prev, token_product_variant_uid: uid }))}
-                    groups={variantGroups}
-                    loading={variantsLoading}
+                  <label className="block text-[12px] font-black text-[#667781] mb-1">Product</label>
+                  <ProductPicker
+                    value={createForm.token_product_uid}
+                    onChange={(uid) => setCreateForm(prev => ({ ...prev, token_product_uid: uid }))}
+                    options={productOptions}
+                    loading={productsLoading}
                   />
+                  <div className="text-[11px] text-[#667781] mt-1">
+                    The token name will be prefixed with the product, e.g.{" "}
+                    <span className="font-black">
+                      {(productOptions.find(p => p.product_uid === createForm.token_product_uid)?.product_name || "PRODUCT").toUpperCase()}_{createForm.token_name || "NAME"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Amount + Currency (defined at token level) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[12px] font-black text-[#667781] mb-1">Amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={createForm.token_amount}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, token_amount: e.target.value }))}
+                      placeholder="0.00"
+                      className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-black text-[#667781] mb-1">Currency</label>
+                    <select
+                      value={createForm.token_currency}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, token_currency: e.target.value }))}
+                      className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] outline-none focus:border-[#128C7E]"
+                    >
+                      <option value="KES">KES</option>
+                      <option value="UGX">UGX</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Parameters — shown for all types */}
@@ -2033,13 +2051,37 @@ export function TokensPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[12px] font-black text-[#667781] mb-1">Product Variant</label>
-                        <VariantPicker
-                          value={editForm.token_product_variant_uid}
-                          onChange={(uid) => setEditForm(prev => ({ ...prev, token_product_variant_uid: uid }))}
-                          groups={variantGroups}
-                          loading={variantsLoading}
+                        <label className="block text-[12px] font-black text-[#667781] mb-1">Product</label>
+                        <ProductPicker
+                          value={editForm.token_product_uid}
+                          onChange={(uid) => setEditForm(prev => ({ ...prev, token_product_uid: uid }))}
+                          options={productOptions}
+                          loading={productsLoading}
                         />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[12px] font-black text-[#667781] mb-1">Amount</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={editForm.token_amount}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, token_amount: e.target.value }))}
+                            className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[12px] font-black text-[#667781] mb-1">Currency</label>
+                          <select
+                            value={editForm.token_currency}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, token_currency: e.target.value }))}
+                            className="w-full h-9 rounded-lg border border-[#E9EDEF] bg-white px-3 text-[13px] text-[#111B21] outline-none focus:border-[#128C7E]"
+                          >
+                            <option value="KES">KES</option>
+                            <option value="UGX">UGX</option>
+                            <option value="USD">USD</option>
+                          </select>
+                        </div>
                       </div>
                       {editForm.token_type && (
                         <div>
@@ -2177,22 +2219,20 @@ export function TokensPage() {
                         <span className="text-[12px] font-black text-[#667781]">Date Created</span>
                         <span className="text-[13px] text-[#111B21]">{selectedToken?.date_created ? String(selectedToken.date_created).split("T")[0] : "—"}</span>
                       </div>
-                      {selectedToken?.variant && (
-                        <>
-                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
-                            <span className="text-[12px] font-black text-[#667781]">Variant</span>
-                            <span className="text-[13px] text-[#111B21] font-bold">{selectedToken.variant.variant_name}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
-                            <span className="text-[12px] font-black text-[#667781]">Billing Period</span>
-                            <span className="text-[13px] text-[#111B21]">{billingTypeLabel(String(selectedToken.variant.billing_type))}</span>
-                          </div>
-                          <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
-                            <span className="text-[12px] font-black text-[#667781]">Price</span>
-                            <span className="text-[13px] text-[#111B21] font-bold">{selectedToken.variant.billing_currency} {selectedToken.variant.billing_amount}</span>
-                          </div>
-                        </>
+                      {selectedToken?.product && (
+                        <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                          <span className="text-[12px] font-black text-[#667781]">Product</span>
+                          <span className="text-[13px] text-[#111B21] font-bold">{String(selectedToken.product.product_name).toUpperCase()}</span>
+                        </div>
                       )}
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF]">
+                        <span className="text-[12px] font-black text-[#667781]">Amount</span>
+                        <span className="text-[13px] text-[#111B21] font-bold">{selectedToken?.token_amount != null ? Number(selectedToken.token_amount).toLocaleString() : "—"}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-[#E9EDEF] last:border-0">
+                        <span className="text-[12px] font-black text-[#667781]">Currency</span>
+                        <span className="text-[13px] text-[#111B21] font-bold">{selectedToken?.token_currency ?? "—"}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -2385,20 +2425,18 @@ function ModalSection({ title, children }: { title: string; children: React.Reac
   );
 }
 
-function VariantPicker({
+function ProductPicker({
   value,
   onChange,
-  groups,
+  options,
   loading,
 }: {
   value: string;
   onChange: (uid: string) => void;
-  groups: ProductGroup[];
+  options: ProductOption[];
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  // groups start collapsed; clicking the header expands them
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -2421,40 +2459,16 @@ function VariantPicker({
     else setSearch("");
   }, [open]);
 
-  const selected = useMemo(() => {
-    for (const g of groups) {
-      const v = g.variants.find(v => v.variant_uid === value);
-      if (v) return { productName: g.product_name, variant: v };
-    }
-    return null;
-  }, [value, groups]);
+  const selected = useMemo(
+    () => options.find(p => p.product_uid === value) ?? null,
+    [value, options]
+  );
 
-  const toggleExpand = (productUid: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(productUid)) next.delete(productUid);
-      else next.add(productUid);
-      return next;
-    });
-  };
-
-  // filtered groups — when searching, expand all matching groups automatically
   const q = search.trim().toLowerCase();
-  const filteredGroups = useMemo(() => {
-    if (!q) return groups;
-    return groups
-      .map(g => ({
-        ...g,
-        variants: g.variants.filter(
-          v =>
-            v.variant_name.toLowerCase().includes(q) ||
-            g.product_name.toLowerCase().includes(q)
-        ),
-      }))
-      .filter(g => g.variants.length > 0);
-  }, [q, groups]);
-
-  const isSearching = q.length > 0;
+  const filtered = useMemo(() => {
+    if (!q) return options;
+    return options.filter(p => p.product_name.toLowerCase().includes(q));
+  }, [q, options]);
 
   return (
     <div ref={ref} className="relative">
@@ -2471,10 +2485,10 @@ function VariantPicker({
       >
         <span className={`truncate ${selected ? "text-[#111B21]" : "text-[#667781]"}`}>
           {loading
-            ? "Loading variants…"
+            ? "Loading products…"
             : selected
-              ? `${selected.productName} › ${selected.variant.variant_name}`
-              : "Select Variant"}
+              ? selected.product_name.toUpperCase()
+              : "Select Product"}
         </span>
         <span className="ml-2 text-[#667781] text-[10px] shrink-0">{open ? "▲" : "▼"}</span>
       </button>
@@ -2488,63 +2502,35 @@ function VariantPicker({
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search variants…"
+              placeholder="Search products…"
               className="w-full h-8 rounded-lg border border-[#E9EDEF] bg-[#F0F2F5] px-3 text-[12px] outline-none focus:border-[#128C7E]"
             />
           </div>
 
           {/* Scrollable list */}
           <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-1">
-            {filteredGroups.length === 0 ? (
+            {filtered.length === 0 ? (
               <div className="px-3 py-4 text-[12px] text-[#667781] italic text-center">
-                {groups.length === 0 ? "No variants available" : "No results"}
+                {options.length === 0 ? "No products available" : "No results"}
               </div>
             ) : (
-              filteredGroups.map(group => {
-                const isExpanded = isSearching || expanded.has(group.product_uid);
-                return (
-                  <div key={group.product_uid}>
-                    {/* Group header */}
-                    <button
-                      type="button"
-                      onClick={() => !isSearching && toggleExpand(group.product_uid)}
-                      className={[
-                        "w-full flex items-center justify-between px-3 py-2 bg-[#F0F2F5] text-left border-b border-[#E9EDEF]",
-                        isSearching ? "cursor-default" : "hover:bg-[#E9EDEF] cursor-pointer",
-                      ].join(" ")}
-                    >
-                      <span className="font-black text-[11px] text-[#111B21] uppercase tracking-wide">
-                        {group.product_name}
-                      </span>
-                      <span className="text-[#667781] text-[10px] font-bold">
-                        {!isSearching && (isExpanded ? "▲" : "▼")} {group.variants.length}
-                      </span>
-                    </button>
-
-                    {/* Variant rows */}
-                    {isExpanded && group.variants.map(v => (
-                      <button
-                        key={v.variant_uid}
-                        type="button"
-                        onClick={() => { onChange(v.variant_uid); setOpen(false); setSearch(""); }}
-                        className={[
-                          "w-full text-left px-4 py-2.5 border-b border-[#F0F2F5] last:border-0 transition-colors",
-                          v.variant_uid === value
-                            ? "bg-[#E9F7F4]"
-                            : "text-[#111B21] hover:bg-[#F8FAFC]",
-                        ].join(" ")}
-                      >
-                        <div className={`text-[12px] font-bold ${v.variant_uid === value ? "text-[#128C7E]" : ""}`}>
-                          {v.variant_name}
-                        </div>
-                        <div className="text-[11px] text-[#667781] mt-0.5">
-                          {v.billing_currency} {v.billing_amount} · {billingTypeLabel(String(v.billing_type))}
-                        </div>
-                      </button>
-                    ))}
+              filtered.map(p => (
+                <button
+                  key={p.product_uid}
+                  type="button"
+                  onClick={() => { onChange(p.product_uid); setOpen(false); setSearch(""); }}
+                  className={[
+                    "w-full text-left px-4 py-2.5 border-b border-[#F0F2F5] last:border-0 transition-colors",
+                    p.product_uid === value
+                      ? "bg-[#E9F7F4]"
+                      : "text-[#111B21] hover:bg-[#F8FAFC]",
+                  ].join(" ")}
+                >
+                  <div className={`text-[12px] font-bold uppercase tracking-wide ${p.product_uid === value ? "text-[#128C7E]" : ""}`}>
+                    {p.product_name}
                   </div>
-                );
-              })
+                </button>
+              ))
             )}
           </div>
         </div>
