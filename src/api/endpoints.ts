@@ -99,6 +99,7 @@ export const ENDPOINTS = {
     AUTHORIZE: "/tokens/special/authorize",
     TRANSFER:  "/tokens/transfer",
     BALANCE:   "/tokens",              // append /{client_uid}/balance
+    BUDGET_OFFER: "/tokens/budget-offer",
   },
   FINANCE: {
     PAYMENTS: "/finance/payments",
