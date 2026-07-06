@@ -67,7 +67,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
       .then((res) => {
         const list = res.data ?? [];
         setClients(list);
-        if (list.length > 0) setOrganization(list[0].client_name);
+        if (list.length > 0) setOrganization(list[0].client_uid);
       })
       .catch(() => {})
       .finally(() => setClientsLoading(false));
@@ -79,17 +79,20 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
     setError(null);
     setSuccess(null);
     try {
+      const rootAccount = accountType === "Customer" && organization
+        ? organization   // client_uid from the dropdown
+        : (accountRoot ?? "engine");
+
       const res = await createUser({
         account_name: accountName.trim(),
         username: username.trim(),
-        account_type: accountType,
+        account_type: accountType === "Customer" ? "client" : accountType,
         assigned_role: assignedRole,
         email: email.trim(),
         password,
-        root_account: accountRoot ?? "engine",
+        root_account: rootAccount,
         author: accountUid ?? "engine",
         billing_type: billingType,
-        ...(accountType === "Customer" && organization ? { organization } : {}),
       });
       const uid = res.data?.account_uid;
       if (mode === "full") {
@@ -188,7 +191,7 @@ export function StepUser({ preSelectedRoleName, onSuccess, onClose, onNext, mode
               ) : (
                 <select value={organization} onChange={(e) => setOrganization(e.target.value)} className={SELECT_CLS}>
                   {clients.map((c) => (
-                    <option key={c.client_uid} value={c.client_name}>
+                    <option key={c.client_uid} value={c.client_uid}>
                       {c.client_name}
                     </option>
                   ))}

@@ -373,19 +373,6 @@ export function RbacPage() {
             />
           )} */}
 
-          {/* ── Waswa AI Insights ─────────────────────────────────────── */}
-          <div className="bg-[#128C7E] text-white rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-black text-[13px]">Waswa AI &#8226; RBAC Insights</span>
-              <span className="text-[12px] opacity-70 cursor-pointer">&#183;&#183;&#183;</span>
-            </div>
-            <div className="text-[11px] leading-relaxed opacity-90">
-              <div>&#8226; Permission drift detected: 2 users with wider access than role baseline (ROL-004)</div>
-              <div>&#8226; Least-privilege recommendation: ROL-005 can drop Alerts.View (unused 90d)</div>
-              <div>&#8226; Access denied explainer: 3 tickets today attributed to missing Object ACLs (not role permissions)</div>
-            </div>
-          </div>
-
           {/* ── Monitoring KPIs (commented out) ─────────────────────── */}
           {/* <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-[#E9EDEF]">
