@@ -343,6 +343,7 @@ const BUILT_MODULES: ModuleDef[] = [
     group: "finance",
     showInNavRail: true,
     showInSidebar: true,
+    catalogModuleName: "Products & Variants",
   },
 ];
 

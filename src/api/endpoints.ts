@@ -139,7 +139,12 @@ export const ENDPOINTS = {
   USERS: {
     CREATE: "/users/create",
     ALL: "/users/all",
-    ASSIGN_ROLE: "/users",           // append /{user_uid}/assign-role
+    ALL_BACKOFFICE: "/users/allx",   // GET  returns ALL users (CMS + Oliwa)
+    DELETE: "/users",                // DELETE append /{user_uid}/delete
+    DETAILS: "/users",               // GET  append /{user_uid}/details
+    ACTION: "/users/action",         // POST {data:{action, account_uid}}
+    RESET_PASSWORD: "/users",        // PUT  append /{user_uid}/reset-password
+    ASSIGN_ROLE: "/users",           // PUT  append /{user_uid}/assign-role
   },
 
   FLEET: {

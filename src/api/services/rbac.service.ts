@@ -110,12 +110,53 @@ export function createUser(
   return post<CreateUserResponse>(ENDPOINTS.USERS.CREATE, { data: payload }, opts);
 }
 
-/** Get all users for an account root. */
+/** Get all users for a specific account root. */
 export function getAllUsers(
   accountRoot: string,
   opts?: RequestOptions,
 ): Promise<ApiResponse<UserAccount[]>> {
   return post<UserAccount[]>(ENDPOINTS.USERS.ALL, { data: { primary_account: accountRoot } }, opts);
+}
+
+/** Get ALL users across all tenants (back-office view). */
+export function getAllUsersBackoffice(
+  opts?: RequestOptions,
+): Promise<ApiResponse<UserAccount[]>> {
+  return get<UserAccount[]>(ENDPOINTS.USERS.ALL_BACKOFFICE, opts);
+}
+
+/** Soft-delete (deactivate) a user account. */
+export function deleteUser(
+  userUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<string>> {
+  return del<string>(`${ENDPOINTS.USERS.DELETE}/${userUid}/delete`, { data: { deleted_by: "system" } }, opts);
+}
+
+/** Get full details for a single user. */
+export function getUserDetails(
+  userUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<UserAccount>> {
+  return get<UserAccount>(`${ENDPOINTS.USERS.DETAILS}/${userUid}/details`, opts);
+}
+
+/** Block, unblock, or deactivate a user. */
+export function setUserAction(
+  accountUid: string,
+  action: "active" | "locked" | "deactivated",
+  opts?: RequestOptions,
+): Promise<ApiResponse<string>> {
+  return post<string>(ENDPOINTS.USERS.ACTION, { data: { action, account_uid: accountUid } }, opts);
+}
+
+/** Admin-initiated password reset. */
+export function adminResetPassword(
+  userUid: string,
+  newPassword: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<string>> {
+  return put<string>(`${ENDPOINTS.USERS.RESET_PASSWORD}/${userUid}/reset-password`, { data: { new_password: newPassword } }, opts);
 }
 
 /** Assign a role to an existing user. */

@@ -9,15 +9,14 @@
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllRoles, getAllPermissions, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "../../api";
+import { getAllRoles, getAllPermissions, getAllUsersBackoffice, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "../../api";
 import type { RbacRole, RbacPermission } from "../../api";
 import { PermissionGate } from "../../auth/PermissionGate";
 import { usePermissionGuard } from "../../auth/usePermissionGuard";
 import { RolesTable } from "./components/RolesTable";
 import { PermissionSetsTable } from "./components/PermissionSetsTable";
-// import { ObjectAclsTable } from "./components/ObjectAclsTable";
-// import { PoliciesTable } from "./components/PoliciesTable";
-// import { RoleTemplatesTable } from "./components/RoleTemplatesTable";
+import { UsersTable, type UserRow } from "./components/UsersTable";
+import { UserDetailBlade } from "./components/UserDetailBlade";
 import { RbacDetailBlade } from "./components/RbacDetailBlade";
 import { EditRoleModal } from "./components/EditRoleModal";
 import { EditPermissionModal } from "./components/EditPermissionModal";
@@ -31,7 +30,7 @@ import type { PermissionSet } from "./components/PermissionSetsTable";
 // import type { RoleTemplate } from "./components/RoleTemplatesTable";
 
 // ─── Section Tabs ────────────────────────────────────────────────────────────
-const SECTION_TABS = ["Roles", "Permission Sets" /*, "Object ACLs", "Policies", "Role Templates" */] as const;
+const SECTION_TABS = ["Users", "Roles", "Permission Sets" /*, "Object ACLs", "Policies", "Role Templates" */] as const;
 type SectionTab = typeof SECTION_TABS[number];
 
 // ─── Helpers: map backend → frontend types ──────────────────────────────────
@@ -90,7 +89,7 @@ function mapRbacPermToPermissionSet(p: RbacPermission): PermissionSet {
 export function RbacPage() {
   const navigate = useNavigate();
   const guard = usePermissionGuard();
-  const [sectionTab, setSectionTab] = useState<SectionTab>("Roles");
+  const [sectionTab, setSectionTab] = useState<SectionTab>("Users");
   const [bladeOpen, setBladeOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -110,6 +109,12 @@ export function RbacPage() {
   // ── API state: Permissions ────────────────────────────────────────────────
   const [permissionSets, setPermissionSets] = useState<PermissionSet[]>([]);
   const [permsLoading, setPermsLoading] = useState(true);
+
+  // ── API state: Users ─────────────────────────────────────────────────────
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [userBladeOpen, setUserBladeOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
 
   // ── API state: Stats KPIs ──────────────────────────────────────────────
   const [statsLoading, setStatsLoading] = useState(true);
@@ -171,7 +176,18 @@ export function RbacPage() {
     ]).finally(() => setStatsLoading(false));
   }
 
+  function refreshUsers() {
+    setUsersLoading(true);
+    getAllUsersBackoffice()
+      .then((res) => setUsers(res.data as unknown as UserRow[]))
+      .catch(() => setFetchError("Failed to load users"))
+      .finally(() => setUsersLoading(false));
+  }
+
   useEffect(() => {
+    // Users
+    refreshUsers();
+
     // Roles + user counts
     Promise.all([
       getAllRoles("engine"),
@@ -314,18 +330,30 @@ export function RbacPage() {
               />
               <button
                 onClick={() => {
-                  if (sectionTab === "Roles") { refreshRoles(); refreshStats(); }
+                  if (sectionTab === "Users") { refreshUsers(); refreshStats(); }
+                  else if (sectionTab === "Roles") { refreshRoles(); refreshStats(); }
                   else if (sectionTab === "Permission Sets") { refreshPermissions(); refreshStats(); }
                 }}
-                disabled={sectionTab === "Roles" ? rolesLoading : permsLoading}
+                disabled={sectionTab === "Users" ? usersLoading : sectionTab === "Roles" ? rolesLoading : permsLoading}
                 className="h-8 px-3 rounded-lg bg-[#F0F2F5] border border-[#E9EDEF] text-[11px] font-black text-[#667781] cursor-pointer hover:bg-[#E9EDEF] disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
               >
-                {(sectionTab === "Roles" ? rolesLoading : permsLoading) ? "Refreshing..." : "Refresh"}
+                {(sectionTab === "Users" ? usersLoading : sectionTab === "Roles" ? rolesLoading : permsLoading) ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
 
           {/* ── Active Section Table ─────────────────────────────────── */}
+          {sectionTab === "Users" && (
+            usersLoading
+              ? <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-8 text-center text-[12px] text-[#667781]">Loading users...</div>
+              : <UsersTable
+                  users={users.filter(u => !searchQuery || u.account_name?.toLowerCase().includes(searchQuery.toLowerCase()) || u.username?.toLowerCase().includes(searchQuery.toLowerCase()) || u.email?.toLowerCase().includes(searchQuery.toLowerCase()) || u.account_uid?.toLowerCase().includes(searchQuery.toLowerCase()))}
+                  onSelect={(u) => { setSelectedUser(u); setUserBladeOpen(true); }}
+                  selectedId={selectedUser?.account_uid}
+                  roles={roles.map(r => r.name)}
+                />
+          )}
+
           {sectionTab === "Roles" && (
             rolesLoading
               ? <div className="bg-white border border-[#E9EDEF] rounded-xl px-4 py-8 text-center text-[12px] text-[#667781]">Loading roles...</div>
@@ -436,13 +464,22 @@ export function RbacPage() {
         />
       )}
 
+      {/* ── Blade: User Detail ───────────────────────────────────── */}
+      {userBladeOpen && selectedUser && (
+        <UserDetailBlade
+          user={selectedUser}
+          onClose={() => { setUserBladeOpen(false); setSelectedUser(null); }}
+          onUserUpdated={refreshUsers}
+        />
+      )}
+
       {/* ── RBAC Setup Wizard ─────────────────────────────────── */}
       <RbacWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         mode={wizardMode}
         initialStep={wizardInitialStep}
-        onDataChanged={() => { refreshRoles(); refreshPermissions(); refreshStats(); }}
+        onDataChanged={() => { refreshRoles(); refreshPermissions(); refreshUsers(); refreshStats(); }}
       />
 
       {/* ── Modal: Edit Role ─────────────────────────────────────── */}

@@ -293,6 +293,11 @@ export const PERMISSION_CATALOG = {
     "can_manage_repair_manual", "can_approve_cost_estimate", "can_configure_workshop_kanban",
     "can_view_repeat_fault_analysis", "can_manage_quality_control_checklist",
   ],
+  "Products & Variants": [
+    "products.view_only", "products.create", "products.update", "products.delete",
+    "products.variants.view_only", "products.variants.create", "products.variants.update",
+    "products.variants.delete",
+  ],
   "eShop & Solution Builder": [
     "can_browse_eshop", "can_purchase_eshop_item", "can_manage_eshop_catalog",
     "can_configure_eshop_integration", "can_manage_eshop_returns", "can_view_eshop_recommendations",

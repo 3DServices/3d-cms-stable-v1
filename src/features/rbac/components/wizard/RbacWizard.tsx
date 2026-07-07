@@ -10,10 +10,10 @@ import { StepAssignRole } from "./StepAssignRole";
 export type WizardMode = "full" | "quick";
 
 /** Maps full-setup wizard step numbers to the actual component to render */
-const FULL_STEP_MAP: Record<number, "user" | "assign-role" | "permission"> = {
-  1: "user",
-  2: "assign-role",
-  3: "permission",
+const FULL_STEP_MAP: Record<number, "role" | "user" | "assign-role"> = {
+  1: "role",
+  2: "user",
+  3: "assign-role",
 };
 
 /** Maps quick-action initialStep to the component to render */
@@ -60,7 +60,7 @@ export function RbacWizard({ open, onClose, mode = "quick", initialStep = 1, onD
   if (!open) return null;
 
   const currentComponent = mode === "full"
-    ? FULL_STEP_MAP[wizard.activeStep] ?? "user"
+    ? FULL_STEP_MAP[wizard.activeStep] ?? "role"
     : QUICK_STEP_MAP[wizard.activeStep] ?? "permission";
 
   function handleStepSuccess(component: string, data?: Record<string, unknown>) {

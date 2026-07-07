@@ -8,7 +8,7 @@ export interface WizardStep {
 }
 
 export const FULL_SETUP_STEPS: WizardStep[] = [
-  { id: 1, title: "Create User", subtitle: "Add user account", permission: "rbac.create" },
-  { id: 2, title: "Assign Role", subtitle: "Link role to user", permission: "rbac.assign" },
-  { id: 3, title: "Assign Permissions", subtitle: "Define module actions", permission: "rbac.create" },
+  { id: 1, title: "Create Role", subtitle: "Bundle permissions into a role", permission: "rbac.create" },
+  { id: 2, title: "Create User", subtitle: "Add user account", permission: "rbac.create" },
+  { id: 3, title: "Assign Role", subtitle: "Link role to user", permission: "rbac.assign" },
 ];
