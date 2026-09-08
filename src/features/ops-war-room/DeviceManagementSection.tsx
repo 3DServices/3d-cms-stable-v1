@@ -82,6 +82,7 @@ const FORMULA_KEYS: Partial<Record<TeltoKey, string>> = {
 const XIRGO_PARAMS = [
   "regtime","sats","speed","course","altitude","lon","lat",
   "avl_driver","adc2","adc6","adc12","adc16","cell_id","engine_hours",
+  "in1","in2","in3","in4","in5","in6","in7","in8","in9","in10",
   "f0","f100","f102","f103",
   "lls_lvl_add1","lls_lvl_add2","lls_lvl_add3","lls_lvl_add4",
   "lls_temp_add1","lls_temp_add2","lls_temp_add3","lls_temp_add4",
