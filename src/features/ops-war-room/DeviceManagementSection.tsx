@@ -604,15 +604,46 @@ export function DeviceManagementSection() {
   }, []);
 
   // ── API helpers ──────────────────────────────────────────────────────────────
+  /** Normalise an API client payload into dropdown items: drop uid-less rows,
+   *  de-duplicate by uid (duplicate <option> keys silently drop entries), sort by name. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function toClientItems(rows: any[]): ClientItem[] {
+    const seen = new Set<string>();
+    const out: ClientItem[] = [];
+    for (const c of rows) {
+      const uid = String(c?.client_uid || c?.uid || "").trim();
+      if (!uid || seen.has(uid)) continue;
+      seen.add(uid);
+      out.push({ uid, label: String(c?.client_name || c?.label || uid).trim() || uid });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   async function loadClients() {
+    // In-house staff read the same /clients/all list Tenant Tower shows. The
+    // provider-scoped list below only returns clients owned by this account
+    // root, so clients registered under another owner never appeared here.
+    // Client accounts stay on the scoped list — they must not see other tenants.
+    const inhouseSession = (authState.accountType || "").toLowerCase() === "inhouse";
+    if (inhouseSession) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const j = await getRaw<any>(ENDPOINTS.CLIENTS.GET_ALL);
+        if (j?.status === "success" && Array.isArray(j?.data) && j.data.length > 0) {
+          setClients(toClientItems(j.data));
+          return;
+        }
+      } catch { /**/ }
+    }
+
+    // Fallback: provider-scoped list (used when /clients/all is not permitted).
     const primary = authState.accountRoot || authState.accountUid || "";
     if (!primary) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const j = await fleetFetch("GET", `${ENDPOINTS.FLEET.CLIENTS_ALL}/${encodeURIComponent(primary)}/all`) as any;
       if (j?.status === "success" && Array.isArray(j?.data)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setClients(j.data.map((c: any) => ({ uid: c.client_uid || c.uid || "", label: c.client_name || c.uid || "" })));
+        setClients(toClientItems(j.data));
       }
     } catch { /**/ }
   }
