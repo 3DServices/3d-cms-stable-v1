@@ -4,7 +4,8 @@
  * configuration, subscription renewal and deletion.
  * Ported from devices.qt.php — adapts auth + base-URL to project standards.
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { getStoredAuthToken, getRaw } from "../../api/client";
 import { ENDPOINTS }          from "../../api/endpoints";
 import { useAuth }            from "../../auth/AuthContext";
@@ -285,6 +286,50 @@ function Modal({ title, onClose, wide, children }: {
   );
 }
 
+// ─── Row actions menu ─────────────────────────────────────────────────────────
+// Rendered through a portal with fixed positioning so the table's overflow
+// container can never clip it — a one-row (filtered) table is shorter than
+// the menu, and an absolutely-positioned menu got cut off at the card edge.
+// Flips upward when there is no room below the button.
+function RowMenu({ anchor, onClose, children }: {
+  anchor: HTMLElement; onClose: () => void; children: React.ReactNode;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Positions the menu straight on the DOM node: it depends on the menu's own
+  // measured height, so it runs after layout rather than through state.
+  const place = useCallback(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const r  = anchor.getBoundingClientRect();
+    const up = window.innerHeight - r.bottom < menu.offsetHeight + 8 && r.top > menu.offsetHeight + 8;
+    menu.style.top       = `${up ? r.top - 4 : r.bottom + 4}px`;
+    menu.style.right     = `${window.innerWidth - r.right}px`;
+    menu.style.transform = up ? "translateY(-100%)" : "";
+  }, [anchor]);
+
+  useLayoutEffect(() => {
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [place]);
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[40]" onClick={onClose} />
+      <div ref={menuRef}
+        className="fixed z-[50] w-[160px] bg-white border border-[#E9EDEF] rounded-lg shadow-xl overflow-hidden">
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 // ─── Teltonika config table ───────────────────────────────────────────────────
 function TeltonikaConfigTable({ values, formulas, onChange }: {
   values: TeltoValues; formulas: TeltoFormulas;
@@ -552,6 +597,7 @@ export function DeviceManagementSection() {
 
   // ── Actions dropdown ─────────────────────────────────────────────────────────
   const [openMenuImei, setOpenMenuImei] = useState<string | null>(null);
+  const [menuAnchor,   setMenuAnchor]   = useState<HTMLElement | null>(null);
 
   // ── Panel / modal state ─────────────────────────────────────────────────────
   const [detailsDevice,   setDetailsDevice]   = useState<Device | null>(null);
@@ -1059,15 +1105,18 @@ export function DeviceManagementSection() {
                     </td>
                     {/* ── Actions dropdown ── */}
                     <td className="px-4 py-2.5 text-right">
-                      <div className="relative inline-block">
+                      <div className="inline-block">
                         <button
-                          onClick={() => setOpenMenuImei(menuOpen ? null : d.device_imei)}
+                          onClick={(e) => {
+                            setMenuAnchor(e.currentTarget);
+                            setOpenMenuImei(menuOpen ? null : d.device_imei);
+                          }}
                           className="h-7 px-3 rounded border border-[#E9EDEF] text-[11px] text-[#111B21]
                             hover:bg-[#F0F2F5] cursor-pointer bg-white transition-colors flex items-center gap-1.5">
                           Actions <span className="text-[9px] leading-none">▾</span>
                         </button>
-                        {menuOpen && (
-                          <div className="absolute right-0 top-8 z-[30] w-[160px] bg-white border border-[#E9EDEF] rounded-lg shadow-xl overflow-hidden">
+                        {menuOpen && menuAnchor && (
+                          <RowMenu anchor={menuAnchor} onClose={() => setOpenMenuImei(null)}>
                             <button
                               onClick={() => { setDetailsTab("info"); setDetailsDevice(d); setOpenMenuImei(null); }}
                               className="w-full text-left px-3 py-2 text-[12px] text-[#111B21] hover:bg-[#F8F9FA] cursor-pointer bg-transparent border-none">
@@ -1104,7 +1153,7 @@ export function DeviceManagementSection() {
                                 </button>
                               </>
                             )}
-                          </div>
+                          </RowMenu>
                         )}
                       </div>
                     </td>
@@ -1241,11 +1290,6 @@ export function DeviceManagementSection() {
         </div>
 
       </div>{/* end right card */}
-
-      {/* ── Invisible backdrop to close the Actions dropdown ─────────────────── */}
-      {openMenuImei && (
-        <div className="fixed inset-0 z-[20]" onClick={() => setOpenMenuImei(null)} />
-      )}
 
       {/* ════════ Modals ════════════════════════════════════════════════════════ */}
 
