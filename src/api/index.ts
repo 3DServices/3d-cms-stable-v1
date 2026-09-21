@@ -169,3 +169,7 @@ export type {
   CreateVariantResponse,
   UpdateVariantRequest,
 } from "./types";
+
+// ── Waswa AI assistant + AI Console ──────────────────────────────────────────
+export * from "./services/waswa.service";
+export type * from "./types/waswa.types";

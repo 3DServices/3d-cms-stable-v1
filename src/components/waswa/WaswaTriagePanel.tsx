@@ -11,6 +11,11 @@
  *   AI Action Queue: HITL/HIC items with coloured badges + Approve Selected | View Audit Proof
  *
  * All styles: Tailwind utility classes only.
+ *
+ * Pass `queueItems` (e.g. from useWaswaQueue) to show the real Waswa review
+ * queue; an empty array shows "nothing waiting". Footer buttons render only
+ * when their handler is passed, so a page never shows a button that does
+ * nothing.
  */
 import React from "react";
 
@@ -49,6 +54,7 @@ interface WaswaTriagePanelProps {
   resources?:        ResourceBar[];
   momoRows?:         MoMoRow[];
   queueItems?:       AiQueueItem[];
+  onQueueItemClick?: (item: AiQueueItem) => void;
 }
 
 /* ── Defaults ──────────────────────────────────────────────────────────────── */
@@ -113,6 +119,7 @@ export function WaswaTriagePanel({
   resources         = DEFAULT_RESOURCES,
   momoRows          = DEFAULT_MOMO,
   queueItems        = DEFAULT_QUEUE,
+  onQueueItemClick,
 }: WaswaTriagePanelProps) {
   return (
     <aside className="hidden xl:flex flex-col w-[300px] shrink-0 bg-white border-l border-[#E9EDEF] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -203,8 +210,15 @@ export function WaswaTriagePanel({
         <div className="font-extrabold text-[12px] text-[#111B21]">AI Action Queue (HITL/HIC)</div>
 
         <div className="flex flex-col gap-2">
+          {queueItems.length === 0 && (
+            <div className="text-[11px] text-[#667781]">Nothing waiting for review.</div>
+          )}
           {queueItems.map((item) => (
-            <div key={item.id} className="flex items-start gap-2">
+            <div
+              key={item.id}
+              onClick={onQueueItemClick ? () => onQueueItemClick(item) : undefined}
+              className={`flex items-start gap-2 ${onQueueItemClick ? "cursor-pointer hover:bg-[#F8F9FA] rounded-lg -mx-1 px-1" : ""}`}
+            >
               <span className={`shrink-0 text-[9px] font-extrabold px-2 py-0.5 rounded-full mt-0.5 ${badgeCls[item.badge]}`}>
                 {item.badge}
               </span>
@@ -218,18 +232,18 @@ export function WaswaTriagePanel({
 
         {/* Footer actions */}
         <div className="flex gap-2 flex-wrap pt-1">
-          <button
+          {onApproveSelected && <button
             onClick={onApproveSelected}
             className="h-7 px-3 rounded-full bg-[#25D366] text-[#075E54] text-[10px] font-extrabold border-none cursor-pointer hover:brightness-105 transition-all whitespace-nowrap"
           >
             Approve Selected
-          </button>
-          <button
+          </button>}
+          {onViewAuditProof && <button
             onClick={onViewAuditProof}
             className="h-7 px-3 rounded-full bg-[#34B7F1] text-white text-[10px] font-extrabold border-none cursor-pointer hover:brightness-105 transition-all whitespace-nowrap"
           >
             View Audit Proof
-          </button>
+          </button>}
         </div>
       </section>
     </aside>
