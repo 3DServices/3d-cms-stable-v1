@@ -14,6 +14,10 @@
  * Conversation threading: the conversation_uid returned by the first reply is
  * sent back with every later message, so the backend keeps one conversation.
  *
+ * Normally mounted once, by WaswaProvider, for the whole CMS. `pendingPrompt`
+ * lets any page ask a question through it (an "Ask Waswa" box, a suggestion
+ * chip); `moduleName` tells Waswa which screen the question came from.
+ *
  * All styles: Tailwind utility classes only.
  */
 import React, { useState, useRef, useEffect } from "react";
@@ -36,6 +40,10 @@ interface WaswaDrawerProps {
   waswaOn?: boolean;
   onToggleWaswa?: () => void;
   quickActions?: { id: string; label: string; onClick?: () => void }[];
+  /** Ask this as soon as it changes (nonce) and the drawer is open. */
+  pendingPrompt?: { text: string; nonce: number } | null;
+  /** The CMS screen the user is on — sent with each question as context. */
+  moduleName?: string | null;
 }
 
 const GREETING: ChatMessage = {
@@ -64,6 +72,8 @@ export function WaswaDrawer({
   waswaOn       = true,
   onToggleWaswa,
   quickActions  = DEFAULT_QUICK_ACTIONS,
+  pendingPrompt = null,
+  moduleName    = null,
 }: WaswaDrawerProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input,    setInput]    = useState("");
@@ -85,7 +95,11 @@ export function WaswaDrawer({
     setInput("");
     setSending(true);
     try {
-      const res = await sendWaswaMessage({ message: text, conversation_uid: conversationUid });
+      const res = await sendWaswaMessage({
+        message: text,
+        conversation_uid: conversationUid,
+        module: moduleName ?? undefined,
+      });
       const data = res.data;
       if (data.conversation_uid) setConversationUid(data.conversation_uid);
       setMessages((prev) => [...prev, {
@@ -103,6 +117,18 @@ export function WaswaDrawer({
       setSending(false);
     }
   };
+
+  // A question asked from elsewhere on the page. The latest send is kept in a
+  // ref so this effect runs once per prompt, not on every render.
+  const sendRef = useRef(send);
+  useEffect(() => { sendRef.current = send; });
+  const handledNonce = useRef<number | null>(null);
+  useEffect(() => {
+    if (!open || !pendingPrompt || handledNonce.current === pendingPrompt.nonce) return;
+    if (!waswaOn || sending) return;         // retried when these change
+    handledNonce.current = pendingPrompt.nonce;
+    void sendRef.current(pendingPrompt.text);
+  }, [open, pendingPrompt, waswaOn, sending]);
 
   const rate = async (msg: ChatMessage, verdict: WaswaVerdict, note?: string) => {
     if (!msg.messageUid) return;
@@ -142,14 +168,18 @@ export function WaswaDrawer({
           w-full max-w-[400px]
           bg-white border-l border-[#E9EDEF]
           flex flex-col
-          shadow-[-8px_0_40px_rgba(0,0,0,0.15)]
           transition-transform duration-300 ease-in-out
-          ${open ? "translate-x-0" : "translate-x-full"}
+          ${open
+            ? "translate-x-0 shadow-[-8px_0_40px_rgba(0,0,0,0.15)]"
+            : "translate-x-full shadow-none pointer-events-none"}
         `}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-[#075E54] text-white shrink-0">
-          <div className="font-black text-[14px]">Waswa AI • Co-Pilot Chat</div>
+          <div className="min-w-0">
+            <div className="font-black text-[14px]">Waswa AI • Co-Pilot Chat</div>
+            {moduleName && <div className="text-[10px] opacity-70 truncate">Context: {moduleName}</div>}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={newChat}
@@ -178,6 +208,13 @@ export function WaswaDrawer({
             </button>
           </div>
         </div>
+
+        {!waswaOn && (
+          <div className="px-4 py-2 bg-[#FFFBEB] border-b border-[#FDE68A] text-[12px] text-[#92400E] shrink-0">
+            Waswa is switched off. Press <b>OFF</b> above to switch it on
+            {pendingPrompt && handledNonce.current !== pendingPrompt.nonce ? " — your question will be sent then." : "."}
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 px-4 py-4">
@@ -228,6 +265,14 @@ export function WaswaDrawer({
                       </button>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* An answer without a message id cannot be flagged — usually the
+                  API is running code from before the feedback feature. */}
+              {msg.role === "ai" && !msg.messageUid && !msg.error && msg.id !== GREETING.id && (
+                <div className="mt-1 text-[10px] text-[#667781]">
+                  This answer can't be rated (no message id from the server — restart the API).
                 </div>
               )}
 

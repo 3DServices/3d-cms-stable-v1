@@ -10,7 +10,8 @@
  *   Corrections:    every staff-written answer by status, plus a "test a
  *                   question" box showing which live correction would match
  *   Conversations:  what people asked and what Waswa answered, with evidence
- *   Documents:      what Waswa may read, who may see it, review status
+ *   Documents:      upload, new versions, approve, remove/restore, who may see
+ *                   each one (DocumentsTab)
  *
  * Permissions come from the server (GET /assistant/console/summary → you):
  * waswa.review to see and write, waswa.approve to sign off. The server
@@ -21,23 +22,21 @@ import { useSearchParams } from "react-router-dom";
 import {
   getWaswaConversations,
   getWaswaQueue,
-  getWaswaSources,
   getWaswaSummary,
   listWaswaAnswers,
   previewWaswaMatch,
   reviewWaswaSource,
-  setWaswaSourceAudience,
 } from "../../api/services/waswa.service";
 import { getAccountUid } from "../../api/services/auth.service";
 import type {
   WaswaAnswer,
   WaswaConversationRow,
   WaswaQueueItem,
-  WaswaSource,
   WaswaSummary,
 } from "../../api/types";
 import { AnswerEditor, type AnswerPrefill } from "./AnswerEditor";
 import { ConversationView } from "./ConversationView";
+import { DocumentsTab } from "./DocumentsTab";
 import { Btn, Empty, Notice, Pill } from "./parts";
 import { day, errText, inputCls, kindLabel, statusTone, when } from "./format";
 
@@ -58,6 +57,14 @@ const ANSWER_FILTERS = [
   { id: "retired",  label: "Retired"  },
   { id: "",         label: "All"      },
 ];
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+/** A reply that is not the console's JSON: route missing, proxy page, crash page. */
+function isMissingEndpoint(e: { status?: number; message?: string } | null | undefined): boolean {
+  if (!e) return false;
+  return e.status === 404 || e.status === 405 || /not JSON|failed to parse/i.test(e.message ?? "");
+}
 
 function Stat({ label, value, sub, tone = "#111B21" }: { label: string; value: React.ReactNode; sub?: string; tone?: string }) {
   return (
@@ -80,15 +87,20 @@ export function AIWorkloadsPage() {
   const [summary, setSummary] = useState<WaswaSummary | null>(null);
   const [denied, setDenied] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  // The API answered, but not with the console endpoints (usually HTTP 404 from
+  // a server that is not running the waswa-ai backend). One clear banner
+  // instead of a parse error per request.
+  const [apiMissing, setApiMissing] = useState<number | null>(null);
   const perms = summary?.you.permissions ?? [];
   const canApprove = perms.includes("waswa.approve");
 
   const loadSummary = useCallback(() => {
     getWaswaSummary()
-      .then((res) => { setSummary(res.data); setDenied(false); })
-      .catch((e: { status?: number }) => {
-        if (e?.status === 403) setDenied(true);
-        else setPageError(errText(e));
+      .then((res) => { setSummary(res.data); setDenied(false); setPageError(null); setApiMissing(null); })
+      .catch((e: { status?: number; message?: string }) => {
+        if (e?.status === 403) { setDenied(true); return; }
+        if (isMissingEndpoint(e)) { setApiMissing(e.status ?? 0); setPageError(null); return; }
+        setPageError(errText(e));
       });
   }, []);
 
@@ -100,7 +112,6 @@ export function AIWorkloadsPage() {
   const [convs, setConvs] = useState<WaswaConversationRow[]>([]);
   const [convSurface, setConvSurface] = useState("");
   const [convFlagged, setConvFlagged] = useState(false);
-  const [sources, setSources] = useState<WaswaSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabError, setTabError] = useState<string | null>(null);
   const [tabInfo, setTabInfo] = useState<string | null>(null);
@@ -109,7 +120,11 @@ export function AIWorkloadsPage() {
   // effect that calls this does not cascade renders.
   const loadTab = useCallback(() => {
     const ok = () => { setTabError(null); setLoading(false); };
-    const fail = (e: unknown) => { setTabError(errText(e)); setLoading(false); };
+    const fail = (e: unknown) => {
+      // The page banner already explains a missing backend; don't repeat it per tab.
+      setTabError(isMissingEndpoint(e as { status?: number; message?: string }) ? null : errText(e));
+      setLoading(false);
+    };
     if (tab === "queue") {
       getWaswaQueue(undefined, 100).then((r) => { setQueue(r.data.items); ok(); }).catch(fail);
     } else if (tab === "answers") {
@@ -119,11 +134,15 @@ export function AIWorkloadsPage() {
       getWaswaConversations({ surface: convSurface || undefined, flagged: convFlagged, limit: 50 })
         .then((r) => { setConvs(r.data.conversations); ok(); }).catch(fail);
     } else {
-      getWaswaSources().then((r) => { setSources(r.data.sources); ok(); }).catch(fail);
+      setTimeout(ok, 0);    // DocumentsTab loads its own data
     }
   }, [tab, answerFilter, answerSearch, convSurface, convFlagged]);
 
-  const refreshAll = useCallback(() => { loadSummary(); loadTab(); }, [loadSummary, loadTab]);
+  const refreshAll = useCallback(() => {
+    setTabInfo(null);
+    loadSummary();
+    loadTab();
+  }, [loadSummary, loadTab]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useEffect(() => { if (!denied) loadTab(); }, [loadTab, denied]);
@@ -131,6 +150,7 @@ export function AIWorkloadsPage() {
   // ── Side panels ──────────────────────────────────────────────────────────
   const [editor, setEditor] = useState<{ open: boolean; uid: string | null; prefill?: AnswerPrefill }>({ open: false, uid: null });
   const [convView, setConvView] = useState<{ open: boolean; uid: string | null; focus?: string | null }>({ open: false, uid: null });
+  const [openDoc, setOpenDoc] = useState<string | null>(null);
 
   const openItem = (item: WaswaQueueItem) => {
     if (item.item_kind === "flag") {
@@ -138,6 +158,7 @@ export function AIWorkloadsPage() {
     } else if (item.item_kind === "approval" || item.item_kind === "recheck") {
       setEditor({ open: true, uid: item.item_uid });
     } else {
+      setOpenDoc(item.item_uid);
       setTab("documents");
     }
   };
@@ -195,6 +216,18 @@ export function AIWorkloadsPage() {
       </div>
 
       {pageError && <Notice tone="red">{pageError}</Notice>}
+      {apiMissing !== null && (
+        <Notice tone="red">
+          <b>The Waswa console can't reach its backend.</b> The API at{" "}
+          <code className="font-mono">{API_BASE || "(VITE_API_BASE_URL not set)"}</code> answered
+          {apiMissing ? ` HTTP ${apiMissing}` : " with a non-JSON page"} for the console endpoints, which
+          means it is not running the Waswa AI backend (navas-core-apis, waswa-ai branch).
+          <br />
+          For local work, set <code className="font-mono">VITE_API_BASE_URL=http://localhost:5000</code> in
+          the CMS <code className="font-mono">.env</code>, restart <code className="font-mono">npm run dev</code> and
+          sign in again. For the live CMS, deploy the waswa-ai branch and run migrations 041 and 042 there.
+        </Notice>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -202,14 +235,15 @@ export function AIWorkloadsPage() {
           tone={(summary?.queue_total ?? 0) > 0 ? "#B91C1C" : "#111B21"} sub="flags, approvals, rechecks, documents" />
         <Stat label="Flagged answers" value={summary?.queue.flag ?? "—"} sub="open or in review" />
         <Stat label="Awaiting approval" value={summary?.queue.approval ?? "—"}
-          sub={canApprove ? "you can approve" : "needs waswa.approve"} />
-        <Stat label="Live corrections" value={summary?.corrections.approved ?? 0} sub="checked before documents" />
-        <Stat label="Answers · 30 days" value={answered30}
-          sub={answered30 ? `${flagged30} flagged (${Math.round((flagged30 / answered30) * 100)}%)` : "no answers yet"} />
+          sub={!summary ? "corrections to sign off" : canApprove ? "you can approve" : "needs waswa.approve"} />
+        <Stat label="Live corrections" value={summary ? (summary.corrections.approved ?? 0) : "—"} sub="checked before documents" />
+        <Stat label="Answers · 30 days" value={summary ? answered30 : "—"}
+          sub={!summary ? "answers given by Waswa"
+            : answered30 ? `${flagged30} flagged (${Math.round((flagged30 / answered30) * 100)}%)` : "no answers yet"} />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E9EDEF] overflow-x-auto">
+      <div className="flex gap-1 border-b border-[#E9EDEF] overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`h-9 px-3 text-[12px] font-extrabold bg-transparent cursor-pointer whitespace-nowrap -mb-px
@@ -230,7 +264,12 @@ export function AIWorkloadsPage() {
       {tab === "queue" && (
         <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF]">
           {loading && !queue.length && <Empty>Loading…</Empty>}
-          {!loading && !queue.length && <Empty>Nothing is waiting. New flags from any platform will appear here.</Empty>}
+          {!loading && !queue.length && !tabError && apiMissing === null && (
+            <Empty>Nothing is waiting. New flags from any platform will appear here.</Empty>
+          )}
+          {!loading && !queue.length && (tabError || apiMissing !== null) && (
+            <Empty>The queue could not be loaded.</Empty>
+          )}
           {queue.map((item) => (
             <div key={`${item.item_kind}-${item.item_uid}`} className="px-4 py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
               <div className="flex items-center gap-1.5 md:w-[190px] shrink-0">
@@ -247,10 +286,13 @@ export function AIWorkloadsPage() {
                 {item.surface && <span className="mr-1">{item.surface} ·</span>}{when(item.raised_at)}
               </div>
               <div className="flex gap-1.5 shrink-0">
-                {item.item_kind === "document" && canApprove ? (
+                {item.item_kind === "document" ? (
                   <>
-                    <Btn kind="primary" onClick={() => docAction(reviewWaswaSource(item.item_uid, "approve"), `${item.title}: approved.`)}>Approve</Btn>
-                    <Btn kind="danger" onClick={() => docAction(reviewWaswaSource(item.item_uid, "reject"), `${item.title}: rejected.`)}>Reject</Btn>
+                    {canApprove && (
+                      <Btn kind="primary" onClick={() => docAction(reviewWaswaSource(item.item_uid, "approve"), `${item.title}: approved.`)}>Approve</Btn>
+                    )}
+                    {/* Rejecting needs a reason, so it happens in the document panel. */}
+                    <Btn kind="blue" onClick={() => openItem(item)}>Open</Btn>
                   </>
                 ) : (
                   <Btn kind="blue" onClick={() => openItem(item)}>
@@ -292,7 +334,7 @@ export function AIWorkloadsPage() {
                 </thead>
                 <tbody>
                   {!answers.length && (
-                    <tr><td colSpan={5}><Empty>{loading ? "Loading…" : "No corrections here yet."}</Empty></td></tr>
+                    <tr><td colSpan={5}><Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Corrections could not be loaded." : "No corrections here yet."}</Empty></td></tr>
                   )}
                   {answers.map((a) => {
                     const due = a.status === "approved" && a.review_due && new Date(a.review_due) <= new Date();
@@ -371,7 +413,7 @@ export function AIWorkloadsPage() {
             </label>
           </div>
           <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF]">
-            {!convs.length && <Empty>{loading ? "Loading…" : "No conversations match."}</Empty>}
+            {!convs.length && <Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Conversations could not be loaded." : "No conversations match."}</Empty>}
             {convs.map((c) => (
               <button key={c.conversation_uid} onClick={() => setConvView({ open: true, uid: c.conversation_uid })}
                 className="w-full text-left px-4 py-3 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 bg-white hover:bg-[#F8F9FA] border-none cursor-pointer">
@@ -392,61 +434,8 @@ export function AIWorkloadsPage() {
 
       {/* ── Documents ─────────────────────────────────────────────────────── */}
       {tab === "documents" && (
-        <div className="flex flex-col gap-3">
-          <Notice>
-            Staff-only documents are never read to customers. Release a document to customers only if
-            every part of it is fit for a customer to see. Uploading new documents from here is coming next;
-            for now they are loaded by the knowledge ingest script.
-          </Notice>
-          <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto">
-            <table className="w-full text-[12px] min-w-[720px]">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-[#667781] border-b border-[#E9EDEF]">
-                  <th className="px-3 py-2 font-extrabold">Document</th>
-                  <th className="px-3 py-2 font-extrabold">Authority</th>
-                  <th className="px-3 py-2 font-extrabold">Review</th>
-                  <th className="px-3 py-2 font-extrabold">Who sees it</th>
-                  <th className="px-3 py-2 font-extrabold text-right">Passages</th>
-                  {canApprove && <th className="px-3 py-2 font-extrabold">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {!sources.length && (
-                  <tr><td colSpan={6}><Empty>{loading ? "Loading…" : "No documents loaded."}</Empty></td></tr>
-                )}
-                {sources.map((s) => (
-                  <tr key={s.source_uid} className="border-b border-[#F0F2F5] last:border-0">
-                    <td className="px-3 py-2.5 max-w-[320px]">
-                      <div className="font-extrabold text-[#111B21] truncate">{s.title}</div>
-                      <div className="text-[11px] text-[#667781]">{s.document_type ?? "—"} · loaded {day(s.ingested_at)}</div>
-                    </td>
-                    <td className="px-3 py-2.5">L{s.authority_level}</td>
-                    <td className="px-3 py-2.5"><Pill tone={s.review_status === "approved" ? "green" : s.review_status === "rejected" ? "red" : "amber"}>{s.review_status}</Pill></td>
-                    <td className="px-3 py-2.5"><Pill tone={s.audience === "everyone" ? "teal" : "blue"}>{s.audience === "everyone" ? "Customers + staff" : "Staff only"}</Pill></td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{s.chunk_count}</td>
-                    {canApprove && (
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-wrap gap-1.5">
-                          {s.review_status !== "approved" && (
-                            <Btn kind="primary" onClick={() => docAction(reviewWaswaSource(s.source_uid, "approve"), `${s.title}: approved.`)}>Approve</Btn>
-                          )}
-                          {s.review_status === "approved" && (
-                            <Btn kind="danger" onClick={() => docAction(reviewWaswaSource(s.source_uid, "reject"), `${s.title}: withdrawn from Waswa.`)}>Withdraw</Btn>
-                          )}
-                          {s.audience === "staff" ? (
-                            <Btn onClick={() => docAction(setWaswaSourceAudience(s.source_uid, "everyone"), `${s.title}: now visible to customers.`)}>Release to customers</Btn>
-                          ) : (
-                            <Btn onClick={() => docAction(setWaswaSourceAudience(s.source_uid, "staff"), `${s.title}: staff only.`)}>Make staff-only</Btn>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DocumentsTab canApprove={canApprove} myAccountUid={myAccountUid} onChanged={loadSummary}
+          openSourceUid={openDoc} onOpened={() => setOpenDoc(null)} />
       )}
 
       <AnswerEditor

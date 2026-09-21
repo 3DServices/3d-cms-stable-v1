@@ -23,12 +23,18 @@
  *   POST /assistant/console/sources/{uid}/review      → reviewWaswaSource
  *   POST /assistant/console/sources/{uid}/audience    → setWaswaSourceAudience
  *   GET  /assistant/console/match                     → previewWaswaMatch
+ *   GET  /assistant/console/sources/{uid}             → getWaswaSource
+ *   POST /assistant/console/sources/upload            → uploadWaswaSource (multipart)
+ *   POST /assistant/console/sources/{uid}/remove      → removeWaswaSource
+ *   POST /assistant/console/sources/{uid}/restore     → restoreWaswaSource
+ *   POST /assistant/console/sources/{uid}/details     → updateWaswaSourceDetails
+ *   GET  /assistant/console/authority-levels          → getWaswaAuthorityLevels
  *
  * The backend reads the caller's role from the JWT; nothing here sends a role
  * or permission. Every write body is wrapped in { data: ... } per convention.
  */
 
-import { get, post } from "../client";
+import { get, post, postForm } from "../client";
 import { ENDPOINTS } from "../endpoints";
 import type { ApiResponse, RequestOptions } from "../types";
 import type {
@@ -44,8 +50,13 @@ import type {
   WaswaQueue,
   WaswaQueueKind,
   WaswaResolution,
-  WaswaSource,
+  WaswaAuthorityLevel,
+  WaswaSourceDetail,
+  WaswaSourceDetailsInput,
+  WaswaSourcesList,
   WaswaSummary,
+  WaswaUploadMeta,
+  WaswaUploadResult,
 } from "../types";
 
 const W = ENDPOINTS.WASWA;
@@ -173,8 +184,52 @@ export function resolveWaswaFeedback(
 
 // ── Console: documents ───────────────────────────────────────────────────────
 
-export function getWaswaSources(opts?: RequestOptions): Promise<ApiResponse<{ sources: WaswaSource[] }>> {
-  return get(W.SOURCES, opts);
+export function getWaswaSources(
+  filters: { includeRemoved?: boolean; includeOld?: boolean } = {},
+  opts?: RequestOptions,
+): Promise<ApiResponse<WaswaSourcesList>> {
+  const params: Record<string, string> = {};
+  if (filters.includeRemoved) params.include_removed = "true";
+  if (filters.includeOld) params.include_old = "true";
+  return get<WaswaSourcesList>(W.SOURCES, { ...opts, params });
+}
+
+export function getWaswaSource(sourceUid: string, opts?: RequestOptions): Promise<ApiResponse<WaswaSourceDetail>> {
+  return get<WaswaSourceDetail>(`${W.SOURCES}/${enc(sourceUid)}`, opts);
+}
+
+/** Upload a document, or a new version of one (meta.replaces_source_uid). Lands as pending. */
+export function uploadWaswaSource(
+  file: File,
+  meta: WaswaUploadMeta,
+  opts?: RequestOptions,
+): Promise<ApiResponse<WaswaUploadResult>> {
+  const form = new FormData();
+  form.append("file", file);
+  for (const [key, value] of Object.entries(meta)) {
+    if (value !== undefined && value !== null && value !== "") form.append(key, String(value));
+  }
+  return postForm<WaswaUploadResult>(W.SOURCE_UPLOAD, form, opts);
+}
+
+export function removeWaswaSource(sourceUid: string, reason: string, opts?: RequestOptions): Promise<ApiResponse<WaswaSourceDetail>> {
+  return post<WaswaSourceDetail>(`${W.SOURCES}/${enc(sourceUid)}/remove`, { data: { reason } }, opts);
+}
+
+export function restoreWaswaSource(sourceUid: string, opts?: RequestOptions): Promise<ApiResponse<WaswaSourceDetail>> {
+  return post<WaswaSourceDetail>(`${W.SOURCES}/${enc(sourceUid)}/restore`, { data: {} }, opts);
+}
+
+export function updateWaswaSourceDetails(
+  sourceUid: string,
+  input: WaswaSourceDetailsInput,
+  opts?: RequestOptions,
+): Promise<ApiResponse<WaswaSourceDetail>> {
+  return post<WaswaSourceDetail>(`${W.SOURCES}/${enc(sourceUid)}/details`, { data: input }, opts);
+}
+
+export function getWaswaAuthorityLevels(opts?: RequestOptions): Promise<ApiResponse<{ levels: WaswaAuthorityLevel[] }>> {
+  return get(W.AUTHORITY_LEVELS, opts);
 }
 
 export function reviewWaswaSource(
@@ -182,7 +237,7 @@ export function reviewWaswaSource(
   decision: "approve" | "reject" | "pending",
   note?: string,
   opts?: RequestOptions,
-): Promise<ApiResponse<{ source_uid: string; title: string; review_status: string }>> {
+): Promise<ApiResponse<WaswaSourceDetail & { replaced_title?: string | null }>> {
   return post(`${W.SOURCES}/${enc(sourceUid)}/review`, { data: { decision, note } }, opts);
 }
 

@@ -9,6 +9,7 @@
  *   MODAL:  New Protocol Mapping wizard (5 steps)
  */
 import React, { useState, useEffect } from "react";
+import { WaswaAskChips, WaswaAskInput, WaswaSampleTag } from "../../components/waswa";
 
 // ─── Status colors ───────────────────────────────────────────────────────────
 const sBadge: Record<string, string> = {
@@ -443,7 +444,10 @@ export function ProtocolPage() {
           /* ── Waswa AI Co-Pilot sidebar ───────────────────────────── */
           <div className="p-4 flex flex-col gap-3">
             <div className="border border-[#E9EDEF] rounded-xl p-4">
-              <div className="font-black text-[13px] text-[#111B21]">Waswa AI Co-Pilot</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-black text-[13px] text-[#111B21]">Waswa AI Co-Pilot</div>
+                <WaswaSampleTag />
+              </div>
               <div className="text-[11px] text-[#667781] mt-0.5">HIC: suggestions need approval</div>
               <div className="mt-3 bg-[#128C7E]/10 border border-[#128C7E]/20 rounded-xl p-3">
                 <div className="font-black text-[12px] text-[#128C7E] mb-1">Insight</div>
@@ -464,7 +468,10 @@ export function ProtocolPage() {
             <div className="border border-[#128C7E]/20 rounded-lg px-3 py-2.5 text-[12px] font-black text-[#128C7E] cursor-pointer hover:bg-[#128C7E]/5">Token Top-Up (MoMo / Card)</div>
             <div className="border border-[#128C7E]/20 rounded-lg px-3 py-2.5 text-[12px] font-black text-[#128C7E] cursor-pointer hover:bg-[#128C7E]/5">VEBA Leakage Monitor</div>
 
-            <input placeholder="Ask Waswa... (e.g., 'why decoder p95 spiked?')" className="w-full h-8 rounded-lg border border-[#E9EDEF] px-3 text-[11px] text-[#111B21] placeholder:text-[#667781] outline-none mt-auto" />
+            <div className="mt-auto flex flex-col gap-2">
+              <WaswaAskChips prompts={["Which device protocols are supported?", "How is a new protocol mapping approved?"]} />
+              <WaswaAskInput placeholder="Ask Waswa… (e.g., 'what is a protocol mapping?')" />
+            </div>
           </div>
         )}
       </aside>

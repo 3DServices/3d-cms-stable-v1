@@ -10,7 +10,7 @@ export { ApiError } from "./types";
 export type { ApiResponse, RequestOptions } from "./types";
 
 // HTTP verbs (for custom one-off calls)
-export { get, getRaw, post, put, patch, del } from "./client";
+export { get, getRaw, post, postForm, put, patch, del } from "./client";
 
 // Central endpoint registry
 export { ENDPOINTS } from "./endpoints";

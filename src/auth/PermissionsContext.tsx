@@ -26,6 +26,7 @@ import React, {
 import { getUserPermissions } from "../api/services/rbac.service";
 import { useAuth } from "./AuthContext";
 import { getCookie } from "../utils/cookies";
+import { canOpenWaswaConsole, WASWA_CONSOLE_PERMISSION } from "./waswaAccess";
 
 // ── Bypass roles (full access, no permission checks needed) ──────────────────
 
@@ -105,9 +106,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     (permission: string): boolean => {
       // Bypass roles have full access
       if (BYPASS_ROLES.includes(role)) return true;
+      // Waswa AI Console: super admins + internal admins (see waswaAccess.ts).
+      if (permission === WASWA_CONSOLE_PERMISSION) {
+        const accountType = authState.accountType || getCookie("_nvxs_account_type") || "";
+        return canOpenWaswaConsole(role, accountType, permissions);
+      }
       return permissions.includes(permission);
     },
-    [permissions, role],
+    [permissions, role, authState.accountType],
   );
 
   const hasAnyPermission = useCallback(

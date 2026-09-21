@@ -2,6 +2,7 @@
  * Two-column panel: Maintenance & Compliance Queue + Waswa AI Proactive Insights.
  */
 import React from 'react';
+import { WaswaAskChips, WaswaSampleTag } from '../../../components/waswa';
 import { COLORS, btn, btnPrimary, btnBlue } from './types';
 import { Pill, SectionTitle } from './MetricCard';
 
@@ -45,9 +46,12 @@ export function MaintenancePanel() {
         <SectionTitle
           title="Waswa AI — Proactive Insights"
           subtitle="Human-in-Control • suggestions require approval"
-          right={<Pill bg="#fff" fg={COLORS.green}>AI: ON</Pill>}
+          right={<WaswaSampleTag />}
         />
         <div style={{ marginTop: 12 }}>
+          <div style={{ marginBottom: 10 }}>
+            <WaswaAskChips prompts={["How are maintenance schedules set?", "What documents must a vehicle keep valid?"]} />
+          </div>
           <div style={{ background: '#E6F4FE', borderRadius: 14, padding: 10, border: `1px solid ${COLORS.border}`, marginBottom: 10 }}>
             <div style={{ fontWeight: 900, fontSize: 12 }}>Detected revenue leakage risk in VEBA Boda sector.</div>
             <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>

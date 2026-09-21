@@ -18,6 +18,9 @@ import { AuthProvider } from "../auth/AuthContext";
 import { PermissionsProvider } from "../auth/PermissionsContext";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
 
+// ── Waswa AI: one drawer + launcher shared by every module ──────────────────
+import { WaswaProvider } from "../components/waswa";
+
 // ── Feature pages ────────────────────────────────────────────────────────────
 import { AegisDashboardPage }  from "../features/aegis";
 import { NocBridgePage }       from "../features/noc-bridge";
@@ -54,6 +57,7 @@ export default function App() {
   return (
     <AuthProvider>
     <PermissionsProvider>
+    <WaswaProvider>
     <div className="h-dvh flex flex-col bg-[#F0F2F5] overflow-hidden w-full">
       <TopBar />
       <StatusStrip />
@@ -103,6 +107,7 @@ export default function App() {
         Kafka lag 4.8s • Redis p95 3ms • Cassandra p95 27ms • SSE clients 2.1k • Uptime 99.82%
       </footer>
     </div>
+    </WaswaProvider>
     </PermissionsProvider>
     </AuthProvider>
   );

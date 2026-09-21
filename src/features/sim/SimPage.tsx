@@ -10,6 +10,7 @@
  *   MODAL:  Link Telco Private APN (HITL) — 5-step wizard
  */
 import React, { useState, useEffect, useMemo } from "react";
+import { WaswaAskChips, WaswaSampleTag } from "../../components/waswa";
 import { getAllSimCards, getSimStatistics, ApiError } from "../../api";
 import type { SimCard, SimStatistics } from "../../api";
 import { CreateSimDialog } from "./components";
@@ -251,10 +252,16 @@ export function SimPage() {
 
           {/* Waswa AI — Connectivity Risk */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
-            <div className="font-black text-[13px] text-[#111B21] mb-1">Waswa AI — Connectivity Risk</div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="font-black text-[13px] text-[#111B21]">Waswa AI — Connectivity Risk</div>
+              <WaswaSampleTag />
+            </div>
             <div className="text-[12px] text-[#111B21] leading-relaxed mb-2">
               Detected roaming spike near KE border (MCC 639). 42 SIMs burning bundles 3.8× baseline.<br/>
               Suggestion: auto-purchase "Roaming Packet Bundle" (Tokens A) + enforce APN policy. HITL approval required.
+            </div>
+            <div className="mb-2">
+              <WaswaAskChips prompts={["What happens when a SIM goes offline?", "How are SIM bundles managed?"]} />
             </div>
             <div className="flex gap-2">
               <span className="h-7 px-3 rounded-full border border-[#128C7E]/30 text-[#128C7E] text-[11px] font-black flex items-center cursor-pointer">Evidence</span>

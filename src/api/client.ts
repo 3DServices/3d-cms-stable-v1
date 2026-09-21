@@ -9,7 +9,7 @@
  *  - Generic ApiResponse<T> envelope parsing
  *  - Consistent error handling via ApiError
  *
- * Public surface:  get · getRaw · post · put · patch · del
+ * Public surface:  get · getRaw · post · postForm · put · patch · del
  */
 
 import type { ApiResponse, RequestOptions } from "./types";
@@ -98,6 +98,13 @@ async function tryRefresh(): Promise<boolean> {
 
 // ── Shared fetch logic ───────────────────────────────────────────────────────
 
+/** FormData goes as-is (the browser sets the multipart boundary); anything else as JSON. */
+function encodeBody(body: unknown): BodyInit | undefined {
+  if (body == null) return undefined;
+  if (body instanceof FormData) return body;
+  return JSON.stringify(body);
+}
+
 async function baseFetch(
   method: string,
   path: string,
@@ -114,7 +121,7 @@ async function baseFetch(
   }
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(extraHeaders as Record<string, string>),
   };
 
@@ -126,7 +133,7 @@ async function baseFetch(
   const response = await fetch(url.toString(), {
     method,
     headers,
-    body: body != null ? JSON.stringify(body) : undefined,
+    body: encodeBody(body),
     credentials: "include", // always send cookies (for HttpOnly refresh token)
     ...fetchOpts,
   });
@@ -144,7 +151,7 @@ async function baseFetch(
       return fetch(url.toString(), {
         method,
         headers: retryHeaders,
-        body: body != null ? JSON.stringify(body) : undefined,
+        body: encodeBody(body),
         credentials: "include",
         ...fetchOpts,
       });
@@ -174,8 +181,12 @@ async function request<T>(
   try {
     json = await response.json();
   } catch {
+    // Usually an HTML error page: a route this API does not have (404), a
+    // proxy error, or a crash page. Say which, instead of "failed to parse".
     throw new ApiError(
-      `${method} ${path} — failed to parse response`,
+      `${method} ${path} — the server answered HTTP ${response.status}` +
+        `${response.statusText ? ` ${response.statusText}` : ""} with a page that is not JSON` +
+        (response.status === 404 ? " (this API does not have that endpoint)" : ""),
       response.status,
       response.statusText,
     );
@@ -221,8 +232,12 @@ async function requestRaw<T>(
   try {
     json = await response.json();
   } catch {
+    // Usually an HTML error page: a route this API does not have (404), a
+    // proxy error, or a crash page. Say which, instead of "failed to parse".
     throw new ApiError(
-      `${method} ${path} — failed to parse response`,
+      `${method} ${path} — the server answered HTTP ${response.status}` +
+        `${response.statusText ? ` ${response.statusText}` : ""} with a page that is not JSON` +
+        (response.status === 404 ? " (this API does not have that endpoint)" : ""),
       response.status,
       response.statusText,
     );
@@ -251,6 +266,11 @@ export function getRaw<T>(path: string, opts?: RequestOptions) {
 
 export function post<T>(path: string, body: unknown, opts?: RequestOptions) {
   return request<T>("POST", path, body, opts);
+}
+
+/** POST multipart/form-data (file uploads). Same envelope and 401 handling as post. */
+export function postForm<T>(path: string, form: FormData, opts?: RequestOptions) {
+  return request<T>("POST", path, form, opts);
 }
 
 export function put<T>(path: string, body: unknown, opts?: RequestOptions) {

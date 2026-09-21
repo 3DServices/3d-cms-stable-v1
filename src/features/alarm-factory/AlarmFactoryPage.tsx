@@ -11,7 +11,7 @@
  */
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { WaswaTriagePanel } from "../../components/waswa";
+import { WaswaTriagePanel, useWaswa } from "../../components/waswa";
 import { useWaswaQueue } from "../../hooks/useWaswaQueue";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ const MODAL_TABS = ["Basics","Trigger","Conditions","Channels","Token Cost","Esc
 export function AlarmFactoryPage() {
   const [createRuleOpen, setCreateRuleOpen] = useState(false);
   const [modalTab, setModalTab] = useState("Conditions");
-  const [waswaOn, setWaswaOn] = useState(true);
+  const waswa = useWaswa();
   const navigate = useNavigate();
   const waswaQueue = useWaswaQueue(6);
 
@@ -481,8 +481,8 @@ export function AlarmFactoryPage() {
 
       {/* ── Waswa AI Triage Blade (right panel) ─────────────────────────────── */}
       <WaswaTriagePanel
-        waswaOn={waswaOn}
-        onToggleWaswa={() => setWaswaOn(v => !v)}
+        waswaOn={waswa.on}
+        onToggleWaswa={waswa.toggle}
         hitlCount={waswaQueue.count}
         queueItems={waswaQueue.items.map((i) => i.card)}
         onQueueItemClick={() => navigate("/ai?tab=queue")}

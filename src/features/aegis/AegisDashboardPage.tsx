@@ -18,7 +18,7 @@
  *   TokenEngineCard      → Token Engine dual economy card
  *   VebaGovernanceTable  → VEBA marketplace governance / leakage prevention table
  *   AuditTrailCard       → Audit-grade trail (irrefutable) with timestamped entries
- *   WaswaDrawer          → floating slide-in Waswa AI chat drawer
+ *   Waswa chat           → shared drawer + launcher from WaswaProvider (App.tsx)
  *   TokenTopupModal      → Top-up tokens via MoMo + ePayment (rebuilt to match screenshot)
  *
  * ── Airlock modal overlay ───────────────────────────────────────────────────
@@ -38,7 +38,7 @@ import { PaymentGatewaysCard }   from "./components/PaymentGatewaysCard";
 import { TokenEngineCard }       from "./components/TokenEngineCard";
 import { VebaGovernanceTable }   from "./components/VebaGovernanceTable";
 import { AuditTrailCard }        from "./components/AuditTrailCard";
-import { WaswaDrawer }           from "../../components/waswa";
+import { useWaswa, WaswaAskChips, WaswaSampleTag } from "../../components/waswa";
 import { TokenTopupModal }       from "../tokens/components/TokenTopupModal";
 
 // ── Auth & API ──────────────────────────────────────────────────────────────
@@ -68,8 +68,7 @@ const HITL_ROWS: ApprovalRow[] = [
 export function AegisDashboard() {
   const { state }              = useAuth();
   const [topupOpen,      setTopupOpen]      = useState(false);
-  const [waswaOn,        setWaswaOn]        = useState(true);
-  const [waswaDrawerOpen,setWaswaDrawerOpen]= useState(false);
+  const waswa = useWaswa();
   // Show Airlock modal if not authenticated
   const [airlockOpen,    setAirlockOpen]    = useState(() => !getCookie("account_uid"));
   // Statistics metrics state
@@ -207,9 +206,10 @@ export function AegisDashboard() {
                 <div className="font-black text-[13px] text-[#111B21]">
                   Waswa AI Co‑Pilot — HiC(Human In Command) Insights (Today)
                 </div>
-                <span className="text-[10px] font-extrabold bg-[#128C7E] text-white px-2.5 py-1 rounded-full">
-                  AI ON
+                <span className={`text-[10px] font-extrabold text-white px-2.5 py-1 rounded-full ${waswa.on ? "bg-[#128C7E]" : "bg-[#9CA3AF]"}`}>
+                  AI {waswa.on ? "ON" : "OFF"}
                 </span>
+                <WaswaSampleTag />
                 <span className="ml-auto text-[11px] text-[#667781]">
                   Model: Cascade (Local→SLM→External)
                 </span>
@@ -223,6 +223,9 @@ export function AegisDashboard() {
                 <li>Suggested action: Raise VEBA 'Lead Unlock' fee by +1.5 T (HITL approval required)</li>
                 <li>Suggested action: Enable Smart Caps: 80% soft alert, 95% hard lock (per tenant)</li>
               </ul>
+              <div className="px-4 pb-4">
+                <WaswaAskChips prompts={["Which actions need human approval?", "How do tracking tokens work?", "What is VEBA escrow?"]} />
+              </div>
             </div>
 
             {/* HITL queue card */}
@@ -270,30 +273,9 @@ export function AegisDashboard() {
               Kafka: 12s lag&nbsp;•&nbsp;Redis: 97% hit&nbsp;•&nbsp;Cassandra write p95 9ms&nbsp;•&nbsp;MoMo retries 41&nbsp;•&nbsp;UI refresh 30s
             </div>
           </div>
-      {/* Floating Waswa W button */}
-      <button
-        onClick={() => setWaswaDrawerOpen(true)}
-        aria-label="Open Waswa AI"
-        className="
-          fixed right-5 bottom-20 z-[300] lg:bottom-5
-          w-14 h-14 rounded-full border-none
-          bg-[#25D366] text-white font-black text-[22px]
-          shadow-[0_12px_30px_rgba(0,0,0,0.18)]
-          cursor-pointer hover:brightness-105 active:scale-95 transition-all
-          grid place-items-center
-        "
-      >
-        W
-      </button>
-
       {/* Modals + drawers */}
       <TokenTopupModal open={topupOpen} onClose={() => setTopupOpen(false)} />
-      <WaswaDrawer
-        open={waswaDrawerOpen && waswaOn}
-        onClose={() => setWaswaDrawerOpen(false)}
-        waswaOn={waswaOn}
-        onToggleWaswa={() => setWaswaOn((v) => !v)}
-      />
+      {/* Waswa's drawer and launcher are shared across the CMS (WaswaProvider). */}
 
       {/* Airlock login modal overlay */}
       <AirlockModal open={airlockOpen} onClose={() => setAirlockOpen(false)} />

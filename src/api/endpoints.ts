@@ -202,7 +202,9 @@ export const ENDPOINTS = {
     CONVERSATIONS:    "/assistant/console/conversations", // GET list; append /{conversation_uid}
     ANSWERS:          "/assistant/console/answers",       // GET list | POST create; append /{uid}[/submit|/decide|/confirm|/retire]
     FEEDBACK_RESOLVE: "/assistant/console/feedback",      // append /{feedback_uid}/resolve
-    SOURCES:          "/assistant/console/sources",       // append /{source_uid}/review | /audience
+    SOURCES:          "/assistant/console/sources",       // append /{source_uid}[/review|/audience|/remove|/restore|/details]
+    SOURCE_UPLOAD:    "/assistant/console/sources/upload",// POST multipart: file + metadata
+    AUTHORITY_LEVELS: "/assistant/console/authority-levels",
     MATCH:            "/assistant/console/match",         // ?q=&audience=
   },
 } as const;

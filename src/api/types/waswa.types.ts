@@ -28,6 +28,8 @@ export interface WaswaChatRequest {
   message: string;
   surface?: WaswaSurface;
   conversation_uid?: string | null;
+  /** CMS screen the question came from, e.g. "Billing" — context only. */
+  module?: string;
 }
 
 export interface WaswaChatReply {
@@ -207,7 +209,86 @@ export interface WaswaSource {
   reviewed_by: string | null;
   reviewed_at: string | null;
   ingested_at: string;
+  ingested_by: string | null;
   superseded_by: string | null;
+  active: boolean;
+  replaces_source_uid: string | null;
+  original_filename: string | null;
+  version_label: string | null;
+  redactions: number;
+  removed_at: string | null;
+  removed_reason: string | null;
+}
+
+export interface WaswaUploadCheck {
+  pdf: boolean;
+  xlsx: boolean;
+  storage_writable: boolean;
+  storage_path: string;
+}
+
+export interface WaswaSourcesList {
+  sources: WaswaSource[];
+  document_types: string[];
+  max_upload_mb: number;
+  allowed_extensions: string[];
+  /** What the API server can accept right now (missing packages, storage). */
+  upload_check?: WaswaUploadCheck;
+}
+
+export interface WaswaPassage {
+  ordinal: number;
+  heading: string | null;
+  pages: string | number | null;
+  text: string;
+  chars: number;
+}
+
+export interface WaswaSourceDetail extends WaswaSource {
+  document_date: string | null;
+  country_scope: string | null;
+  stored_path: string | null;
+  removed_by: string | null;
+  notes: string | null;
+  passages: WaswaPassage[];
+  newer_versions: { source_uid: string; title: string; review_status: string; active: boolean; ingested_at: string }[];
+  corrections_relying: number;
+}
+
+export interface WaswaUploadResult extends WaswaSource {
+  withheld: string[];
+  preview: { heading: string | null; text: string }[];
+}
+
+export interface WaswaAuthorityLevel {
+  level: number;
+  label: string;
+  description: string;
+  may_quote: boolean;
+  confirmed: boolean;
+  uploadable: boolean;
+}
+
+export interface WaswaUploadMeta {
+  title?: string;
+  document_type?: string;
+  authority_level?: number;
+  audience?: WaswaAudience;
+  version_label?: string;
+  document_date?: string;
+  country_scope?: string;
+  notes?: string;
+  replaces_source_uid?: string;
+}
+
+export interface WaswaSourceDetailsInput {
+  title?: string;
+  document_type?: string;
+  authority_level?: number;
+  version_label?: string;
+  document_date?: string;
+  country_scope?: string;
+  notes?: string;
 }
 
 export type WaswaResolution = "correction" | "document" | "data_fix" | "dismissed";

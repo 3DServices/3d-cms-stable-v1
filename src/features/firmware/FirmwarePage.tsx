@@ -12,6 +12,7 @@
  *   MODAL:  New OTA Campaign wizard (5 steps, Billing & Approval active)
  */
 import React, { useState } from "react";
+import { WaswaAskChips, WaswaAskInput, WaswaSampleTag } from "../../components/waswa";
 
 // ─── Status badge styles ─────────────────────────────────────────────────────
 const sBadge: Record<string, string> = {
@@ -410,7 +411,7 @@ export function FirmwarePage() {
           <div className="p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="font-black text-[13px] text-[#111B21]">Waswa AI Co-Pilot</span>
-              <span className="text-[11px] font-black text-[#25D366] border border-[#25D366]/30 px-2 py-0.5 rounded-full">AI: ON</span>
+              <WaswaSampleTag />
             </div>
 
             <div className="bg-[#128C7E]/10 border border-[#128C7E]/20 rounded-xl p-3">
@@ -432,7 +433,10 @@ export function FirmwarePage() {
 
             <button className="w-full h-9 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-[12px] font-black cursor-pointer mt-1">Kill Switch: Disable OTA Engine (HIC)</button>
 
-            <input placeholder={'Ask Waswa... e.g. "Why did OTA fail in UG today?"'} className="w-full h-8 rounded-lg border border-[#E9EDEF] px-3 text-[11px] text-[#111B21] placeholder:text-[#667781] outline-none mt-auto" />
+            <div className="mt-auto flex flex-col gap-2">
+              <WaswaAskChips prompts={["How are OTA rollouts approved?", "What happens when an OTA update fails?"]} />
+              <WaswaAskInput placeholder={'Ask Waswa… e.g. "How is an OTA campaign rolled back?"'} />
+            </div>
           </div>
         )}
       </aside>
