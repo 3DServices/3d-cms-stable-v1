@@ -34,7 +34,7 @@ export function createVebaListing(
 ): Promise<CreateVebaListingResponse> {
   return post<CreateVebaListingResponse>(
     ENDPOINTS.VEBA.LISTINGS_CREATE,
-    payload,
+    { data: payload },
     opts,
   ).then(res => res.data);
 }
@@ -46,7 +46,7 @@ export function updateVebaListing(
 ) {
   return put(
     `${ENDPOINTS.VEBA.LISTINGS_UPDATE}/${listingUid}/update`,
-    fields,
+    { data: fields },
     opts,
   );
 }
@@ -109,7 +109,7 @@ export function createBookingRequest(
 ): Promise<CreateBookingRequestResponse> {
   return post<CreateBookingRequestResponse>(
     ENDPOINTS.VEBA.BOOKING_CREATE,
-    payload,
+    { data: payload },
     opts,
   ).then(res => res.data);
 }

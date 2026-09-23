@@ -31,6 +31,8 @@ export interface ChatMessage {
   messageUid?: string | null;
   verified?:   WaswaVerifiedRef[];
   error?:      boolean;
+  /** The question that failed, so it can be sent again. */
+  retryText?:  string;
   feedback?:   WaswaVerdict;
 }
 
@@ -87,11 +89,15 @@ export function WaswaDrawer({
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [open, messages, sending]);
 
-  const send = async (raw: string) => {
+  /** Ask a question. With `retryOf`, re-ask one that failed: the error bubble
+   *  is removed and the question isn't shown twice. */
+  const send = async (raw: string, retryOf?: string) => {
     const text = raw.trim();
     if (!text || sending || !waswaOn) return;
     const id = `m${Date.now()}`;
-    setMessages((prev) => [...prev, { id, role: "user", text }]);
+    setMessages((prev) => retryOf
+      ? prev.filter((m) => m.id !== retryOf)
+      : [...prev, { id, role: "user", text }]);
     setInput("");
     setSending(true);
     try {
@@ -111,7 +117,7 @@ export function WaswaDrawer({
       }]);
     } catch (err) {
       setMessages((prev) => [...prev, {
-        id: `${id}-err`, role: "ai", text: errorText(err), error: true,
+        id: `${id}-err`, role: "ai", text: errorText(err), error: true, retryText: text,
       }]);
     } finally {
       setSending(false);
@@ -241,6 +247,16 @@ export function WaswaDrawer({
                 )}
                 {msg.text}
               </div>
+
+              {msg.error && msg.retryText && (
+                <button
+                  onClick={() => send(msg.retryText!, msg.id)}
+                  disabled={sending || !waswaOn}
+                  className="mt-1 h-6 px-2.5 rounded-full border border-[#FECACA] bg-white text-[#B91C1C] text-[10px] font-bold cursor-pointer hover:bg-[#FEF2F2] disabled:opacity-50 disabled:cursor-default"
+                >
+                  Try again
+                </button>
+              )}
 
               {/* Rate an AI answer */}
               {msg.role === "ai" && msg.messageUid && !msg.error && (

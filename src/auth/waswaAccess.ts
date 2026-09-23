@@ -27,7 +27,9 @@ export function canOpenWaswaConsole(
   const r = (role ?? "").toLowerCase();
   const type = (accountType ?? "").toLowerCase();
   if (ADMIN_ROLES.includes(r)) return true;
-  if (STAFF_ADMIN_ROLES.includes(r) && !CUSTOMER_ACCOUNT_TYPES.includes(type)) return true;
+  // Customer accounts never get the console, whatever their role was given.
+  if (CUSTOMER_ACCOUNT_TYPES.includes(type)) return false;
+  if (STAFF_ADMIN_ROLES.includes(r)) return true;
   return permissions.includes(WASWA_CONSOLE_PERMISSION)
     || WASWA_PERMISSIONS.some((p) => permissions.includes(p));
 }

@@ -96,6 +96,7 @@ export const ENDPOINTS = {
     CREATE:    "/tokens/create",
     BY_ID:     "/tokens",              // append /{token_id}
     BUY:       "/payments/tokens/buy",
+    PAYMENT_STATUS: "/payments/transactions", // GET append /{transaction_uid}/status
     AUTHORIZE: "/tokens/special/authorize",
     TRANSFER:  "/tokens/transfer",
     BALANCE:   "/tokens",              // append /{client_uid}/balance

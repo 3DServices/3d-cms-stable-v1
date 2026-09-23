@@ -113,6 +113,17 @@ export function buyTokens(
   return post<BuyTokensResponse>(ENDPOINTS.TOKENS.BUY, { data: payload }, opts);
 }
 
+/** Status of a Mobile Money payment started by buyTokens(). */
+export function getPaymentStatus(
+  transactionUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ transaction_status: string }>> {
+  return get<{ transaction_status: string }>(
+    `${ENDPOINTS.TOKENS.PAYMENT_STATUS}/${transactionUid}/status`,
+    opts,
+  );
+}
+
 /** Transfer tokens between clients. */
 export function transferTokens(
   payload: TransferTokensRequest,
