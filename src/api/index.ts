@@ -10,7 +10,7 @@ export { ApiError } from "./types";
 export type { ApiResponse, RequestOptions } from "./types";
 
 // HTTP verbs (for custom one-off calls)
-export { get, getRaw, post, put, patch, del } from "./client";
+export { get, getRaw, post, postForm, put, patch, del } from "./client";
 
 // Central endpoint registry
 export { ENDPOINTS } from "./endpoints";
@@ -145,7 +145,7 @@ export {
   requestDraftApproval,
   submitApprovedDraft,
 } from "./services/tenants.service";
-export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getAllTokens, getClientBalance, buyTokens, transferTokens } from "./services/clients.service";
+export { createClient, getAllClients, getClientsByProvider, updateClient, trashClient, restoreClient, getTrashedClients, getClientDevices, getAllTokens, getClientBalance, buyTokens, transferTokens, getPaymentStatus } from "./services/clients.service";
 export { getActiveSubscriptions, getPausedSubscriptions, getHighSubClients, getChurnRate, getExpiringSubscriptions, getClientTransactions } from "./services/billing.service";
 export { getAllRoles, getRoleByUid, createRole, updateRole, deleteRole, getAllPermissions, getUserPermissions, createUser, getAllUsers, getAllUsersBackoffice, deleteUser, getUserDetails, setUserAction, adminResetPassword, assignUserRole, createPermission, updatePermission, deletePermission, getActiveRolesCount, getTotalPermissionsCount, getActiveClientsCount, getActive3dClientsCount, getClientUsersCount, getRoleUserCounts, getPermissionRoleCounts } from "./services/rbac.service";
 export { getAuditEvents, getAuditKpis, getHashChain, getAuditApprovals, approveAuditRequest, rejectAuditRequest, getComplianceSnapshot, requestAuditExport } from "./services/audit.service";
@@ -169,3 +169,7 @@ export type {
   CreateVariantResponse,
   UpdateVariantRequest,
 } from "./types";
+
+// ── Waswa AI assistant + AI Console ──────────────────────────────────────────
+export * from "./services/waswa.service";
+export type * from "./types/waswa.types";

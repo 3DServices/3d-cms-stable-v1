@@ -8,6 +8,7 @@
  *   MODAL:  HIC Approval Required (dual-control checklist + reason/notes)
  */
 import React, { useState } from "react";
+import { WaswaAskChips, WaswaSampleTag } from "../../components/waswa";
 
 // ─── Status colors ───────────────────────────────────────────────────────────
 const stColor: Record<string, string> = {
@@ -147,15 +148,18 @@ export function InvoicingPage() {
             <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="font-black text-[13px] text-[#111B21]">Waswa AI — Billing Insights</div>
-                <span className="px-2 py-0.5 rounded-full bg-[#34B7F1]/15 border border-[#34B7F1]/30 text-[10px] font-black text-[#34B7F1]">Explain</span>
+                <WaswaSampleTag />
               </div>
               <div className="text-[12px] text-[#111B21] leading-relaxed mb-1">
                 <div className="font-black">Recon gap detected: INV-2601-0041</div>
                 <div className="text-[#667781] mt-1">Likely cause: Token overage not billed (Maps API).</div>
                 <div className="text-[#667781]">Suggested action: Run 'Token→Invoice reconcile' job.</div>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <Pill>Create ticket</Pill>
+              </div>
+              <div className="mt-3">
+                <WaswaAskChips prompts={["How does dunning and service cut-off work?", "How are invoices reconciled with token usage?"]} />
               </div>
             </div>
           </div>

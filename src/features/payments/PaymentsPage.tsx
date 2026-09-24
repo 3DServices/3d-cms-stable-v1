@@ -8,6 +8,7 @@
  *   BLADE:  Top-up & Settlement (tabs: Token Top-up, VEBA Escrow, Refunds, Config)
  */
 import React, { useState } from "react";
+import { WaswaAskChips, WaswaSampleTag } from "../../components/waswa";
 
 // ─── Colour helpers ──────────────────────────────────────────────────────────
 // const okBg    = "bg-[#25D366] text-[#053B33]";
@@ -327,10 +328,12 @@ export function PaymentsPage() {
 
           {/* ── Waswa AI Recommendations ──────────────────────────────────────── */}
           <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#E9EDEF]">
+            <div className="px-4 py-3 border-b border-[#E9EDEF] flex items-center justify-between gap-2">
               <div className="font-black text-[13px] text-[#111B21]">Waswa AI • Recommendations (Human-in-Control)</div>
+              <WaswaSampleTag />
             </div>
             <div className="flex flex-col gap-3 p-4">
+              <WaswaAskChips prompts={["How are mobile money payments reconciled?", "Who approves a refund?"]} />
               {WASWA_RECS.map((r, i) => (
                 <div key={i} className="flex gap-3 text-[12px]">
                   <span className="text-[16px] leading-none shrink-0 mt-0.5">{r.tag}</span>

@@ -4,7 +4,7 @@ import type { RbacPermission } from "../../../../api";
 import { useAuth } from "../../../../auth/AuthContext";
 import { MSection, Field, StepSuccessBanner, ErrorBanner, INPUT_CLS, BTN_PRIMARY } from "./WizardShared";
 
-const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"];
+const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports", "waswa"];
 
 interface Props {
   onSuccess: (permissionUids?: string[]) => void;

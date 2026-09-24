@@ -154,3 +154,5 @@ export type {
   ExportAuditPackResponse,
   AuditFilters,
 } from "./audit.types";
+
+export type * from "./waswa.types";

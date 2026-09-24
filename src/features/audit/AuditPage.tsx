@@ -13,6 +13,7 @@
  *   MODAL:  Export Audit Pack (HIC) — 4-step wizard (Scope, Format, Redaction, Approval)
  */
 import React, { useEffect, useState, useCallback } from "react";
+import { WaswaAskChips, WaswaAskInput, WaswaSampleTag } from "../../components/waswa";
 import {
   getAuditEvents,
   getAuditKpis,
@@ -432,7 +433,7 @@ export function AuditPage() {
         <div className="bg-[#128C7E] text-white rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="font-black text-[13px]">Waswa AI • Co-Pilot</span>
-            <span className="text-[10px] font-black bg-[#25D366] text-[#075E54] px-2 py-0.5 rounded-full">ON</span>
+            <WaswaSampleTag tone="dark" />
           </div>
           <div className="text-[11px] leading-relaxed opacity-90 mb-3">
             {[
@@ -447,10 +448,10 @@ export function AuditPage() {
               </div>
             ))}
           </div>
-          <input
-            placeholder="Ask Waswa...  (e.g., 'show HIC overrides last 24h')"
-            className="w-full h-8 rounded-lg bg-white/15 border-none px-3 text-[11px] text-white placeholder:text-white/60 outline-none"
-          />
+          <div className="flex flex-col gap-2">
+            <WaswaAskChips tone="dark" label="" prompts={["Which actions need HIC approval?", "How long are audit records kept?"]} />
+            <WaswaAskInput tone="dark" placeholder="Ask Waswa…  (e.g., 'who approves a data export?')" />
+          </div>
         </div>
 
         {/* Compliance Snapshot */}

@@ -9,6 +9,7 @@
  *   MODAL:   HIC Manual Settlement Override (3 scroll sections)
  */
 import React, { useState } from "react";
+import { WaswaAskChips, WaswaSampleTag } from "../../components/waswa";
 import { MarketplaceBrowse } from "./components/MarketplaceBrowse";
 import { BookingRequestModal } from "./components/BookingRequestModal";
 import { IncomingBookingRequests } from "./components/IncomingBookingRequests";
@@ -221,9 +222,13 @@ export function VebaPage() {
             <div className="bg-white border border-[#E9EDEF] rounded-xl overflow-hidden">
               <div className="px-4 py-2.5 border-b border-[#E9EDEF]">
                 <div className="font-black text-[12px] text-[#667781]">AI-01</div>
-                <div className="font-black text-[13px] text-[#111B21]">Waswa Co-Pilot (HiC)</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-black text-[13px] text-[#111B21]">Waswa Co-Pilot (HiC)</div>
+                  <WaswaSampleTag />
+                </div>
               </div>
               <div className="p-4 flex flex-col gap-3">
+                <WaswaAskChips prompts={["How does VEBA escrow work?", "How are VEBA disputes handled?"]} />
                 <div className="bg-[#F8FAFC] border border-[#E9EDEF] rounded-xl p-3">
                   <div className="font-black text-[12px] text-[#111B21]">Insight: Potential payout leakage</div>
                   <div className="text-[11px] text-[#667781] mt-1">Detected 7 bookings with contact-unlock before escrow funded.</div>

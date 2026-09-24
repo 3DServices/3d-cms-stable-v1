@@ -8,6 +8,8 @@
  * All styles use Tailwind utility classes only.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useWaswa, WaswaAskChips, WaswaAskInput } from "../../../components/waswa";
 import type{ HitlAction, Severity } from "../../../types";
 import { Kpi, Card, Bar, MiniGateway, MiniStat } from "../../../components/ui";
 import { TaskManagerModal } from "./TaskManagerModal";
@@ -62,6 +64,8 @@ const DEFAULT_HITL: HitlAction[] = [
 // const TABLE_GRID = "grid grid-cols-[50px_1.4fr_1fr_1.8fr_32px] gap-2 items-center";
 
 export function Dashboard() {
+  const navigate = useNavigate();
+  const waswa = useWaswa();
   const [showTaskManager, setShowTaskManager] = useState(false);
   const [showGatewayHistory, setShowGatewayHistory] = useState(false);
   const hitl = useMemo(() => DEFAULT_HITL, []);
@@ -255,22 +259,24 @@ export function Dashboard() {
           <div className="p-3 md:p-3.5 flex flex-col gap-3.5 overflow-y-auto flex-1">
 
             {/* AI status */}
-            <Card title="Waswa AI • Ops Co‑Pilot" subtitle="Proactive insights (Revenue + Health + Billing)">
+            <Card title="Waswa AI • Ops Co‑Pilot" subtitle="Sample insights — live ops insights are not connected yet">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="rounded-full px-2.5 py-1 text-[12px] font-extrabold bg-[#25D366] text-white">ON</span>
+                <span className={`rounded-full px-2.5 py-1 text-[12px] font-extrabold text-white ${waswa.on ? "bg-[#25D366]" : "bg-[#9CA3AF]"}`}>
+                  {waswa.on ? "ON" : "OFF"}
+                </span>
                 <span className="text-[12px] text-[#667781] leading-snug">
                   System Health 99.82% • leakage risk (VEBA) • suggest 5k mint
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
-                <Btn variant="azure">Open HITL Queue</Btn>
-                <Btn variant="teal">Ask why?</Btn>
-                <Btn variant="ghost">Mute (1h)</Btn>
+                <Btn variant="azure" onClick={() => navigate("/ai?tab=queue")}>Open review queue</Btn>
+                <Btn variant="teal" onClick={() => waswa.open("What does the NOC Bridge monitor, and what do its health indicators mean?")}>Ask why?</Btn>
+                <Btn variant="ghost" onClick={waswa.toggle}>{waswa.on ? "Turn Waswa off" : "Turn Waswa on"}</Btn>
               </div>
             </Card>
 
             {/* HITL actions */}
-            <Card title="HITL / HIC Pending Actions" subtitle="High-risk actions require approval + audit">
+            <Card title="HITL / HIC Pending Actions" subtitle="Sample data — high-risk actions require approval + audit">
               <div className="flex flex-col gap-2.5">
                 {hitl.map((a) => (
                   <div
@@ -297,32 +303,16 @@ export function Dashboard() {
             </Card>
 
             {/* Chat */}
-            <Card title="Ask Waswa (chat)" subtitle="Natural language ops • cost-aware answers (tokenized)">
-              <div className="flex flex-col gap-2.5">
-                <div className="self-start max-w-[92%] bg-[#E7FFEF] border border-[#BEF0D2] rounded-xl px-3 py-2.5 text-[12px] leading-snug">
-                  Why is token burn up today?
-                </div>
-                <div className="self-end max-w-[92%] bg-[#F1F4F6] border border-[#E9EDEF] rounded-xl px-3 py-2.5 text-[12px] leading-snug">
-                  Root cause: 1) Airtel UG retries (+0.18 Tok/s), 2) SSE clients surge (+0.11 Tok/s), 3) Kafka replays (+0.06 Tok/s). Recommend: backoff + per-tenant caps.
-                </div>
-                <div className="self-start max-w-[92%] bg-[#E7FFEF] border border-[#BEF0D2] rounded-xl px-3 py-2.5 text-[12px] leading-snug">
-                  Create an 80% burn alert + WhatsApp notify.
-                </div>
-                <div className="self-end max-w-[92%] bg-[#F1F4F6] border border-[#E9EDEF] rounded-xl px-3 py-2.5 text-[12px] leading-snug">
-                  Draft created (HITL). Impact: +0.02 Tok/s for notifications. Approve to activate for OLIWA_CORP_UG, PIKI_KLA_POOL.
-                </div>
-              </div>
-
-              {/* Chat input */}
-              <div className="flex gap-2 mt-1">
-                <input
-                  placeholder="Tell Waswa to…"
-                  className="flex-1 h-9 rounded-full border border-[#E9EDEF] px-3.5 text-[13px] outline-none focus:border-[#128C7E] transition-colors"
-                />
-                <button className="w-10 h-9 rounded-full bg-[#25D366] text-white font-black cursor-pointer hover:brightness-105 shrink-0">
-                  ➤
-                </button>
-              </div>
+            <Card title="Ask Waswa (chat)" subtitle="Answers from approved company knowledge · opens the Waswa chat">
+              <WaswaAskChips
+                label=""
+                prompts={[
+                  "How is token burn measured?",
+                  "Which actions need HIC approval?",
+                  "What does the NOC Bridge monitor?",
+                ]}
+              />
+              <WaswaAskInput placeholder="Ask Waswa…" className="mt-1" />
             </Card>
           </div>
         </section>

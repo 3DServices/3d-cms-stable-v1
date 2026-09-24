@@ -96,6 +96,7 @@ export const ENDPOINTS = {
     CREATE:    "/tokens/create",
     BY_ID:     "/tokens",              // append /{token_id}
     BUY:       "/payments/tokens/buy",
+    PAYMENT_STATUS: "/payments/transactions", // GET append /{transaction_uid}/status
     AUTHORIZE: "/tokens/special/authorize",
     TRANSFER:  "/tokens/transfer",
     BALANCE:   "/tokens",              // append /{client_uid}/balance
@@ -191,5 +192,20 @@ export const ENDPOINTS = {
     COMPLIANCE:     "/audit/compliance",
     /** Request an audit pack export (HIC-gated) */
     EXPORT:         "/audit/export",
+  },
+
+  /** Waswa AI assistant + AI Console (navas-core-apis, migration 041) */
+  WASWA: {
+    CHAT:             "/assistant/chat",                  // POST {data:{message,surface,conversation_uid}}
+    FEEDBACK:         "/assistant/feedback",              // POST {data:{message_uid,verdict,note}}
+    SUMMARY:          "/assistant/console/summary",
+    QUEUE:            "/assistant/console/queue",         // ?kind=flag,approval,recheck,document
+    CONVERSATIONS:    "/assistant/console/conversations", // GET list; append /{conversation_uid}
+    ANSWERS:          "/assistant/console/answers",       // GET list | POST create; append /{uid}[/submit|/decide|/confirm|/retire]
+    FEEDBACK_RESOLVE: "/assistant/console/feedback",      // append /{feedback_uid}/resolve
+    SOURCES:          "/assistant/console/sources",       // append /{source_uid}[/review|/audience|/remove|/restore|/details]
+    SOURCE_UPLOAD:    "/assistant/console/sources/upload",// POST multipart: file + metadata
+    AUTHORITY_LEVELS: "/assistant/console/authority-levels",
+    MATCH:            "/assistant/console/match",         // ?q=&audience=
   },
 } as const;

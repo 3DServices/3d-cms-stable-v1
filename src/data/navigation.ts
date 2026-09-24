@@ -27,7 +27,7 @@ export const DEFAULT_NAV_ITEMS: NavRailItem[] = [
   { key: "payments",          glyph: "$",  label: "Payments",             path: "/payments"          },
   { key: "money",             glyph: "💳", label: "Money Switchboard",    path: "/money"             },
   { key: "veba",              glyph: "V",  label: "VEBA",                 path: "/veba"              },
-  { key: "ai",                glyph: "W",  label: "AI Workloads",         path: "/ai"                },
+  { key: "ai",                glyph: "W",  label: "Waswa AI Console",     path: "/ai"                },
   { key: "rbac",              glyph: "R",  label: "RBAC",                 path: "/rbac"              },
   { key: "audit",             glyph: "📋", label: "Audit Trail",          path: "/audit"             },
   { key: "products",          glyph: "P",  label: "Products",             path: "/products"          },
@@ -63,7 +63,7 @@ export const DEFAULT_SIDEBAR_ITEMS: SidebarItem[] = [
 
   // ── Platform ─────────────────────────────────────────────────────────────
   { key: "veba",              label: "VEBA Marketplace",        path: "/veba"              },
-  { key: "ai-workloads",      label: "AI Workloads",            path: "/ai"                },
+  { key: "ai-workloads",      label: "Waswa AI Console",        path: "/ai"                },
   { key: "rbac",              label: "RBAC / Access Control",   path: "/rbac"              },
   { key: "runbooks",          label: "Runbooks",                path: "/audit"             },
   { key: "audit",             label: "Audit Trail",             path: "/audit"             },

@@ -297,14 +297,16 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "ai-workloads",
-    name: "AI Workloads",
-    navLabel: "AI Workloads",
+    name: "Waswa AI Console",
+    navLabel: "Waswa AI Console",
     navGlyph: "W",
     route: "/ai",
+    // Granted to super admins and internal admins automatically, and to any
+    // role holding ai.view / waswa.review / waswa.approve (auth/waswaAccess.ts).
     viewPermission: "ai.view",
     group: "platform",
     showInNavRail: true,
-    showInSidebar: false,
+    showInSidebar: true,
     catalogModuleName: "Waswa AI & System Health",
   },
 

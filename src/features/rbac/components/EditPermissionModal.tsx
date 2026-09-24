@@ -10,7 +10,7 @@ interface Props {
   onUpdated?: () => void;
 }
 
-const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports"];
+const DEFAULT_MODULES = ["billing", "gps", "alerts", "tokens", "rbac", "tenants", "devices", "veba", "noc", "reports", "waswa"];
 
 export function EditPermissionModal({ open, permission, onClose, onUpdated }: Props) {
   const [permissionName, setPermissionName] = useState("");
