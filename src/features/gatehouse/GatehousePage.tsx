@@ -8,9 +8,9 @@ import { getStoredAuthToken } from "../../api/client";
 import { ENDPOINTS }          from "../../api/endpoints";
 
 // ─── Fleet env config ─────────────────────────────────────────────────────────
-const FLEET_API = (import.meta.env.VITE_FLEET_API_URL as string) ?? "https://api.fort-track.online";
-const FLEET_SSE = (import.meta.env.VITE_FLEET_SSE_URL as string) ?? "https://socket.fort-track.online";
-const GMAPS_KEY = "AIzaSyCxsn8cnwrKUpbgO6Pn_Gdk2-T5HkJRmLY";
+const FLEET_API = (import.meta.env.VITE_FLEET_API_URL as string) ?? "";
+const FLEET_SSE = (import.meta.env.VITE_FLEET_SSE_URL as string) ?? "";
+const GMAPS_KEY = "AIzaSyC9YFU43z_0g_v_Qc29ulCWpsRdBUK2XAU";
 const PAGE_SIZE  = 25;
 
 const ICONS = {
@@ -337,6 +337,12 @@ export default function GatehousePage() {
   const [page,           setPage]          = useState(1);
   const [statusFilter,   setStatusFilter]  = useState<MotionStatus | "">("");
   const [selectedImei,   setSelectedImei]  = useState<string | null>(null);
+  const [debouncedQ,     setDebouncedQ]    = useState("");
+  const [totalUnits,     setTotalUnits]    = useState(0);
+  const [totalPages,     setTotalPages]    = useState(1);
+  const [statusCounts,   setStatusCounts]  = useState<Record<string, number>>({});
+  const scope     = useRef<{ dataLevel: string; accountUid: string } | null>(null);
+  const loadSeq   = useRef(0);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const gMap      = useRef<unknown>(null);
@@ -368,25 +374,11 @@ export default function GatehousePage() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 320);
   }, []);
 
-  // Filtered + paginated list
-  const q        = searchQ.trim().toLowerCase();
-  const allUnits = Array.from(units.current.values());
-  const list     = allUnits.filter((u) => {
-    const matchQ  = !q || u.name.toLowerCase().includes(q)
-      || u.imei.toLowerCase().includes(q)
-      || (u.geocoded_location || u.country || "").toLowerCase().includes(q);
-    const matchSt = !statusFilter || u.status === statusFilter;
-    return matchQ && matchSt;
-  });
-
-  const statusCounts = allUnits.reduce<Record<string, number>>((acc, u) => {
-    acc[u.status] = (acc[u.status] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  // The server filters and paginates; `units` holds only the current page.
+  const q          = debouncedQ;
+  const pagedList  = Array.from(units.current.values());
   const safePage   = Math.min(page, totalPages);
-  const pagedList  = list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const allCount   = Object.values(statusCounts).reduce((sum, n) => sum + n, 0);
 
   // ── Map helpers ───────────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -454,7 +446,9 @@ export default function GatehousePage() {
       u.mileage           = Number(d.mileage    || d.odometer)       || 0;
       u.fuel              = Number(d.fuel       || d.fuel_level)     || 0;
       u.motion_state      = d.motion_state || "";
-      u.status            = normalizeStatus(u.motion_state, u.speed);
+      u.status            = String(d.device_state || "").toLowerCase() === "offline"
+        ? "Offline"
+        : normalizeStatus(u.motion_state, u.speed);
       u.coords            = { lat, lng };
       u.geocoded_location = d.geocoded_location || u.geocoded_location || "";
       u.last_sync         = `${d.local_system_datestamp || ""} ${d.local_system_timestamp || ""}`.trim();
@@ -474,51 +468,87 @@ export default function GatehousePage() {
   function startAll() { stopAll(); units.current.forEach((_, imei) => openStream(imei)); }
 
   // ── API ───────────────────────────────────────────────────────────────────
-  async function enrichSubs() {
-    await Promise.all(
-      Array.from(units.current.entries()).map(async ([imei, u]) => {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const j = await fleetFetch("POST", ENDPOINTS.FLEET.CHECK_IMEI, { data: { device_imei: imei } }) as any;
-          if (j?.status !== "success" || !j.data) return;
-          const d   = j.data;
-          const raw = String(d.subscription_status || "").toLowerCase();
-          u.subscription_status = raw === "active" ? "running" : raw || "unknown";
-        } catch { /**/ }
-      })
-    );
+  function clearMarkersExcept(keep: Set<string>) {
+    markers.current.forEach((m, imei) => {
+      if (keep.has(imei)) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try { (m as any).setMap(null); } catch { /**/ }
+      markers.current.delete(imei);
+    });
   }
 
-  async function loadUnits(dataLevel: string, accountUid: string) {
+  async function fetchPage(pageNo: number, search: string, status: MotionStatus | "") {
+    const ctx = scope.current;
+    if (!ctx) return;
+    const seq = ++loadSeq.current;
     setLoading(true); setListError(null);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resp = await fleetFetch("POST", ENDPOINTS.FLEET.LIST_UNITS, {
-        data: { data_level: dataLevel, account_uid: accountUid },
+        data: {
+          data_level: ctx.dataLevel, account_uid: ctx.accountUid,
+          page: pageNo, page_size: PAGE_SIZE, search, status,
+        },
       }) as any;
+      if (seq !== loadSeq.current) return;
+      if (resp?.status === "error" && /no devices/i.test(String(resp?.message || ""))) {
+        stopAll(); units.current.clear(); clearMarkersExcept(new Set());
+        setTotalUnits(0); setTotalPages(1); setStatusCounts({});
+        tick(); setLoading(false); return;
+      }
       if (!resp || resp.status !== "success" || !Array.isArray(resp.data)) {
         setListError("Failed to load units."); setLoading(false); return;
       }
+      stopAll();
       units.current.clear();
-      setPage(1);
-      setSelectedImei(null);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       resp.data.forEach((u: any) => {
         if (!u.device_imei) return;
+        const live = u.live || {};
+        const lat  = Number(live.latitude), lng = Number(live.longitude);
+        const sub  = String(u.subscription_status || "").toLowerCase();
         units.current.set(u.device_imei, {
           imei: u.device_imei, name: u.device_name || u.device_imei,
-          subscription_status: u.subscription_status || "",
-          status: "Offline", speed: 0, altitude: 0, course: 0,
+          subscription_status: sub === "active" ? "running" : sub,
+          status: (live.live_status as MotionStatus) || "Offline",
+          speed: Number(live.speed) || 0, altitude: 0, course: 0,
           satellites: 0, mileage: 0, fuel: 0,
-          motion_state: "", geocoded_location: "", coords: null,
-          last_sync: "", country: "", sensors: [],
+          motion_state: live.motion_state || "",
+          geocoded_location: live.geocoded_location || "",
+          coords: Number.isFinite(lat) && Number.isFinite(lng) && live.latitude != null ? { lat, lng } : null,
+          last_sync: live.last_sync || "", country: "", sensors: [],
         });
       });
+      clearMarkersExcept(new Set(units.current.keys()));
+      units.current.forEach((u) => ensureMarker(u));
+      const p = resp.pagination || {};
+      setTotalUnits(Number(p.total) || units.current.size);
+      setTotalPages(Math.max(1, Number(p.total_pages) || 1));
+      setStatusCounts(resp.status_counts || {});
+      if (selectedImei && !units.current.has(selectedImei)) setSelectedImei(null);
       tick(); setLoading(false);
-      try { await enrichSubs(); tick(); } catch { /**/ }
       startAll();
-    } catch { setListError("API error loading units."); setLoading(false); }
+    } catch {
+      if (seq === loadSeq.current) { setListError("API error loading units."); setLoading(false); }
+    }
   }
+
+  async function loadUnits(dataLevel: string, accountUid: string) {
+    scope.current = { dataLevel, accountUid };
+    setSelectedImei(null);
+    if (page !== 1) { setPage(1); return; }
+    await fetchPage(1, debouncedQ, statusFilter);
+  }
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(searchQ.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchQ]);
+
+  useEffect(() => {
+    if (!scope.current) return;
+    fetchPage(page, debouncedQ, statusFilter);
+  }, [page, debouncedQ, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -651,7 +681,7 @@ export default function GatehousePage() {
                 <div>
                   <div className="font-black text-[15px] text-[#111B21]">Vehicle Units</div>
                   <div className="text-[12px] text-[#667781] mt-0.5">
-                    {list.length} unit{list.length !== 1 ? "s" : ""}{(q || statusFilter) ? " (filtered)" : ""}
+                    {totalUnits} unit{totalUnits !== 1 ? "s" : ""}{(q || statusFilter) ? " (filtered)" : ""}
                   </div>
                 </div>
                 <span className="shrink-0 text-[11px] font-extrabold text-white px-2.5 py-1 rounded-full bg-[#25D366]">LIVE</span>
@@ -675,7 +705,7 @@ export default function GatehousePage() {
                 {([["", "All"], ["Moving", "Moving"], ["Parked", "Parked"], ["Idling", "Idling"], ["Offline", "Offline"]] as [MotionStatus | "", string][]).map(([val, label]) => {
                   const active = statusFilter === val;
                   const c      = val ? BADGE_COLORS[val as MotionStatus] : { bg: "#E9EDEF", color: "#111B21" };
-                  const count  = val ? (statusCounts[val] ?? 0) : allUnits.length;
+                  const count  = val ? (statusCounts[val] ?? 0) : allCount;
                   return (
                     <button
                       key={val}
@@ -697,7 +727,7 @@ export default function GatehousePage() {
               <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
                 {loading   && <div className="px-4 py-3 text-[12px] text-[#667781] italic">Loading units…</div>}
                 {listError && <div className="px-4 py-3 text-[12px] text-[#D93025]">{listError}</div>}
-                {!loading && !listError && list.length === 0 && (
+                {!loading && !listError && pagedList.length === 0 && (
                   <div className="px-4 py-3 text-[12px] text-[#667781] italic">No units found.</div>
                 )}
                 {pagedList.map((u, i) => {
@@ -728,9 +758,9 @@ export default function GatehousePage() {
               {/* Pagination */}
               <div className="shrink-0 flex items-center justify-between px-4 py-2 border-t border-[#E9EDEF] bg-white">
                 <span className="text-[11px] text-[#667781]">
-                  {list.length === 0
+                  {totalUnits === 0
                     ? "0 units"
-                    : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, list.length)} of ${list.length}`}
+                    : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, totalUnits)} of ${totalUnits}`}
                 </span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}

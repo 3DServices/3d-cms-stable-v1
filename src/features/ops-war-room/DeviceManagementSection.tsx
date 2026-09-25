@@ -591,9 +591,18 @@ export function DeviceManagementSection() {
   const [regSearch,    setRegSearch]    = useState("");
   const [regPage,      setRegPage]      = useState(1);
 
-  // ── Configured devices pagination + search ───────────────────────────────────
+  // ── Configured devices pagination + search (server side) ────────────────────
   const [search, setSearch] = useState("");
   const [page,   setPage]   = useState(1);
+  const [debouncedSearch,    setDebouncedSearch]    = useState("");
+  const [debouncedRegSearch, setDebouncedRegSearch] = useState("");
+  const [total,         setTotal]         = useState(0);
+  const [totalPages,    setTotalPages]    = useState(1);
+  const [regTotal,      setRegTotal]      = useState(0);
+  const [regTotalPages, setRegTotalPages] = useState(1);
+  const scope      = useRef<{ dataLevel: string; accountUid: string } | null>(null);
+  const loadSeq    = useRef(0);
+  const regLoadSeq = useRef(0);
 
   // ── Actions dropdown ─────────────────────────────────────────────────────────
   const [openMenuImei, setOpenMenuImei] = useState<string | null>(null);
@@ -707,33 +716,40 @@ export function DeviceManagementSection() {
     } catch { /**/ } finally { setClientTokensLoading(false); }
   }
 
-  async function enrichSubscriptions(list: Device[]) {
-    await Promise.all(
-      list.map(async (dev) => {
-        if (!dev.device_imei) { dev.subscription_status ||= "No Payment"; return; }
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const j = await fleetFetch("POST", ENDPOINTS.FLEET.CHECK_IMEI, { data: { device_imei: dev.device_imei } }) as any;
-          if (j?.status === "success" && j?.data) {
-            const d = j.data;
-            const raw = String(d.subscription_status || "").toLowerCase();
-            dev.subscription_status = raw === "active" ? "Active" : raw === "expired" ? "Expired" : (d.subscription_status || "No Payment");
-          }
-        } catch { /**/ }
-      })
-    );
+  function subscriptionLabel(raw: unknown): string {
+    const s = String(raw || "").toLowerCase();
+    if (s === "active")  return "Active";
+    if (s === "expired") return "Expired";
+    if (s === "paused")  return "Paused";
+    return s ? String(raw) : "No Payment";
   }
 
   async function loadDevices(dataLevel: string, accountUid: string) {
+    scope.current = { dataLevel, accountUid };
+    if (page !== 1) { setPage(1); return; }
+    await fetchDevicePage(1, debouncedSearch);
+  }
+
+  async function fetchDevicePage(pageNo: number, searchQ: string) {
+    const ctx = scope.current;
+    if (!ctx) return;
+    const seq = ++loadSeq.current;
     setLoading(true); setLoadErr(null);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const j = await fleetFetch("POST", ENDPOINTS.FLEET.LIST_UNITS, {
-        data: { data_level: dataLevel, account_uid: accountUid },
+        data: { data_level: ctx.dataLevel, account_uid: ctx.accountUid, page: pageNo, page_size: PAGE_SIZE, search: searchQ },
       }) as any;
+      if (seq !== loadSeq.current) return;
+      if (j?.status === "error" && /no devices/i.test(String(j?.message || ""))) {
+        setDevices([]); setTotal(0); setTotalPages(1); setLoading(false); return;
+      }
       if (!j || j.status !== "success" || !Array.isArray(j.data)) {
         setLoadErr("Failed to load devices."); setLoading(false); return;
       }
+      const p = j.pagination || {};
+      setTotal(Number(p.total) || j.data.length);
+      setTotalPages(Math.max(1, Number(p.total_pages) || 1));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list: Device[] = j.data.map((d: any) => ({
         device_imei:           d.device_imei           ?? "",
@@ -749,31 +765,38 @@ export function DeviceManagementSection() {
         vin_number:            d.vin_number            ?? "",
         car_type:              d.car_type              ?? "",
         billing_status:        d.billing_status        ?? "",
-        subscription_status:   d.subscription_status   ?? "",
+        subscription_status:   subscriptionLabel(d.subscription_status),
         validity_status:       d.validity_status       ?? "",
         subscription_end_date: d.subscription_end_date ?? "",
         payment_uid:           d.payment_uid           ?? "",
       }));
-      setDevices([...list]); setPage(1); setLoading(false);
-      await enrichSubscriptions(list);
-      setDevices([...list]);
-    } catch { setLoadErr("API error loading devices."); setLoading(false); }
+      setDevices(list); setLoading(false);
+    } catch {
+      if (seq === loadSeq.current) { setLoadErr("API error loading devices."); setLoading(false); }
+    }
   }
 
-  async function loadRegisteredDevices() {
+  async function loadRegisteredDevices(pageNo: number = regPage, searchQ: string = debouncedRegSearch) {
     const type = authState.accountType || "client";
     const uid  = type.toLowerCase() === "client"
       ? (authState.accountRoot || authState.accountUid || "")
       : (authState.accountUid || "");
     if (!uid) { setRegLoading(false); return; }
+    const seq = ++regLoadSeq.current;
     setRegLoading(true); setRegLoadErr(null);
     try {
       // fleetFetch sets Authorization: Bearer <token> — same header as loadDevices (configured devices)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const j = await fleetFetch("POST", ENDPOINTS.FLEET.LIST_REGISTERED, {
-        data: { data_level: type, account_uid: uid },
+        data: { data_level: type, account_uid: uid, page: pageNo, page_size: REG_PAGE_SIZE, search: searchQ },
       }) as any;
-      if (j?.status === "success" && Array.isArray(j?.data)) {
+      if (seq !== regLoadSeq.current) return;
+      if (j?.status === "error" && /no devices/i.test(String(j?.message || ""))) {
+        setRegDevices([]); setRegTotal(0); setRegTotalPages(1);
+      } else if (j?.status === "success" && Array.isArray(j?.data)) {
+        const p = j.pagination || {};
+        setRegTotal(Number(p.total) || j.data.length);
+        setRegTotalPages(Math.max(1, Number(p.total_pages) || 1));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setRegDevices(j.data.map((d: any) => ({
           device_imei:    d.device_imei    ?? d.unit_imei    ?? "",
@@ -813,28 +836,34 @@ export function DeviceManagementSection() {
     Promise.all([loadClients(), loadDevices(type, uid), loadRegisteredDevices()]);
   }, [authState.accountUid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Configured devices — filtered + paginated ────────────────────────────────
-  const q          = search.trim().toLowerCase();
-  const filtered   = devices.filter((d) =>
-    !q || d.device_name.toLowerCase().includes(q) ||
-          d.device_imei.toLowerCase().includes(q) ||
-          d.client_name.toLowerCase().includes(q)
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage   = Math.min(page, totalPages);
-  const paged      = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  // ── Server-side search + pagination ─────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  // ── Registered devices — filtered + paginated ────────────────────────────────
-  const regQ          = regSearch.trim().toLowerCase();
-  const regFiltered   = regDevices.filter((d) =>
-    !regQ || d.device_imei.toLowerCase().includes(regQ) ||
-             d.hardware_model.toLowerCase().includes(regQ) ||
-             d.unit_vendor.toLowerCase().includes(regQ) ||
-             d.client_name.toLowerCase().includes(regQ)
-  );
-  const regTotalPages = Math.max(1, Math.ceil(regFiltered.length / REG_PAGE_SIZE));
-  const regSafePage   = Math.min(regPage, regTotalPages);
-  const regPaged      = regFiltered.slice((regSafePage - 1) * REG_PAGE_SIZE, regSafePage * REG_PAGE_SIZE);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedRegSearch(regSearch.trim()), 350);
+    return () => clearTimeout(t);
+  }, [regSearch]);
+
+  useEffect(() => {
+    if (!scope.current) return;
+    fetchDevicePage(page, debouncedSearch);
+  }, [page, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const regBooted = useRef(false);
+  useEffect(() => {
+    if (!regBooted.current) { regBooted.current = true; return; }
+    loadRegisteredDevices(regPage, debouncedRegSearch);
+  }, [regPage, debouncedRegSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const q           = debouncedSearch;
+  const safePage    = Math.min(page, totalPages);
+  const paged       = devices;
+  const regQ        = debouncedRegSearch;
+  const regSafePage = Math.min(regPage, regTotalPages);
+  const regPaged    = regDevices;
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function openEditProps(d: Device) {
@@ -1033,7 +1062,7 @@ export function DeviceManagementSection() {
           <div>
             <div className="font-black text-[15px] text-[#111B21]">Configured Devices</div>
             <div className="text-[12px] text-[#667781] mt-0.5">
-              {filtered.length} device{filtered.length !== 1 ? "s" : ""}{q ? " (filtered)" : ""}
+              {total} device{total !== 1 ? "s" : ""}{q ? " (filtered)" : ""}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1167,8 +1196,8 @@ export function DeviceManagementSection() {
         {/* ── Pagination ── */}
         <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-[#E9EDEF] mt-auto">
           <span className="text-[11px] text-[#667781]">
-            {filtered.length === 0 ? "0 devices"
-              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
+            {total === 0 ? "0 devices"
+              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, total)} of ${total}`}
           </span>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
@@ -1192,7 +1221,7 @@ export function DeviceManagementSection() {
             <div>
               <div className="font-black text-[14px] text-[#111B21]">Registered Devices</div>
               <div className="text-[11px] text-[#667781] mt-0.5">
-                {regFiltered.length} unit{regFiltered.length !== 1 ? "s" : ""}{regQ ? " (filtered)" : ""}
+                {regTotal} unit{regTotal !== 1 ? "s" : ""}{regQ ? " (filtered)" : ""}
               </div>
             </div>
             {canRegisterUnit && (
@@ -1275,8 +1304,8 @@ export function DeviceManagementSection() {
         {/* Pagination */}
         <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-[#E9EDEF]">
           <span className="text-[11px] text-[#667781]">
-            {regFiltered.length === 0 ? "0 units"
-              : `${(regSafePage - 1) * REG_PAGE_SIZE + 1}–${Math.min(regSafePage * REG_PAGE_SIZE, regFiltered.length)} of ${regFiltered.length}`}
+            {regTotal === 0 ? "0 units"
+              : `${(regSafePage - 1) * REG_PAGE_SIZE + 1}–${Math.min(regSafePage * REG_PAGE_SIZE, regTotal)} of ${regTotal}`}
           </span>
           <div className="flex items-center gap-1">
             <button onClick={() => setRegPage((p) => Math.max(1, p - 1))} disabled={regSafePage <= 1}
