@@ -223,6 +223,8 @@ export interface WaswaSource {
 export interface WaswaUploadCheck {
   pdf: boolean;
   xlsx: boolean;
+  /** The scripts/ converter the API needs to read ANY uploaded file. */
+  converter?: boolean;
   storage_writable: boolean;
   storage_path: string;
 }

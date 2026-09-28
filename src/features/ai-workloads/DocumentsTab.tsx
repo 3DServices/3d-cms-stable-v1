@@ -492,6 +492,15 @@ export function DocumentsTab({ canApprove, myAccountUid, onChanged, openSourceUi
           (<code className="font-mono">{check.storage_path}</code>). Give the API process write access to it.
         </Notice>
       )}
+      {check && check.converter === false && (
+        <Notice tone="red">
+          No upload can be processed: the API server is missing its document
+          converter (<code className="font-mono">scripts/ingest_waswa_knowledge.py</code>).
+          Deploy the <code className="font-mono">scripts/</code> folder alongside
+          <code className="font-mono"> endpoints/</code> and restart the API.
+          This affects every file type, not just PDFs.
+        </Notice>
+      )}
       {check && (!check.pdf || !check.xlsx) && (
         <Notice tone="amber">
           {!check.pdf && <>PDF uploads need the <b>pdfplumber</b> package on the API server. </>}
