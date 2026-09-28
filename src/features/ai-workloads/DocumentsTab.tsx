@@ -37,6 +37,8 @@ import { day, errText, inputCls, when } from "./format";
 
 interface Props {
   canApprove: boolean;
+  /** This person may approve their own upload (administrators). */
+  canSelfApprove: boolean;
   myAccountUid: string | null;
   onChanged: () => void;
   /** Open this document's panel on arrival (from the review queue). */
@@ -64,7 +66,7 @@ function reviewLabel(s: WaswaSource): string {
 // ── Upload panel ─────────────────────────────────────────────────────────────
 
 function UploadPanel({
-  open, replaces, levels, types, maxMb, accept, onClose, onDone,
+  open, replaces, levels, types, maxMb, accept, canSelfApprove, onClose, onDone,
 }: {
   open: boolean;
   replaces: WaswaSource | null;
@@ -72,6 +74,7 @@ function UploadPanel({
   types: string[];
   maxMb: number;
   accept: string;
+  canSelfApprove: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -83,6 +86,7 @@ function UploadPanel({
   const [versionLabel, setVersionLabel] = useState("");
   const [docDate, setDocDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [publish, setPublish] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<WaswaUploadResult | null>(null);
@@ -97,6 +101,7 @@ function UploadPanel({
     setVersionLabel("");
     setDocDate("");
     setNotes("");
+    setPublish(false);   // never carried over between uploads
     setError(null);
     setResult(null);
   }, [open, replaces]);
@@ -119,6 +124,8 @@ function UploadPanel({
         document_date: docDate || undefined,
         notes: notes.trim() || undefined,
         replaces_source_uid: replaces?.source_uid,
+        // Only sent when ticked; the server decides whether it is allowed.
+        publish: publish || undefined,
       });
       setResult(res.data);
       onDone();
@@ -140,7 +147,7 @@ function UploadPanel({
         <>
           <Btn onClick={onClose} disabled={busy}>Cancel</Btn>
           <Btn kind="primary" onClick={submit} disabled={busy || !file}>
-            {busy ? "Uploading…" : "Upload for review"}
+            {busy ? "Uploading…" : publish ? "Upload and publish" : "Upload for review"}
           </Btn>
         </>
       )}
@@ -150,9 +157,15 @@ function UploadPanel({
       {result ? (
         <>
           <Notice tone="green">
-            <b>{result.title}</b> uploaded — {result.chunk_count} passage{result.chunk_count === 1 ? "" : "s"}. It is <b>awaiting approval</b>:
-            Waswa won't use it until someone other than you approves it in the Review queue.
-            {replaces && " The current version keeps answering until then."}
+            <b>{result.title}</b> uploaded — {result.chunk_count} passage{result.chunk_count === 1 ? "" : "s"}.{" "}
+            {result.review_status === "approved" ? (
+              <>It is <b>published</b>: Waswa can answer from it now.
+                {replaces && " The previous version has stopped answering."}</>
+            ) : (
+              <>It is <b>awaiting approval</b>: Waswa won't use it until someone other
+                than you approves it in the Review queue.
+                {replaces && " The current version keeps answering until then."}</>
+            )}
           </Notice>
           {result.withheld.length > 0 && (
             <Notice tone="amber">
@@ -226,9 +239,32 @@ function UploadPanel({
               <input type="date" className={inputCls} value={docDate} onChange={(e) => setDocDate(e.target.value)} disabled={busy} />
             </Field>
           </div>
-          <Field label="Notes for the approver">
+          <Field label={canSelfApprove && publish ? "Note on the document" : "Notes for the approver"}>
             <textarea className={inputCls} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} />
           </Field>
+
+          {/* Only shown to people who can approve. The server checks it again
+              and refuses the flag from anyone else, so this is convenience,
+              not the control. */}
+          {canSelfApprove && (
+            <label className="flex gap-2.5 items-start cursor-pointer rounded-xl border border-[#E9EDEF] bg-[#F7F9FA] px-3 py-2.5">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={publish}
+                onChange={(e) => setPublish(e.target.checked)}
+                disabled={busy}
+              />
+              <span className="text-[12px] text-[#111B21]">
+                <b>Publish now</b> — approve it as I upload, so Waswa can use it
+                straight away.
+                <span className="block text-[11px] text-[#667781] mt-0.5">
+                  Normally a second person approves. Choosing this records the
+                  upload as self-approved in the audit trail.
+                </span>
+              </span>
+            </label>
+          )}
         </>
       )}
     </SidePanel>
@@ -238,11 +274,13 @@ function UploadPanel({
 // ── Document panel ───────────────────────────────────────────────────────────
 
 function DocumentPanel({
-  open, sourceUid, levels, types, canApprove, myAccountUid, onClose, onNewVersion, onChanged,
+  open, sourceUid, levels, types, canApprove, canSelfApprove, myAccountUid,
+  onClose, onNewVersion, onChanged,
 }: {
   open: boolean;
   sourceUid: string | null;
   levels: WaswaAuthorityLevel[];
+  canSelfApprove: boolean;
   types: string[];
   canApprove: boolean;
   myAccountUid: string | null;
@@ -301,7 +339,7 @@ function DocumentPanel({
       {doc.active && !doc.superseded_by && (
         <Btn onClick={() => onNewVersion(doc)} disabled={busy}>Upload new version</Btn>
       )}
-      {pending && canApprove && !isUploader && (
+      {pending && canApprove && (!isUploader || canSelfApprove) && (
         <>
           <Btn kind="danger" disabled={busy || !note.trim()}
             onClick={() => act("Rejected.", () => reviewWaswaSource(doc.source_uid, "reject", note))}>Reject</Btn>
@@ -346,7 +384,8 @@ function DocumentPanel({
           {doc.replaces_source_uid && pending && (
             <Notice>This is a new version. The current version keeps answering until this is approved.</Notice>
           )}
-          {pending && isUploader && <Notice>You uploaded this, so someone else has to approve it.</Notice>}
+          {pending && isUploader && !canSelfApprove &&
+            <Notice>You uploaded this, so someone else has to approve it.</Notice>}
           {pending && !canApprove && <Notice>Waiting for someone with the waswa.approve permission.</Notice>}
           {doc.newer_versions.filter((v) => v.active && v.review_status === "pending").map((v) => (
             <Notice key={v.source_uid} tone="amber">A new version is awaiting approval (uploaded {when(v.ingested_at)}).</Notice>
@@ -356,7 +395,7 @@ function DocumentPanel({
           )}
           {doc.notes && <div className="text-[12px] text-[#111B21]"><b>Notes:</b> {doc.notes}</div>}
 
-          {pending && canApprove && !isUploader && (
+          {pending && canApprove && (!isUploader || canSelfApprove) && (
             <Field label="Decision note" hint="Required to reject — tell the uploader what to fix.">
               <textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} disabled={busy} />
             </Field>
@@ -435,7 +474,7 @@ function DocumentPanel({
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
-export function DocumentsTab({ canApprove, myAccountUid, onChanged, openSourceUid, onOpened }: Props) {
+export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChanged, openSourceUid, onOpened }: Props) {
   const [sources, setSources] = useState<WaswaSource[]>([]);
   const [types, setTypes] = useState<string[]>(Object.keys(TYPE_LABEL));
   const [maxMb, setMaxMb] = useState(25);
@@ -510,9 +549,13 @@ export function DocumentsTab({ canApprove, myAccountUid, onChanged, openSourceUi
         </Notice>
       )}
 
-      <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto">
+      {/* The list grows with every document uploaded and used to run off the
+          bottom of the page. It now scrolls within a capped height, and the
+          header row stays put so you can still tell which column is which
+          twenty rows down. */}
+      <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto overflow-y-auto max-h-[min(60vh,560px)]">
         <table className="w-full text-[12px] min-w-[760px]">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white">
             <tr className="text-left text-[10px] uppercase tracking-wide text-[#667781] border-b border-[#E9EDEF]">
               <th className="px-3 py-2 font-extrabold">Document</th>
               <th className="px-3 py-2 font-extrabold">Status</th>
@@ -570,6 +613,7 @@ export function DocumentsTab({ canApprove, myAccountUid, onChanged, openSourceUi
         types={types}
         maxMb={maxMb}
         accept={accept}
+        canSelfApprove={canSelfApprove}
         onClose={() => setUpload({ open: false, replaces: null })}
         onDone={changed}
       />
@@ -579,6 +623,7 @@ export function DocumentsTab({ canApprove, myAccountUid, onChanged, openSourceUi
         levels={levels}
         types={types}
         canApprove={canApprove}
+        canSelfApprove={canSelfApprove}
         myAccountUid={myAccountUid}
         onClose={() => setPanel(null)}
         onNewVersion={(doc) => { setPanel(null); setUpload({ open: true, replaces: doc }); }}

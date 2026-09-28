@@ -93,6 +93,10 @@ export function AIWorkloadsPage() {
   const [apiMissing, setApiMissing] = useState<number | null>(null);
   const perms = summary?.you.permissions ?? [];
   const canApprove = perms.includes("waswa.approve");
+  // Administrators may approve a document they uploaded themselves; everyone
+  // else still needs a second person. The server decides — this only mirrors
+  // it so the console doesn't offer a button that would be refused.
+  const canSelfApprove = canApprove && summary?.you.can_self_approve === true;
 
   const loadSummary = useCallback(() => {
     getWaswaSummary()
@@ -434,7 +438,8 @@ export function AIWorkloadsPage() {
 
       {/* ── Documents ─────────────────────────────────────────────────────── */}
       {tab === "documents" && (
-        <DocumentsTab canApprove={canApprove} myAccountUid={myAccountUid} onChanged={loadSummary}
+        <DocumentsTab canApprove={canApprove} canSelfApprove={canSelfApprove}
+          myAccountUid={myAccountUid} onChanged={loadSummary}
           openSourceUid={openDoc} onOpened={() => setOpenDoc(null)} />
       )}
 

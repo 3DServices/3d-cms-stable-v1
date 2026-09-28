@@ -62,7 +62,11 @@ export interface WaswaSummary {
   queue_total: number;
   corrections: Partial<Record<WaswaAnswerStatus, number>>;
   last_30_days: { answers: number; feedback: Partial<Record<WaswaVerdict, number>> };
-  you: { permissions: string[] };
+  you: {
+    permissions: string[];
+    /** True when the server would let this person approve their own upload. */
+    can_self_approve?: boolean;
+  };
 }
 
 export interface WaswaQueueCard {
@@ -272,6 +276,9 @@ export interface WaswaAuthorityLevel {
 }
 
 export interface WaswaUploadMeta {
+  /** Approve in the same step. The server still checks waswa.approve, and
+   *  whether this person is allowed to approve their own upload. */
+  publish?: boolean;
   title?: string;
   document_type?: string;
   authority_level?: number;
