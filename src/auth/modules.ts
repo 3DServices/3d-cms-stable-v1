@@ -324,6 +324,18 @@ const BUILT_MODULES: ModuleDef[] = [
     catalogModuleName: "Users & Permissions",
   },
   {
+    id: "resources",
+    name: "Resources",
+    navLabel: "Resources",
+    navGlyph: "▦",
+    route: "/resources",
+    viewPermission: "can_view_resource_template",
+    group: "admin",
+    showInNavRail: true,
+    showInSidebar: true,
+    catalogModuleName: "Resources & Template Library",
+  },
+  {
     id: "audit",
     name: "Audit Trail",
     navLabel: "Audit Trail",

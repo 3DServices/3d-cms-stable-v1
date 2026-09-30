@@ -50,6 +50,7 @@ const DEFAULT_ITEMS: SidebarItem[] = [
   { key: "veba",               label: "VEBA Marketplace",        path: "/veba",              permission: "veba.view" },
   { key: "ai-workloads",       label: "Waswa AI Console",        path: "/ai",                permission: "ai.view" },
   { key: "rbac",               label: "RBAC / Access Control",   path: "/rbac",              permission: "rbac.view" },
+  { key: "resources",          label: "Resources",               path: "/resources",         permission: "can_view_resource_template" },
   // { key: "runbooks",           label: "Runbooks",                path: "/audit"             },
   { key: "audit",              label: "Audit Trail",             path: "/audit",             permission: "audit.view" },
   { key: "products",           label: "Products",                path: "/products",          permission: "products.view_only" },

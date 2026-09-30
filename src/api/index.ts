@@ -173,3 +173,7 @@ export type {
 // ── Waswa AI assistant + AI Console ──────────────────────────────────────────
 export * from "./services/waswa.service";
 export type * from "./types/waswa.types";
+
+// ── Resources (geofences, geofence groups and event rules shared per user) ───
+export * from "./services/resources.service";
+export type * from "./types/resources.types";

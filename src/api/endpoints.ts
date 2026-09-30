@@ -208,4 +208,11 @@ export const ENDPOINTS = {
     AUTHORITY_LEVELS: "/assistant/console/authority-levels",
     MATCH:            "/assistant/console/match",         // ?q=&audience=
   },
+
+  /** Resources: a client's geofences, geofence groups and event rules, shared with its users (migration 045) */
+  RESOURCES: {
+    CLIENT:  "/resources/admin/clients", // GET append /{client_uid}/list | /{client_uid}/catalog
+    CREATE:  "/resources/admin/create",  // POST {data:{client_uid,resource_name,resource_description}}
+    ADMIN:   "/resources/admin",         // append /{resource_uid}/details | /update | /delete | /items | /access
+  },
 } as const;
