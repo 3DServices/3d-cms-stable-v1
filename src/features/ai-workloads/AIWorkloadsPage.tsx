@@ -203,7 +203,11 @@ export function AIWorkloadsPage() {
   const answered30 = summary?.last_30_days.answers ?? 0;
 
   return (
-    <div className="p-4 md:p-6 flex flex-col gap-4 min-w-0">
+    // flex-1 + min-h-0 + overflow-y-auto: the app shell is a height-constrained
+    // flex row with overflow-hidden, so a page that does not declare itself a
+    // scroll container simply gets cut off — which is what was slicing the tab
+    // labels in half. AegisDashboardPage already does this; this page did not.
+    <div className="flex-1 min-h-0 min-w-0 overflow-y-auto p-4 md:p-6 flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -247,7 +251,7 @@ export function AIWorkloadsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#E9EDEF] overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="shrink-0 flex gap-1 border-b border-[#E9EDEF] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`h-9 px-3 text-[12px] font-extrabold bg-transparent cursor-pointer whitespace-nowrap -mb-px
@@ -266,7 +270,7 @@ export function AIWorkloadsPage() {
 
       {/* ── Queue ─────────────────────────────────────────────────────────── */}
       {tab === "queue" && (
-        <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF]">
+        <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF] overflow-y-auto max-h-[min(60vh,560px)]">
           {loading && !queue.length && <Empty>Loading…</Empty>}
           {!loading && !queue.length && !tabError && apiMissing === null && (
             <Empty>Nothing is waiting. New flags from any platform will appear here.</Empty>
@@ -325,9 +329,10 @@ export function AIWorkloadsPage() {
                 value={answerSearch} onChange={(e) => setAnswerSearch(e.target.value)} />
             </div>
 
-            <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto">
+            <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto overflow-y-auto max-h-[min(60vh,560px)]">
               <table className="w-full text-[12px] min-w-[640px]">
-                <thead>
+                {/* Sticky, because the table now scrolls inside itself. */}
+                <thead className="sticky top-0 z-10 bg-white">
                   <tr className="text-left text-[10px] uppercase tracking-wide text-[#667781] border-b border-[#E9EDEF]">
                     <th className="px-3 py-2 font-extrabold">Question</th>
                     <th className="px-3 py-2 font-extrabold">Status</th>
@@ -416,7 +421,7 @@ export function AIWorkloadsPage() {
               Only flagged
             </label>
           </div>
-          <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF]">
+          <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF] overflow-y-auto max-h-[min(60vh,560px)]">
             {!convs.length && <Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Conversations could not be loaded." : "No conversations match."}</Empty>}
             {convs.map((c) => (
               <button key={c.conversation_uid} onClick={() => setConvView({ open: true, uid: c.conversation_uid })}
