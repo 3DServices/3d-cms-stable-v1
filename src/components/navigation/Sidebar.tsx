@@ -21,39 +21,39 @@ interface SidebarProps {
 
 const DEFAULT_ITEMS: SidebarItem[] = [
   // ── Core dashboards (Dashboard has no permission — always visible) ──────
-  { key: "aegis",              label: "Dashboard",               path: "/"                  },
-  { key: "noc-bridge",         label: "NOC Bridge",              path: "/noc-bridge",        permission: "noc.view" },
-  { key: "protocol",           label: "Protocol Port",           path: "/protocol",          permission: "protocol.view" },
-  { key: "sim",                label: "Signal Vault",            path: "/sim",               permission: "sim.view" },
-  { key: "ops",                label: "Ops War Room",            path: "/ops",               permission: "ops.view" },
-  { key: "gatehouse",          label: "Monitoring Alpha",        path: "/gatehouse",         permission: "gatehouse.view" },
-  { key: "alarms-factory",     label: "Alarm Factory",           path: "/alarms-factory",    permission: "alarms.view" },
-  { key: "tenant-tower",       label: "Tenant Tower",            path: "/tenant-tower",      permission: "tenants.view" },
-  // { key: "billing-invoicing",  label: "Billing & Invoicing",     path: "/billing-invoicing", permission: "billing.view" },
-  // { key: "asset-digital-twin", label: "Asset Digital Twin",      path: "/asset-digital-twin", permission: "assets.view" },
+  { key: "aegis",              label: "Dashboard",              path: "/"                  },
+  { key: "noc-bridge",         label: "System Health",          path: "/noc-bridge",        permission: "noc.view" },
+  { key: "protocol",           label: "Device Integrations",    path: "/protocol",          permission: "protocol.view" },
+  { key: "sim",                label: "SIM Cards",              path: "/sim",               permission: "sim.view" },
+  { key: "ops",                label: "Device Management",      path: "/ops",               permission: "ops.view" },
+  { key: "gatehouse",          label: "Fleet Monitoring",       path: "/gatehouse",         permission: "gatehouse.view" },
+  { key: "alarms-factory",     label: "Alarm Center",           path: "/alarms-factory",    permission: "alarms.view" },
+  { key: "tenant-tower",       label: "Tenants",                path: "/tenant-tower",      permission: "tenants.view" },
+  // { key: "billing-invoicing",  label: "Billing & Invoicing", path: "/billing-invoicing", permission: "billing.view" },
+  // { key: "asset-digital-twin", label: "Asset Digital Twin",  path: "/asset-digital-twin", permission: "assets.view" },
 
   // ── System & Ops ─────────────────────────────────────────────────────────
-  // { key: "health",             label: "System Health",           path: "/health",            permission: "health.view" },
-  { key: "alarms",             label: "Alarms Center",           path: "/alarms",            permission: "alarms.view" },
-  // { key: "ingestion",          label: "Ingestion Pipeline",      path: "/health"            },
-  // { key: "kafka",              label: "Kafka",                   path: "/health"            },
-  // { key: "compute",            label: "Compute",                 path: "/health"            },
-  // { key: "task-manager",       label: "Task Manager (Diag)",     path: "/health"            },
+  // { key: "health",             label: "System Health",       path: "/health",            permission: "health.view" },
+  { key: "alarms",             label: "Alarms Center",          path: "/alarms",            permission: "alarms.view" },
+  // { key: "ingestion",          label: "Ingestion Pipeline",  path: "/health"            },
+  // { key: "kafka",              label: "Kafka",               path: "/health"            },
+  // { key: "compute",            label: "Compute",             path: "/health"            },
+  // { key: "task-manager",       label: "Task Manager (Diag)", path: "/health"            },
 
   // ── Tokenomics & Finance ─────────────────────────────────────────────────
-  { key: "tokens",             label: "Token Engine",            path: "/tokens",            permission: "tokens.view" },
-  { key: "billing",            label: "Billing",                 path: "/billing",           permission: "billing.view" },
-  // { key: "payments",           label: "Payments",                path: "/payments",          permission: "payments.view" },
-  { key: "money",              label: "Money Switchboard",       path: "/money",             permission: "money.view" },
+  { key: "tokens",             label: "Tokens",                 path: "/tokens",            permission: "tokens.view" },
+  { key: "billing",            label: "Billing",                path: "/billing",           permission: "billing.view" },
+  // { key: "payments",           label: "Payments",            path: "/payments",          permission: "payments.view" },
+  { key: "money",              label: "Transactions",           path: "/money",             permission: "money.view" },
 
   // ── Platform ─────────────────────────────────────────────────────────────
-  { key: "veba",               label: "VEBA Marketplace",        path: "/veba",              permission: "veba.view" },
-  { key: "ai-workloads",       label: "Waswa AI Console",        path: "/ai",                permission: "ai.view" },
-  { key: "rbac",               label: "RBAC / Access Control",   path: "/rbac",              permission: "rbac.view" },
-  { key: "resources",          label: "Resources",               path: "/resources",         permission: "can_view_resource_template" },
-  // { key: "runbooks",           label: "Runbooks",                path: "/audit"             },
-  { key: "audit",              label: "Audit Trail",             path: "/audit",             permission: "audit.view" },
-  { key: "products",           label: "Products",                path: "/products",          permission: "products.view_only" },
+  { key: "veba",               label: "VEBA Marketplace",       path: "/veba",              permission: "veba.view" },
+  { key: "ai-workloads",       label: "Waswa AI Console",       path: "/ai",                permission: "ai.view" },
+  { key: "rbac",               label: "RBAC / Access Control",  path: "/rbac",              permission: "rbac.view" },
+  { key: "resources",          label: "Resources",              path: "/resources",         permission: "can_view_resource_template" },
+  // { key: "runbooks",           label: "Runbooks",            path: "/audit"             },
+  { key: "audit",              label: "Audit Trail",            path: "/audit",             permission: "audit.view" },
+  { key: "products",           label: "Products",               path: "/products",          permission: "products.view_only" },
 
 ];
 
