@@ -20,12 +20,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  archiveWaswaConversation,
+  confirmWaswaAnswer,
+  decideWaswaAnswer,
+  deleteWaswaAnswer,
   getWaswaConversations,
   getWaswaQueue,
   getWaswaSummary,
   listWaswaAnswers,
   previewWaswaMatch,
+  resolveWaswaFeedback,
+  restoreWaswaConversation,
+  retireWaswaAnswer,
   reviewWaswaSource,
+  submitWaswaAnswer,
 } from "../../api/services/waswa.service";
 import { getAccountUid } from "../../api/services/auth.service";
 import type {
@@ -37,7 +45,7 @@ import type {
 import { AnswerEditor, type AnswerPrefill } from "./AnswerEditor";
 import { ConversationView } from "./ConversationView";
 import { DocumentsTab } from "./DocumentsTab";
-import { Btn, Empty, Notice, Pill } from "./parts";
+import { Btn, ConfirmAction, Empty, Notice, Pill } from "./parts";
 import { day, errText, inputCls, kindLabel, statusTone, when } from "./format";
 
 type Tab = "queue" | "answers" | "conversations" | "documents";
@@ -79,7 +87,14 @@ function Stat({ label, value, sub, tone = "#111B21" }: { label: string; value: R
 export function AIWorkloadsPage() {
   const [params, setParams] = useSearchParams();
   const tab = (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "queue") as Tab;
-  const setTab = (t: Tab) => setParams((p) => { p.set("tab", t); return p; }, { replace: true });
+  const [tabError, setTabError] = useState<string | null>(null);
+  const [tabInfo, setTabInfo] = useState<string | null>(null);
+  const setTab = (t: Tab) => {
+    // A message about the last action belongs to the tab it happened on.
+    setTabInfo(null);
+    setTabError(null);
+    setParams((p) => { p.set("tab", t); return p; }, { replace: true });
+  };
 
   const myAccountUid = useMemo(() => getAccountUid(), []);
 
@@ -116,9 +131,8 @@ export function AIWorkloadsPage() {
   const [convs, setConvs] = useState<WaswaConversationRow[]>([]);
   const [convSurface, setConvSurface] = useState("");
   const [convFlagged, setConvFlagged] = useState(false);
+  const [convArchived, setConvArchived] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tabError, setTabError] = useState<string | null>(null);
-  const [tabInfo, setTabInfo] = useState<string | null>(null);
 
   // State is only set in the promise callbacks, never synchronously, so the
   // effect that calls this does not cascade renders.
@@ -135,12 +149,12 @@ export function AIWorkloadsPage() {
       listWaswaAnswers({ status: answerFilter || undefined, q: answerSearch || undefined, limit: 100 })
         .then((r) => { setAnswers(r.data.answers); ok(); }).catch(fail);
     } else if (tab === "conversations") {
-      getWaswaConversations({ surface: convSurface || undefined, flagged: convFlagged, limit: 50 })
+      getWaswaConversations({ surface: convSurface || undefined, flagged: convFlagged, archived: convArchived, limit: 50 })
         .then((r) => { setConvs(r.data.conversations); ok(); }).catch(fail);
     } else {
       setTimeout(ok, 0);    // DocumentsTab loads its own data
     }
-  }, [tab, answerFilter, answerSearch, convSurface, convFlagged]);
+  }, [tab, answerFilter, answerSearch, convSurface, convFlagged, convArchived]);
 
   const refreshAll = useCallback(() => {
     setTabInfo(null);
@@ -178,10 +192,152 @@ export function AIWorkloadsPage() {
       .catch((e) => setTabError(errText(e)));
   };
 
-  // ── Document actions ─────────────────────────────────────────────────────
-  const docAction = (work: Promise<unknown>, msg: string) => {
+  // ── Row actions ──────────────────────────────────────────────────────────
+  // One action per row at a time: the row's buttons are disabled until the
+  // server answers, so a double click cannot send it twice.
+  const [busyRow, setBusyRow] = useState<string | null>(null);
+  const act = (row: string, work: () => Promise<unknown>, msg: string) => {
+    if (busyRow) return;
+    setBusyRow(row);
     setTabError(null);
-    work.then(() => { setTabInfo(msg); refreshAll(); }).catch((e) => setTabError(errText(e)));
+    setTabInfo(null);
+    work()
+      // Not refreshAll: that clears the message just set.
+      .then(() => { setTabInfo(msg); loadSummary(); loadTab(); })
+      .catch((e) => setTabError(errText(e)))
+      .finally(() => setBusyRow(null));
+  };
+  const short = (s: string | null | undefined) => {
+    const t = (s ?? "").trim();
+    return t.length > 60 ? `“${t.slice(0, 57)}…”` : `“${t}”`;
+  };
+
+  /** The server refuses an approval by the author; don't offer it. */
+  const mine = (owner: string | null | undefined) => !!owner && owner === myAccountUid;
+
+  const queueActions = (item: WaswaQueueItem) => {
+    const busy = busyRow !== null;
+    const row = `queue-${item.item_uid}`;
+    const open = <Btn kind="blue" disabled={busy} onClick={() => openItem(item)}>{item.item_kind === "flag" ? "Review" : "Open"}</Btn>;
+    switch (item.item_kind) {
+      case "flag":
+        return (
+          <>
+            <Btn kind="primary" disabled={busy}
+              onClick={() => setEditor({
+                open: true, uid: null,
+                prefill: { question: item.title ?? "", feedback_uid: item.item_uid, note: item.note ?? undefined, wrongAnswer: item.detail ?? undefined },
+              })}>
+              Write correction
+            </Btn>
+            <ConfirmAction label="Dismiss" placeholder="Why it isn't a problem" disabled={busy}
+              onConfirm={(note) => act(row, () => resolveWaswaFeedback(item.item_uid, "dismissed", note), `Flag on ${short(item.title)} dismissed.`)} />
+            {open}
+          </>
+        );
+      case "approval":
+        return (
+          <>
+            {canApprove && !mine(item.owner) && (
+              <>
+                <Btn kind="primary" disabled={busy}
+                  onClick={() => act(row, () => decideWaswaAnswer(item.item_uid, "approve"), `Approval recorded for ${short(item.title)}.`)}>
+                  Approve
+                </Btn>
+                <ConfirmAction label="Reject" placeholder="What the author should fix" disabled={busy}
+                  onConfirm={(note) => act(row, () => decideWaswaAnswer(item.item_uid, "reject", note), `${short(item.title)} rejected.`)} />
+              </>
+            )}
+            {open}
+          </>
+        );
+      case "recheck":
+        return (
+          <>
+            {canApprove && (
+              <Btn kind="primary" disabled={busy}
+                onClick={() => act(row, () => confirmWaswaAnswer(item.item_uid), `${short(item.title)} confirmed; review date moved on.`)}>
+                Still correct
+              </Btn>
+            )}
+            <ConfirmAction label="Retire" placeholder="Reason, e.g. policy changed" disabled={busy}
+              onConfirm={(reason) => act(row, () => retireWaswaAnswer(item.item_uid, reason), `${short(item.title)} retired.`)} />
+            {open}
+          </>
+        );
+      case "document":
+        return (
+          <>
+            {canApprove && (!mine(item.owner) || canSelfApprove) && (
+              <Btn kind="primary" disabled={busy}
+                onClick={() => act(row, () => reviewWaswaSource(item.item_uid, "approve"), `${item.title}: approved.`)}>
+                Approve
+              </Btn>
+            )}
+            {/* Rejecting a document needs its passages in view, so it happens in the panel. */}
+            {open}
+          </>
+        );
+      default:
+        return open;
+    }
+  };
+
+  const answerActions = (a: WaswaAnswer) => {
+    const busy = busyRow !== null;
+    const row = `answer-${a.answer_uid}`;
+    const q = short(a.question);
+    const isAuthor = mine(a.authored_by);
+    return (
+      <>
+        <Btn kind="blue" disabled={busy} onClick={() => setEditor({ open: true, uid: a.answer_uid })}>
+          {a.status === "retired" ? "View" : "Edit"}
+        </Btn>
+        {(a.status === "draft" || a.status === "rejected") && (
+          <Btn kind="primary" disabled={busy}
+            onClick={() => act(row, () => submitWaswaAnswer(a.answer_uid), `${q} submitted for approval.`)}>
+            Submit
+          </Btn>
+        )}
+        {a.status === "pending" && canApprove && !isAuthor && (
+          <>
+            <Btn kind="primary" disabled={busy}
+              onClick={() => act(row, () => decideWaswaAnswer(a.answer_uid, "approve"), `Approval recorded for ${q}.`)}>
+              Approve
+            </Btn>
+            <ConfirmAction label="Reject" placeholder="What the author should fix" disabled={busy}
+              onConfirm={(note) => act(row, () => decideWaswaAnswer(a.answer_uid, "reject", note), `${q} rejected.`)} />
+          </>
+        )}
+        {a.status === "draft" && !a.submitted_at && (isAuthor || canSelfApprove) ? (
+          <ConfirmAction label="Delete" confirmLabel="Delete for good" disabled={busy}
+            onConfirm={() => act(row, () => deleteWaswaAnswer(a.answer_uid), `Draft ${q} deleted.`)} />
+        ) : a.status !== "retired" && (
+          <ConfirmAction label="Retire" placeholder="Reason, e.g. policy changed" disabled={busy}
+            onConfirm={(reason) => act(row, () => retireWaswaAnswer(a.answer_uid, reason), `${q} retired.`)} />
+        )}
+      </>
+    );
+  };
+
+  const conversationActions = (c: WaswaConversationRow) => {
+    const busy = busyRow !== null;
+    const row = `conv-${c.conversation_uid}`;
+    const q = short(c.first_question || "(no question)");
+    return (
+      <>
+        <Btn kind="blue" disabled={busy} onClick={() => setConvView({ open: true, uid: c.conversation_uid })}>Open</Btn>
+        {canApprove && (c.status === "archived" ? (
+          <Btn disabled={busy}
+            onClick={() => act(row, () => restoreWaswaConversation(c.conversation_uid), `${q} restored.`)}>
+            Restore
+          </Btn>
+        ) : (
+          <ConfirmAction label="Archive" placeholder="Reason, e.g. test chat" disabled={busy}
+            onConfirm={(reason) => act(row, () => archiveWaswaConversation(c.conversation_uid, reason), `${q} archived. Tick "Archived" to see it again.`)} />
+        ))}
+      </>
+    );
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -293,21 +449,7 @@ export function AIWorkloadsPage() {
               <div className="text-[11px] text-[#667781] md:w-[140px] shrink-0">
                 {item.surface && <span className="mr-1">{item.surface} ·</span>}{when(item.raised_at)}
               </div>
-              <div className="flex gap-1.5 shrink-0">
-                {item.item_kind === "document" ? (
-                  <>
-                    {canApprove && (
-                      <Btn kind="primary" onClick={() => docAction(reviewWaswaSource(item.item_uid, "approve"), `${item.title}: approved.`)}>Approve</Btn>
-                    )}
-                    {/* Rejecting needs a reason, so it happens in the document panel. */}
-                    <Btn kind="blue" onClick={() => openItem(item)}>Open</Btn>
-                  </>
-                ) : (
-                  <Btn kind="blue" onClick={() => openItem(item)}>
-                    {item.item_kind === "flag" ? "Review" : "Open"}
-                  </Btn>
-                )}
-              </div>
+              <div className="flex flex-wrap gap-1.5 shrink-0 md:justify-end">{queueActions(item)}</div>
             </div>
           ))}
         </div>
@@ -315,7 +457,9 @@ export function AIWorkloadsPage() {
 
       {/* ── Corrections ───────────────────────────────────────────────────── */}
       {tab === "answers" && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 min-w-0">
+        // The tester sits beside the table only when there is room for both;
+        // otherwise it would squeeze the Actions column off-screen.
+        <div className="grid grid-cols-1 2xl:grid-cols-[1fr_320px] gap-4 min-w-0">
           <div className="flex flex-col gap-3 min-w-0">
             <div className="flex flex-wrap gap-2 items-center">
               {ANSWER_FILTERS.map((f) => (
@@ -330,7 +474,7 @@ export function AIWorkloadsPage() {
             </div>
 
             <div className="border border-[#E9EDEF] rounded-xl bg-white overflow-x-auto overflow-y-auto max-h-[min(60vh,560px)]">
-              <table className="w-full text-[12px] min-w-[640px]">
+              <table className="w-full text-[12px] min-w-[860px]">
                 {/* Sticky, because the table now scrolls inside itself. */}
                 <thead className="sticky top-0 z-10 bg-white">
                   <tr className="text-left text-[10px] uppercase tracking-wide text-[#667781] border-b border-[#E9EDEF]">
@@ -339,11 +483,12 @@ export function AIWorkloadsPage() {
                     <th className="px-3 py-2 font-extrabold">Who sees it</th>
                     <th className="px-3 py-2 font-extrabold text-right">Matched</th>
                     <th className="px-3 py-2 font-extrabold">Review by</th>
+                    <th className="px-3 py-2 font-extrabold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!answers.length && (
-                    <tr><td colSpan={5}><Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Corrections could not be loaded." : "No corrections here yet."}</Empty></td></tr>
+                    <tr><td colSpan={6}><Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Corrections could not be loaded." : "No corrections here yet."}</Empty></td></tr>
                   )}
                   {answers.map((a) => {
                     const due = a.status === "approved" && a.review_due && new Date(a.review_due) <= new Date();
@@ -368,6 +513,10 @@ export function AIWorkloadsPage() {
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{a.match_count}</td>
                         <td className={`px-3 py-2.5 whitespace-nowrap ${due ? "text-[#B91C1C] font-extrabold" : ""}`}>{day(a.review_due)}</td>
+                        {/* The row opens the editor; the buttons must not. */}
+                        <td className="px-3 py-2 cursor-default" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-1.5 justify-end">{answerActions(a)}</div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -420,22 +569,29 @@ export function AIWorkloadsPage() {
               <input type="checkbox" checked={convFlagged} onChange={(e) => setConvFlagged(e.target.checked)} />
               Only flagged
             </label>
+            <label className="flex items-center gap-1.5 text-[12px] text-[#111B21] cursor-pointer">
+              <input type="checkbox" checked={convArchived} onChange={(e) => setConvArchived(e.target.checked)} />
+              Archived
+            </label>
           </div>
           <div className="border border-[#E9EDEF] rounded-xl bg-white divide-y divide-[#E9EDEF] overflow-y-auto max-h-[min(60vh,560px)]">
-            {!convs.length && <Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Conversations could not be loaded." : "No conversations match."}</Empty>}
+            {!convs.length && <Empty>{loading ? "Loading…" : tabError || apiMissing !== null ? "Conversations could not be loaded." : convArchived ? "No archived conversations." : "No conversations match."}</Empty>}
             {convs.map((c) => (
-              <button key={c.conversation_uid} onClick={() => setConvView({ open: true, uid: c.conversation_uid })}
-                className="w-full text-left px-4 py-3 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 bg-white hover:bg-[#F8F9FA] border-none cursor-pointer">
-                <div className="min-w-0 flex-1">
+              <div key={c.conversation_uid}
+                className="px-4 py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4 bg-white hover:bg-[#F8F9FA]">
+                <button onClick={() => setConvView({ open: true, uid: c.conversation_uid })}
+                  className="min-w-0 flex-1 text-left bg-transparent border-none p-0 cursor-pointer">
                   <div className="text-[12px] font-extrabold text-[#111B21] truncate">{c.first_question || "(no question)"}</div>
-                  <div className="text-[11px] text-[#667781]">Account {c.account_uid} · {c.messages} messages</div>
-                </div>
+                  <div className="text-[11px] text-[#667781]">Account {c.account_uid} · {c.messages} {c.messages === 1 ? "message" : "messages"}</div>
+                </button>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <Pill tone="blue">{c.surface}</Pill>
+                  {c.status === "archived" && <Pill>archived</Pill>}
                   {c.flags > 0 && <Pill tone="red">{c.flags} flagged</Pill>}
                   <span className="text-[11px] text-[#667781] w-[110px] text-right">{when(c.last_activity_at)}</span>
                 </div>
-              </button>
+                <div className="flex flex-wrap gap-1.5 shrink-0 md:justify-end">{conversationActions(c)}</div>
+              </div>
             ))}
           </div>
         </div>
