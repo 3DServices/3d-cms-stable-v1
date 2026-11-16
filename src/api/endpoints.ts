@@ -81,6 +81,9 @@ export const ENDPOINTS = {
     DRAFT_APPROVAL:  "/tenants/drafts",           // append /{id}/request-approval
     DRAFT_SUBMIT:    "/tenants/drafts",           // append /{id}/submit
   },
+  BRANDING: {
+    CLIENT: "/branding/clients", // append /{client_uid} (GET, PUT, DELETE) | /{client_uid}/control (PUT)
+  },
   CLIENTS: {
     CREATE:      "/clients/create",
     GET_ALL:     "/clients/all",

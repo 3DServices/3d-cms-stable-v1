@@ -20,6 +20,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly statusText: string,
     public readonly apiMessage?: string,
+    /** The envelope's `data` on an error, e.g. {errors: {field: message}}. */
+    public readonly apiData?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
