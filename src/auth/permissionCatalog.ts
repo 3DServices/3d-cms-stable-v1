@@ -265,6 +265,10 @@ export const PERMISSION_CATALOG = {
     "can_bulk_import_users", "can_bulk_export_users", "can_review_access", "can_recertify_access",
     "can_provision_user_from_directory", "can_manage_delegated_admin", "can_reset_user_password",
     "can_view_dormant_user_report", "can_manage_branch_user",
+    // Client branding (navas-core-apis branding.py, migration 058):
+    // switch it on per client and choose its administrators / change or
+    // reset a client's look for them.
+    "branding.control", "branding.override",
   ],
   "VEBA Booking & Escrow": [
     "can_create_booking", "can_view_booking", "can_approve_booking", "can_reject_booking",

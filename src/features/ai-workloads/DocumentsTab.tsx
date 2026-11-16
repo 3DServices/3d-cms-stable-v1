@@ -474,6 +474,15 @@ function DocumentPanel({
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
+// Who may be answered from a document. There are only two audiences: a
+// document customers can see is always visible to staff as well.
+type AudienceFilter = "all" | WaswaAudience;
+const AUDIENCE_FILTERS: { id: AudienceFilter; label: string }[] = [
+  { id: "all",      label: "All" },
+  { id: "staff",    label: "Staff only" },
+  { id: "everyone", label: "Customers + staff" },
+];
+
 export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChanged, openSourceUid, onOpened }: Props) {
   const [sources, setSources] = useState<WaswaSource[]>([]);
   const [types, setTypes] = useState<string[]>(Object.keys(TYPE_LABEL));
@@ -487,6 +496,9 @@ export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChang
   const [error, setError] = useState<string | null>(null);
   const [upload, setUpload] = useState<{ open: boolean; replaces: WaswaSource | null }>({ open: false, replaces: null });
   const [panel, setPanel] = useState<string | null>(openSourceUid ?? null);
+  const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>("all");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [rowInfo, setRowInfo] = useState<string | null>(null);
   useEffect(() => { if (openSourceUid) onOpened?.(); }, [openSourceUid, onOpened]);
 
   const load = useCallback(() => {
@@ -510,6 +522,31 @@ export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChang
 
   const changed = () => { load(); onChanged(); };
 
+  const shown = audienceFilter === "all"
+    ? sources
+    : sources.filter((s) => s.audience === audienceFilter);
+  const countFor = (f: AudienceFilter) =>
+    f === "all" ? sources.length : sources.filter((s) => s.audience === f).length;
+
+  // The same change the document panel makes, from the list, so a batch of
+  // documents can be narrowed without opening each one. Releasing to
+  // customers asks first: a wrong click there puts internal material in
+  // front of every fleet customer.
+  const setAudienceFromList = async (s: WaswaSource, to: WaswaAudience) => {
+    if (to === "everyone" && !window.confirm(
+      `Release "${s.title}" to customers? Waswa will be able to quote it to every fleet customer.`)) return;
+    setRowBusy(s.source_uid); setRowInfo(null); setError(null);
+    try {
+      await setWaswaSourceAudience(s.source_uid, to);
+      setRowInfo(`${s.title}: ${to === "staff" ? "now staff only" : "now visible to customers"}.`);
+      changed();
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -520,11 +557,24 @@ export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChang
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={showOld} onChange={(e) => setShowOld(e.target.checked)} /> Show older versions
           </label>
+          <div className="flex gap-1" role="group" aria-label="Filter by who sees it">
+            {AUDIENCE_FILTERS.map((f) => (
+              <button key={f.id} type="button" onClick={() => setAudienceFilter(f.id)}
+                aria-pressed={audienceFilter === f.id}
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-bold cursor-pointer ${
+                  audienceFilter === f.id
+                    ? "bg-[#075E54] text-white border-[#075E54]"
+                    : "bg-white text-[#111B21] border-[#E9EDEF] hover:bg-[#F0F2F5]"}`}>
+                {f.label} ({countFor(f.id)})
+              </button>
+            ))}
+          </div>
         </div>
         <Btn kind="primary" onClick={() => setUpload({ open: true, replaces: null })}>Upload document</Btn>
       </div>
 
       {error && <Notice tone="red">{error}</Notice>}
+      {rowInfo && <Notice tone="green">{rowInfo}</Notice>}
       {check && !check.storage_writable && (
         <Notice tone="red">
           Uploads will fail: the API server can't write to its upload folder
@@ -569,7 +619,10 @@ export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChang
             {!sources.length && (
               <tr><td colSpan={6}><Empty>{loading ? "Loading…" : error ? "Documents could not be loaded." : "No documents yet. Upload the first one."}</Empty></td></tr>
             )}
-            {sources.map((s) => (
+            {!!sources.length && !shown.length && (
+              <tr><td colSpan={6}><Empty>No documents are {audienceFilter === "staff" ? "staff only" : "visible to customers"}.</Empty></td></tr>
+            )}
+            {shown.map((s) => (
               <tr key={s.source_uid} className={`border-b border-[#F0F2F5] last:border-0 ${s.active && !s.superseded_by ? "" : "opacity-60"}`}>
                 <td className="px-3 py-2.5 max-w-[340px]">
                   <button onClick={() => setPanel(s.source_uid)}
@@ -592,6 +645,15 @@ export function DocumentsTab({ canApprove, canSelfApprove, myAccountUid, onChang
                     <Btn onClick={() => setPanel(s.source_uid)}>Open</Btn>
                     {s.active && !s.superseded_by && (
                       <Btn onClick={() => setUpload({ open: true, replaces: s })}>New version</Btn>
+                    )}
+                    {canApprove && s.active && !s.superseded_by && (
+                      s.audience === "everyone" ? (
+                        <Btn kind="danger" disabled={rowBusy === s.source_uid}
+                          onClick={() => setAudienceFromList(s, "staff")}>Make staff-only</Btn>
+                      ) : (
+                        <Btn disabled={rowBusy === s.source_uid}
+                          onClick={() => setAudienceFromList(s, "everyone")}>Release to customers</Btn>
+                      )
                     )}
                   </div>
                 </td>

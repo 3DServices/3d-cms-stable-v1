@@ -198,6 +198,7 @@ async function request<T>(
       response.status,
       response.statusText,
       json.message,
+      json.data,
     );
   }
 
@@ -207,6 +208,7 @@ async function request<T>(
       response.status,
       response.statusText,
       json.message,
+      json.data,
     );
   }
 

@@ -41,6 +41,16 @@ const BLANK: WaswaAnswerInput = {
   country_scope: "", based_on_note: "", review_due: "",
 };
 
+const formFrom = (a: WaswaAnswer): WaswaAnswerInput => ({
+  question: a.question,
+  question_variants: a.question_variants ?? "",
+  answer: a.answer,
+  audience: a.audience,
+  country_scope: a.country_scope ?? "",
+  based_on_note: a.based_on_note ?? "",
+  review_due: a.review_due ?? "",
+});
+
 export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUid, onClose, onChanged }: Props) {
   const [uid, setUid] = useState<string | null>(answerUid);
   const [answer, setAnswer] = useState<WaswaAnswer | null>(null);
@@ -58,29 +68,23 @@ export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUi
     setInfo(null);
     setDecisionNote("");
     setRetireReason("");
-    if (!answerUid) {
-      setAnswer(null);
-      setForm({ ...BLANK, question: prefill?.question ?? "", feedback_uid: prefill?.feedback_uid });
-    }
+    // Clear the previous correction so its text and buttons never show
+    // (or act) while the next one loads.
+    setAnswer(null);
+    setForm(answerUid ? BLANK : { ...BLANK, question: prefill?.question ?? "", feedback_uid: prefill?.feedback_uid });
   }, [open, answerUid, prefill]);
 
   useEffect(() => {
     if (!open || !uid) return;
+    let stale = false;
     getWaswaAnswer(uid)
       .then((res) => {
-        const a = res.data;
-        setAnswer(a);
-        setForm({
-          question: a.question,
-          question_variants: a.question_variants ?? "",
-          answer: a.answer,
-          audience: a.audience,
-          country_scope: a.country_scope ?? "",
-          based_on_note: a.based_on_note ?? "",
-          review_due: a.review_due ?? "",
-        });
+        if (stale) return;
+        setAnswer(res.data);
+        setForm(formFrom(res.data));
       })
-      .catch((e) => setError(errText(e)));
+      .catch((e) => { if (!stale) setError(errText(e)); });
+    return () => { stale = true; };
   }, [open, uid]);
 
   const set = (key: keyof WaswaAnswerInput) =>
@@ -94,6 +98,7 @@ export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUi
     try {
       const res = await work();
       setAnswer(res.data);
+      setForm(formFrom(res.data));
       setUid(res.data.answer_uid);
       setInfo(label);
       onChanged();
@@ -104,18 +109,23 @@ export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUi
     }
   };
 
+  // Empty strings are sent, not dropped: the server reads "" as "clear this
+  // field" and a missing key as "keep the current value".
   const payload = (): WaswaAnswerInput => {
     const out: WaswaAnswerInput = {};
     (Object.keys(form) as (keyof WaswaAnswerInput)[]).forEach((k) => {
       const v = form[k];
-      if (v !== undefined && v !== "") (out as Record<string, unknown>)[k] = v;
+      if (v !== undefined) (out as Record<string, unknown>)[k] = v;
     });
     return out;
   };
 
   const status = answer?.status;
   const isAuthor = !!answer && !!myAccountUid && answer.authored_by === myAccountUid;
-  const editable = !answer || ["draft", "rejected", "pending", "approved"].includes(status ?? "");
+  const loadingAnswer = !!uid && !answer;
+  const editable = !loadingAnswer && (!answer || ["draft", "rejected", "pending", "approved"].includes(status ?? ""));
+  const dirty = !!answer && (Object.keys(formFrom(answer)) as (keyof WaswaAnswerInput)[])
+    .some((k) => (form[k] ?? "") !== (formFrom(answer)[k] ?? ""));
   const due = answer?.review_due && new Date(answer.review_due) <= new Date();
 
   const save = () => run(
@@ -123,7 +133,14 @@ export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUi
     () => (answer ? updateWaswaAnswer(answer.answer_uid, payload()) : createWaswaAnswer(payload())),
   );
 
-  const title = !answer ? "New correction"
+  // Unsaved edits are saved first, so what gets submitted is what's on screen.
+  const submit = () => run(dirty ? "Saved and submitted for approval." : "Submitted for approval.", async () => {
+    let target = answer!.answer_uid;
+    if (dirty) target = (await updateWaswaAnswer(target, payload())).data.answer_uid;
+    return submitWaswaAnswer(target);
+  });
+
+  const title = loadingAnswer ? "Loading…" : !answer ? "New correction"
     : `Correction v${answer.version}`;
 
   const footer = (
@@ -134,8 +151,8 @@ export function AnswerEditor({ open, answerUid, prefill, canApprove, myAccountUi
         </Btn>
       )}
       {answer && ["draft", "rejected"].includes(answer.status) && (
-        <Btn kind="blue" disabled={busy} onClick={() => run("Submitted for approval.", () => submitWaswaAnswer(answer.answer_uid))}>
-          Submit for approval
+        <Btn kind="blue" disabled={busy || !form.question?.trim() || !form.answer?.trim()} onClick={submit}>
+          {dirty ? "Save & submit for approval" : "Submit for approval"}
         </Btn>
       )}
       {answer?.status === "pending" && canApprove && !isAuthor && (

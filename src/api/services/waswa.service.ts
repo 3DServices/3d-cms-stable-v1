@@ -18,6 +18,9 @@
  *   POST /assistant/console/answers/{uid}/decide      → decideWaswaAnswer
  *   POST /assistant/console/answers/{uid}/confirm     → confirmWaswaAnswer
  *   POST /assistant/console/answers/{uid}/retire      → retireWaswaAnswer
+ *   POST /assistant/console/answers/{uid}/delete      → deleteWaswaAnswer
+ *   POST /assistant/console/conversations/{uid}/archive → archiveWaswaConversation
+ *   POST /assistant/console/conversations/{uid}/restore → restoreWaswaConversation
  *   POST /assistant/console/feedback/{uid}/resolve    → resolveWaswaFeedback
  *   GET  /assistant/console/sources                   → getWaswaSources
  *   POST /assistant/console/sources/{uid}/review      → reviewWaswaSource
@@ -96,12 +99,13 @@ export function getWaswaQueue(
 }
 
 export function getWaswaConversations(
-  filters: { surface?: string; flagged?: boolean; limit?: number; offset?: number } = {},
+  filters: { surface?: string; flagged?: boolean; archived?: boolean; limit?: number; offset?: number } = {},
   opts?: RequestOptions,
 ): Promise<ApiResponse<{ conversations: WaswaConversationRow[] }>> {
   const params: Record<string, string> = {};
   if (filters.surface) params.surface = filters.surface;
   if (filters.flagged) params.flagged = "true";
+  if (filters.archived) params.archived = "true";
   if (filters.limit != null) params.limit = String(filters.limit);
   if (filters.offset != null) params.offset = String(filters.offset);
   return get(W.CONVERSATIONS, { ...opts, params });
@@ -169,6 +173,26 @@ export function confirmWaswaAnswer(
 
 export function retireWaswaAnswer(answerUid: string, reason: string, opts?: RequestOptions): Promise<ApiResponse<WaswaAnswer>> {
   return post<WaswaAnswer>(`${W.ANSWERS}/${enc(answerUid)}/retire`, { data: { reason } }, opts);
+}
+
+/** Deletes an unsubmitted draft for good. Anything submitted is retired instead. */
+export function deleteWaswaAnswer(answerUid: string, opts?: RequestOptions): Promise<ApiResponse<{ answer_uid: string; deleted: boolean }>> {
+  return post(`${W.ANSWERS}/${enc(answerUid)}/delete`, { data: {} }, opts);
+}
+
+export function archiveWaswaConversation(
+  conversationUid: string,
+  reason: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ conversation_uid: string; status: string }>> {
+  return post(`${W.CONVERSATIONS}/${enc(conversationUid)}/archive`, { data: { reason } }, opts);
+}
+
+export function restoreWaswaConversation(
+  conversationUid: string,
+  opts?: RequestOptions,
+): Promise<ApiResponse<{ conversation_uid: string; status: string }>> {
+  return post(`${W.CONVERSATIONS}/${enc(conversationUid)}/restore`, { data: {} }, opts);
 }
 
 export function resolveWaswaFeedback(

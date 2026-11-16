@@ -81,6 +81,9 @@ export const ENDPOINTS = {
     DRAFT_APPROVAL:  "/tenants/drafts",           // append /{id}/request-approval
     DRAFT_SUBMIT:    "/tenants/drafts",           // append /{id}/submit
   },
+  BRANDING: {
+    CLIENT: "/branding/clients", // append /{client_uid} (GET, PUT, DELETE) | /{client_uid}/control (PUT)
+  },
   CLIENTS: {
     CREATE:      "/clients/create",
     GET_ALL:     "/clients/all",
@@ -200,8 +203,8 @@ export const ENDPOINTS = {
     FEEDBACK:         "/assistant/feedback",              // POST {data:{message_uid,verdict,note}}
     SUMMARY:          "/assistant/console/summary",
     QUEUE:            "/assistant/console/queue",         // ?kind=flag,approval,recheck,document
-    CONVERSATIONS:    "/assistant/console/conversations", // GET list; append /{conversation_uid}
-    ANSWERS:          "/assistant/console/answers",       // GET list | POST create; append /{uid}[/submit|/decide|/confirm|/retire]
+    CONVERSATIONS:    "/assistant/console/conversations", // GET list; append /{conversation_uid}[/archive|/restore]
+    ANSWERS:          "/assistant/console/answers",       // GET list | POST create; append /{uid}[/submit|/decide|/confirm|/retire|/delete]
     FEEDBACK_RESOLVE: "/assistant/console/feedback",      // append /{feedback_uid}/resolve
     SOURCES:          "/assistant/console/sources",       // append /{source_uid}[/review|/audience|/remove|/restore|/details]
     SOURCE_UPLOAD:    "/assistant/console/sources/upload",// POST multipart: file + metadata

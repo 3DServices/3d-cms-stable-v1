@@ -17,6 +17,7 @@ import { PermissionGate } from "../../auth/PermissionGate";
 // import { CreateSubOrgModal } from "./components/CreateSubOrgModal";
 import { TopUpModal } from "./components/TopUpModal";
 import { AllocateModal } from "./components/AllocateModal";
+import { ClientBrandingCard } from "./components/ClientBrandingCard";
 
 // ─── Colour helpers ──────────────────────────────────────────────────────────
 const okBg   = "bg-[#25D366] text-[#053B33]";
@@ -556,6 +557,11 @@ export function TenantTowerPage() {
                   <Pill onClick={() => setAllocateOpen(true)}>Transfer</Pill>
                 </div>
               </div>
+
+              {/* Branding (staff with branding.control / branding.override only) */}
+              {selectedClient && (
+                <ClientBrandingCard clientUid={selectedClient.client_uid} clientName={selectedClient.client_name} />
+              )}
 
               {/* Payments & Gateways */}
               {/* <div className="bg-white border border-[#E9EDEF] rounded-xl p-4">

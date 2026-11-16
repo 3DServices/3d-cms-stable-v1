@@ -87,8 +87,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "noc-bridge",
-    name: "NOC Bridge",
-    navLabel: "NOC Bridge",
+    name: "System Health",
+    navLabel: "System Health",
     navGlyph: "⛑",
     route: "/noc-bridge",
     viewPermission: "noc.view",
@@ -99,8 +99,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "ops",
-    name: "Ops War Room",
-    navLabel: "Ops War Room",
+    name: "Device Management",
+    navLabel: "Device Management",
     navGlyph: "!",
     route: "/ops",
     viewPermission: "ops.view",
@@ -111,8 +111,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "gatehouse",
-    name: "Gatehouse",
-    navLabel: "Monitoring Alpha",
+    name: "Fleet Monitoring",
+    navLabel: "Fleet Monitoring",
     navGlyph: "G",
     route: "/gatehouse",
     viewPermission: "gatehouse.view",
@@ -125,8 +125,8 @@ const BUILT_MODULES: ModuleDef[] = [
   // ── System & Ops ──────────────────────────────────────────────────────────
   {
     id: "protocol",
-    name: "Protocol Port",
-    navLabel: "Protocol Port",
+    name: "Device Integrations",
+    navLabel: "Device Integrations",
     navGlyph: "⚙",
     route: "/protocol",
     viewPermission: "protocol.view",
@@ -149,8 +149,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "sim",
-    name: "SIM & Connectivity",
-    navLabel: "Signal Vault",
+    name: "SIM Cards",
+    navLabel: "SIM Cards",
     navGlyph: "📡",
     route: "/sim",
     viewPermission: "sim.view",
@@ -173,8 +173,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "alarms-factory",
-    name: "Alarm Factory",
-    navLabel: "Alarm Factory",
+    name: "Alarm Center",
+    navLabel: "Alarm Center",
     navGlyph: "⚡",
     route: "/alarms-factory",
     viewPermission: "alarms.view",
@@ -199,8 +199,8 @@ const BUILT_MODULES: ModuleDef[] = [
   // ── Finance & Tokens ──────────────────────────────────────────────────────
   {
     id: "tokens",
-    name: "Token Wallet",
-    navLabel: "Token Engine",
+    name: "Tokens",
+    navLabel: "Tokens",
     navGlyph: "T",
     route: "/tokens",
     viewPermission: "tokens.view",
@@ -247,8 +247,8 @@ const BUILT_MODULES: ModuleDef[] = [
   },
   {
     id: "money",
-    name: "Money Switchboard",
-    navLabel: "Money Switchboard",
+    name: "Transactions",
+    navLabel: "Transactions",
     navGlyph: "💳",
     route: "/money",
     viewPermission: "money.view",
@@ -261,8 +261,8 @@ const BUILT_MODULES: ModuleDef[] = [
   // ── Platform ──────────────────────────────────────────────────────────────
   {
     id: "tenant-tower",
-    name: "Tenant Tower",
-    navLabel: "Tenant Tower",
+    name: "Tenants",
+    navLabel: "Tenants",
     navGlyph: "#",
     route: "/tenant-tower",
     viewPermission: "tenants.view",

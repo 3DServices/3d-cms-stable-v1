@@ -88,6 +88,8 @@ export interface WaswaQueueItem {
   raised_at: string;
   message_uid: string | null;
   conversation_uid: string | null;
+  /** Who wrote the correction or uploaded the document; null for flags. */
+  owner?: string | null;
   card: WaswaQueueCard;
 }
 

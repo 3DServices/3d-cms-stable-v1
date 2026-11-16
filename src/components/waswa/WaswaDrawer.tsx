@@ -84,6 +84,8 @@ export function WaswaDrawer({
   const [flagging, setFlagging] = useState<string | null>(null);   // message id
   const [flagNote, setFlagNote] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Bumped by New: a reply for an older chat is dropped when it arrives.
+  const chatGen = useRef(0);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,6 +97,7 @@ export function WaswaDrawer({
     const text = raw.trim();
     if (!text || sending || !waswaOn) return;
     const id = `m${Date.now()}`;
+    const gen = chatGen.current;
     setMessages((prev) => retryOf
       ? prev.filter((m) => m.id !== retryOf)
       : [...prev, { id, role: "user", text }]);
@@ -106,6 +109,7 @@ export function WaswaDrawer({
         conversation_uid: conversationUid,
         module: moduleName ?? undefined,
       });
+      if (gen !== chatGen.current) return;
       const data = res.data;
       if (data.conversation_uid) setConversationUid(data.conversation_uid);
       setMessages((prev) => [...prev, {
@@ -116,11 +120,12 @@ export function WaswaDrawer({
         verified: data.verified_answers ?? [],
       }]);
     } catch (err) {
+      if (gen !== chatGen.current) return;
       setMessages((prev) => [...prev, {
         id: `${id}-err`, role: "ai", text: errorText(err), error: true, retryText: text,
       }]);
     } finally {
-      setSending(false);
+      if (gen === chatGen.current) setSending(false);
     }
   };
 
@@ -152,6 +157,8 @@ export function WaswaDrawer({
   };
 
   const newChat = () => {
+    chatGen.current += 1;
+    setSending(false);
     setMessages([GREETING]);
     setConversationUid(null);
     setFlagging(null);

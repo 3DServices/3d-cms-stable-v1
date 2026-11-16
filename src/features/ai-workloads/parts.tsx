@@ -39,6 +39,44 @@ export function Btn({
   );
 }
 
+/**
+ * A row action that needs a second step: a reason (Reject, Retire, Dismiss,
+ * Archive) or just a confirmation (Delete). The first click opens the step in
+ * place; nothing is sent until Confirm.
+ */
+export function ConfirmAction({
+  label, confirmLabel, placeholder, kind = "danger", disabled, onConfirm,
+}: {
+  label: string;
+  confirmLabel?: string;
+  /** Asks for a reason when given; the reason is required. */
+  placeholder?: string;
+  kind?: "primary" | "ghost" | "danger" | "blue";
+  disabled?: boolean;
+  onConfirm: (reason: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [reason, setReason] = React.useState("");
+  const close = () => { setOpen(false); setReason(""); };
+  if (!open) return <Btn kind={kind} disabled={disabled} onClick={() => setOpen(true)}>{label}</Btn>;
+  const ready = !placeholder || reason.trim().length > 0;
+  const confirm = () => { if (ready) { onConfirm(reason.trim()); close(); } };
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {placeholder ? (
+        <input autoFocus className="h-8 px-2.5 rounded-full border border-[#E9EDEF] text-[11px] w-[180px] outline-none focus:border-[#25D366]"
+          placeholder={placeholder} value={reason} disabled={disabled}
+          onChange={(e) => setReason(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") confirm(); if (e.key === "Escape") close(); }} />
+      ) : (
+        <span className="text-[11px] text-[#B91C1C] font-extrabold">Sure?</span>
+      )}
+      <Btn kind={kind} disabled={disabled || !ready} onClick={confirm}>{confirmLabel ?? label}</Btn>
+      <Btn disabled={disabled} onClick={close}>Cancel</Btn>
+    </span>
+  );
+}
+
 /** Right-hand slide-over for detail and editing. */
 export function SidePanel({
   open, title, onClose, children, footer,
